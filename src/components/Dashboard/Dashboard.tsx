@@ -28,7 +28,7 @@ export default function Dashboard() {
       window.location.href = deepLink;
 
       // Show success message
-      setSuccessMessage('Opening Falcon... If Falcon is not installed, please download it first.');
+      setSuccessMessage('Redirecting you back to the desktop app...');
     } catch (err: any) {
       setError(err.message || 'Failed to generate deep link for Falcon');
       console.error('Open in Falcon error:', err);
@@ -68,10 +68,10 @@ export default function Dashboard() {
         }}
       >
         <Typography variant="h4" fontWeight="bold" sx={{ color: '#FFFFFF', mb: 1 }}>
-          Welcome, {user?.email}
+          You're signed in
         </Typography>
         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>
-          You are logged into Skyview
+          Return to the Trueyy desktop app to continue
         </Typography>
 
         {error && (
@@ -106,11 +106,11 @@ export default function Dashboard() {
               },
             }}
           >
-            {loading ? 'Opening Falcon...' : 'Open in Falcon'}
+            {loading ? 'Redirecting to app...' : 'Open Desktop App'}
           </Button>
 
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>
-            Don't have Falcon?{' '}
+            Don't have the app installed?{' '}
             <Link
               href="https://github.com/yourusername/falcon/releases"
               target="_blank"
@@ -121,7 +121,7 @@ export default function Dashboard() {
                 '&:hover': { textDecoration: 'underline' },
               }}
             >
-              Download here
+              Download Trueyy
             </Link>
           </Typography>
 
@@ -143,7 +143,7 @@ export default function Dashboard() {
               },
             }}
           >
-            Logout
+            Sign Out
           </Button>
         </Box>
 

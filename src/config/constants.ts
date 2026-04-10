@@ -1,3 +1,10 @@
+// User Roles
+export const USER_ROLES = {
+  INTERVIEWER: 'Interviewer',
+  ADMIN: 'Admin',
+  CANDIDATE: 'Candidate',
+} as const;
+
 // Storage Keys
 export const STORAGE_KEYS = {
   ACCESS_TOKEN: 'auth_access_token',
