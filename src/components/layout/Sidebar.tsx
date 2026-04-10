@@ -463,33 +463,7 @@ export function Sidebar({
     </Box>
   );
 
-  if (isMobile) {
-    return (
-      <Drawer
-        variant="temporary"
-        open={!collapsed}
-        onClose={onToggle}
-        ModalProps={{
-          keepMounted: true,
-          onKeyDown: (e) => {
-            if (e.key === 'Escape') onToggle();
-          },
-        }}
-        sx={{
-          zIndex: theme.zIndex.drawer,
-          '& .MuiDrawer-paper': {
-            width: width,
-            boxSizing: 'border-box',
-            transition: 'width 0.3s ease',
-            border: 'none',
-          },
-        }}
-      >
-        {drawerContent}
-      </Drawer>
-    );
-  }
-
+  // Skyview: sidebar is always permanent and always open (no mobile temporary drawer)
   return (
     <Drawer
       variant="permanent"

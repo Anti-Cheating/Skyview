@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Box, IconButton, useTheme, useMediaQuery } from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
+import { useState } from 'react';
+import { Box } from '@mui/material';
 import { Sidebar } from '../layout/Sidebar';
 import type { LogoConfig, NavItem, SecondaryNavItem, ProfileConfig } from '../layout/sidebar.types';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,15 +12,10 @@ const DRAWER_WIDTH_COLLAPSED = 64;
 
 export default function AppLayout() {
   const { user } = useAuth();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [currentView, setCurrentView] = useState<string>('dashboard');
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Auto-collapse on mobile
-  useEffect(() => {
-    if (isMobile) setSidebarCollapsed(true);
-  }, [isMobile, currentView]);
+  // Sidebar is always open in Skyview — never collapsed
+  const sidebarCollapsed = false;
 
   const sidebarLogo: LogoConfig = {
     label: 'Trueyy',
@@ -59,7 +53,7 @@ export default function AppLayout() {
         secondary={sidebarSecondary}
         profile={sidebarProfile}
         collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onToggle={() => {}}
         onNavigate={handleNavigate}
         activeId={currentView}
         width={DRAWER_WIDTH}
@@ -77,25 +71,6 @@ export default function AppLayout() {
           position: 'relative',
         }}
       >
-        {sidebarCollapsed && (
-          <IconButton
-            onClick={() => setSidebarCollapsed(false)}
-            size="small"
-            sx={{
-              position: 'absolute',
-              top: 12,
-              left: 12,
-              zIndex: 10,
-              color: '#FFFFFF',
-              bgcolor: '#0B1A10',
-              border: '1px solid rgba(76, 217, 100, 0.2)',
-              '&:hover': { bgcolor: '#142A1A' },
-            }}
-          >
-            <MenuIcon fontSize="small" />
-          </IconButton>
-        )}
-
         {currentView === 'dashboard' && <AppDashboard onNavigate={handleNavigate} />}
         {currentView === 'interviews' && <AppInterviewList />}
       </Box>

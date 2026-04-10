@@ -1,3 +1,10 @@
+/**
+ * App Interview Card — Skyview
+ * Mirrors Falcon's InterviewCard design exactly. Skyview does not support
+ * joining interviews, so the action button always shows "Join Not Available"
+ * (or "View Details" for completed interviews).
+ */
+
 import {
   Box,
   Card,
@@ -20,7 +27,6 @@ import {
 } from '@mui/icons-material';
 import type { InterviewSession } from '../../types/interview.types';
 import { USER_ROLES } from '../../config/constants';
-import { useState, useEffect } from 'react';
 
 interface AppInterviewCardProps {
   interview: InterviewSession;
@@ -29,66 +35,60 @@ interface AppInterviewCardProps {
 }
 
 export default function AppInterviewCard({ interview, userRole, onJoin }: AppInterviewCardProps) {
-  const [canJoin, setCanJoin] = useState(false);
-  const [joinMessage, setJoinMessage] = useState('');
-
+  // Format date and time
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
     return {
-      date: date.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }),
-      time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      date: date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }),
+      time: date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
     };
   };
 
   const { date, time } = formatDateTime(interview.scheduled_start_at);
 
-  useEffect(() => {
-    const checkJoinAvailability = () => {
-      const startTime = new Date(interview.scheduled_start_at).getTime();
-      const now = Date.now();
-      const diff = startTime - now;
+  // Skyview: joining is not supported. Only completed interviews are actionable
+  // (View Details). Everything else shows "Join Not Available".
+  const isCompleted = interview.status === 'completed';
+  const canAction = isCompleted;
+  const actionLabel = isCompleted ? 'View Details' : 'Join Not Available';
+  const tooltipMessage = isCompleted ? '' : 'Joining interviews is not available in Skyview';
 
-      if (interview.status === 'completed') {
-        setCanJoin(true);
-        setJoinMessage('View interview details');
-        return;
-      }
-      if (diff <= 0) {
-        setCanJoin(true);
-        setJoinMessage('Join Interview');
-        return;
-      }
-      if (diff <= 5 * 60 * 1000) {
-        setCanJoin(true);
-        const mins = Math.ceil(diff / 60000);
-        setJoinMessage(`Join Interview (${mins} min${mins !== 1 ? 's' : ''} until start)`);
-        return;
-      }
-      setCanJoin(false);
-      const mins = Math.ceil(diff / 60000);
-      const hours = Math.floor(mins / 60);
-      const rem = mins % 60;
-      setJoinMessage(hours > 0 ? `Join available ${hours}h ${rem > 0 ? rem + 'm' : ''} before start` : `Join available ${mins} min before start`);
-    };
-
-    checkJoinAvailability();
-    const interval = setInterval(checkJoinAvailability, 60000);
-    return () => clearInterval(interval);
-  }, [interview.scheduled_start_at, interview.status]);
-
+  // Get participant information based on role
   const getParticipantInfo = () => {
-    if (!interview.interview_session_participants?.length) return { name: 'N/A', role: 'N/A' };
+    if (!interview.interview_session_participants || interview.interview_session_participants.length === 0) {
+      return { name: 'N/A', role: 'N/A' };
+    }
 
     if (userRole === USER_ROLES.CANDIDATE) {
-      const p = interview.interview_session_participants.find(p => p.interviewer_id && p.interviewer);
-      if (p?.interviewer) {
-        return { name: `${p.interviewer.first_name} ${p.interviewer.last_name}`.trim(), role: 'Interviewer' };
+      const participant = interview.interview_session_participants.find(
+        (p) => p.interviewer_id && p.interviewer
+      );
+      if (participant?.interviewer) {
+        const { first_name, last_name } = participant.interviewer;
+        return {
+          name: `${first_name} ${last_name}`.trim(),
+          role: 'Interviewer',
+        };
       }
       return { name: 'Interviewer', role: 'Interviewer' };
     } else {
-      const p = interview.interview_session_participants.find(p => p.candidate_id && p.candidate);
-      if (p?.candidate) {
-        return { name: `${p.candidate.first_name} ${p.candidate.last_name}`.trim(), role: 'Candidate' };
+      const participant = interview.interview_session_participants.find(
+        (p) => p.candidate_id && p.candidate
+      );
+      if (participant?.candidate) {
+        const { first_name, last_name } = participant.candidate;
+        return {
+          name: `${first_name} ${last_name}`.trim(),
+          role: 'Candidate',
+        };
       }
       return { name: 'Candidate', role: 'Candidate' };
     }
@@ -97,14 +97,6 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
   const participantInfo = getParticipantInfo();
   const title = interview.title || 'Interview';
   const description = interview.description || '';
-
-  const handleJoin = () => {
-    if (onJoin) {
-      onJoin(interview);
-    } else if (interview.provider_metadata?.join_url) {
-      window.open(interview.provider_metadata.join_url, '_blank', 'noopener,noreferrer');
-    }
-  };
 
   return (
     <Card
@@ -127,7 +119,7 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
       }}
     >
       <CardContent sx={{ p: 2.5, display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Header */}
+        {/* Header Section */}
         <Box sx={{ mb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
             <Box
@@ -142,13 +134,35 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
                 flexShrink: 0,
               }}
             >
-              {userRole === USER_ROLES.CANDIDATE
-                ? <BusinessIcon sx={{ fontSize: 20, color: 'white' }} />
-                : <WorkIcon sx={{ fontSize: 20, color: 'white' }} />
-              }
+              {userRole === USER_ROLES.CANDIDATE ? (
+                <BusinessIcon sx={{ fontSize: 20, color: 'white' }} />
+              ) : (
+                <WorkIcon sx={{ fontSize: 20, color: 'white' }} />
+              )}
             </Box>
             <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
-              <Tooltip title={title} arrow placement="top" enterDelay={300}>
+              <Tooltip
+                title={title}
+                arrow
+                placement="top"
+                enterDelay={300}
+                leaveDelay={0}
+                PopperProps={{
+                  sx: {
+                    '& .MuiTooltip-tooltip': {
+                      bgcolor: '#212121',
+                      color: '#FFFFFF',
+                      fontSize: '0.813rem',
+                      padding: '8px 12px',
+                      maxWidth: 300,
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                    },
+                    '& .MuiTooltip-arrow': {
+                      color: '#212121',
+                    },
+                  },
+                }}
+              >
                 <Typography
                   variant="subtitle1"
                   fontWeight={700}
@@ -160,6 +174,8 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    wordBreak: 'break-word',
                     flex: 1,
                   }}
                 >
@@ -167,10 +183,38 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
                 </Typography>
               </Tooltip>
               {description && (
-                <Tooltip title={description} arrow placement="top" enterDelay={200}>
+                <Tooltip
+                  title={description}
+                  arrow
+                  placement="top"
+                  enterDelay={200}
+                  leaveDelay={0}
+                  PopperProps={{
+                    sx: {
+                      '& .MuiTooltip-tooltip': {
+                        bgcolor: '#212121',
+                        color: '#FFFFFF',
+                        fontSize: '0.813rem',
+                        padding: '10px 14px',
+                        maxWidth: 350,
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                        lineHeight: 1.5,
+                      },
+                      '& .MuiTooltip-arrow': {
+                        color: '#212121',
+                      },
+                    },
+                  }}
+                >
                   <IconButton
                     size="small"
-                    sx={{ padding: '4px', color: 'primary.main', '&:hover': { bgcolor: 'rgba(76, 217, 100, 0.08)' } }}
+                    sx={{
+                      padding: '4px',
+                      color: 'primary.main',
+                      '&:hover': {
+                        bgcolor: 'rgba(76, 217, 100, 0.08)',
+                      },
+                    }}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <InfoIcon sx={{ fontSize: 18 }} />
@@ -183,16 +227,55 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
 
         <Divider sx={{ mb: 2, borderColor: '#E0E0E0' }} />
 
-        {/* Details */}
+        {/* Details Section */}
         <Box sx={{ mb: 2, flex: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
             <PersonIcon sx={{ fontSize: 18, color: 'primary.main' }} />
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="caption" sx={{ fontSize: '0.688rem', color: '#757575', display: 'block', mb: 0.25 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: '0.688rem',
+                  color: '#757575',
+                  display: 'block',
+                  mb: 0.25,
+                }}
+              >
                 {participantInfo.role}
               </Typography>
-              <Tooltip title={participantInfo.name} arrow placement="top" enterDelay={300}>
-                <Typography variant="body2" sx={{ fontSize: '0.813rem', color: '#212121', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <Tooltip
+                title={participantInfo.name}
+                arrow
+                placement="top"
+                enterDelay={300}
+                leaveDelay={0}
+                PopperProps={{
+                  sx: {
+                    '& .MuiTooltip-tooltip': {
+                      bgcolor: '#212121',
+                      color: '#FFFFFF',
+                      fontSize: '0.813rem',
+                      padding: '8px 12px',
+                      maxWidth: 200,
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                    },
+                    '& .MuiTooltip-arrow': {
+                      color: '#212121',
+                    },
+                  },
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontSize: '0.813rem',
+                    color: '#212121',
+                    fontWeight: 500,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   {participantInfo.name}
                 </Typography>
               </Tooltip>
@@ -202,20 +285,43 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
             <ScheduleIcon sx={{ fontSize: 18, color: 'primary.main', mt: 0.25 }} />
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="caption" sx={{ fontSize: '0.688rem', color: '#757575', display: 'block', mb: 0.25 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: '0.688rem',
+                  color: '#757575',
+                  display: 'block',
+                  mb: 0.25,
+                }}
+              >
                 Schedule
               </Typography>
-              <Typography variant="body2" sx={{ fontSize: '0.813rem', color: '#212121', fontWeight: 500, lineHeight: 1.4, mb: 0.25 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.813rem',
+                  color: '#212121',
+                  fontWeight: 500,
+                  lineHeight: 1.4,
+                  mb: 0.25,
+                }}
+              >
                 {date}
               </Typography>
-              <Typography variant="body2" sx={{ fontSize: '0.75rem', color: '#757575' }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: '0.75rem',
+                  color: '#757575',
+                }}
+              >
                 {time}
               </Typography>
             </Box>
           </Box>
         </Box>
 
-        {/* Status */}
+        {/* Status + Provider Chips */}
         <Box sx={{ display: 'flex', gap: 0.5, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
           <Chip
             label={interview.status || 'Scheduled'}
@@ -229,19 +335,76 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
               border: '1px solid',
               borderColor: interview.status === 'completed' ? '#C8E6C9' : '#E0E0E0',
               borderRadius: 1,
-              '& .MuiChip-label': { px: 0.75, py: 0 },
+              '& .MuiChip-label': {
+                px: 0.75,
+                py: 0,
+              },
             }}
           />
+          {interview.provider && (
+            <Chip
+              icon={<VideoCallIcon sx={{ fontSize: 12 }} />}
+              label={
+                interview.provider === 'daily'
+                  ? 'Daily.co'
+                  : interview.provider === 'zoom'
+                  ? 'Zoom'
+                  : interview.provider
+              }
+              size="small"
+              sx={{
+                fontSize: '0.688rem',
+                height: 20,
+                bgcolor: interview.provider === 'daily' ? '#E8F5E9' : '#EDE7F6',
+                color: interview.provider === 'daily' ? '#2E7D32' : '#5E35B1',
+                fontWeight: 500,
+                border: '1px solid',
+                borderColor: interview.provider === 'daily' ? '#C8E6C9' : '#D1C4E9',
+                borderRadius: 1,
+                '& .MuiChip-icon': { color: 'inherit', ml: 0.5 },
+                '& .MuiChip-label': { px: 0.75, py: 0 },
+              }}
+            />
+          )}
         </Box>
 
-        {/* Action Button */}
-        <Tooltip title={!canJoin ? joinMessage : ''} arrow placement="top">
+        {/* Action Button — Skyview: join is not supported */}
+        <Tooltip
+          title={tooltipMessage}
+          arrow
+          placement="top"
+          PopperProps={{
+            sx: {
+              '& .MuiTooltip-tooltip': {
+                bgcolor: '#212121',
+                color: '#FFFFFF',
+                fontSize: '0.813rem',
+                padding: '8px 12px',
+                maxWidth: 250,
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              },
+              '& .MuiTooltip-arrow': {
+                color: '#212121',
+              },
+            },
+          }}
+        >
           <span>
             <Button
               variant="contained"
               fullWidth
-              startIcon={canJoin ? <VideoCallIcon sx={{ fontSize: 14 }} /> : <AccessTimeIcon sx={{ fontSize: 14 }} />}
-              onClick={handleJoin}
+              startIcon={
+                canAction ? (
+                  <VideoCallIcon sx={{ fontSize: 14 }} />
+                ) : (
+                  <AccessTimeIcon sx={{ fontSize: 14 }} />
+                )
+              }
+              onClick={() => {
+                if (canAction && onJoin) {
+                  onJoin(interview);
+                }
+              }}
               size="small"
               sx={{
                 fontSize: '0.75rem',
@@ -250,15 +413,24 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
                 fontWeight: 600,
                 mt: 'auto',
                 borderRadius: 1.5,
-                bgcolor: canJoin ? 'primary.main' : '#E0E0E0',
-                color: canJoin ? '#FFFFFF' : '#9E9E9E',
+                bgcolor: canAction ? 'primary.main' : '#E0E0E0',
+                color: canAction ? '#FFFFFF' : '#9E9E9E',
                 boxShadow: 'none',
-                '&:hover': canJoin
-                  ? { bgcolor: 'primary.dark', boxShadow: '0 4px 12px rgba(76, 217, 100, 0.4)' }
-                  : { bgcolor: '#E0E0E0' },
+                '&:hover': canAction
+                  ? {
+                      bgcolor: 'primary.dark',
+                      boxShadow: '0 4px 12px rgba(76, 217, 100, 0.4)',
+                    }
+                  : {
+                      bgcolor: '#E0E0E0',
+                    },
+                '&.Mui-disabled': {
+                  bgcolor: '#E0E0E0',
+                  color: '#9E9E9E',
+                },
               }}
             >
-              {interview.status === 'completed' ? 'View Details' : canJoin ? 'Join Interview' : 'Join Not Available'}
+              {actionLabel}
             </Button>
           </span>
         </Tooltip>

@@ -218,7 +218,24 @@ export default function AppInterviewList() {
                   onChange={(_, page) => setUpcomingPage(page)}
                   color="primary"
                   shape="rounded"
-                  sx={{ '& .MuiPaginationItem-root': { color: '#6B7280', '&.Mui-selected': { backgroundColor: 'primary.main', color: '#FFFFFF', fontWeight: 600 }, '&:hover': { backgroundColor: 'rgba(76, 217, 100, 0.15)' } } }}
+                  sx={{
+                    '& .MuiPaginationItem-root': {
+                      color: '#6B7280',
+                      fontSize: '0.875rem',
+                      '&.Mui-selected': {
+                        backgroundColor: 'primary.main',
+                        color: '#FFFFFF',
+                        fontWeight: 600,
+                        '&:hover': {
+                          backgroundColor: 'primary.dark',
+                        },
+                      },
+                      '&:hover': {
+                        backgroundColor: 'rgba(76, 217, 100, 0.15)',
+                        color: '#1F2937',
+                      },
+                    },
+                  }}
                 />
               </Stack>
             )}
@@ -250,7 +267,24 @@ export default function AppInterviewList() {
                   onChange={(_, page) => setPastPage(page)}
                   color="primary"
                   shape="rounded"
-                  sx={{ '& .MuiPaginationItem-root': { color: '#6B7280', '&.Mui-selected': { backgroundColor: 'primary.main', color: '#FFFFFF', fontWeight: 600 }, '&:hover': { backgroundColor: 'rgba(76, 217, 100, 0.15)' } } }}
+                  sx={{
+                    '& .MuiPaginationItem-root': {
+                      color: '#6B7280',
+                      fontSize: '0.875rem',
+                      '&.Mui-selected': {
+                        backgroundColor: 'primary.main',
+                        color: '#FFFFFF',
+                        fontWeight: 600,
+                        '&:hover': {
+                          backgroundColor: 'primary.dark',
+                        },
+                      },
+                      '&:hover': {
+                        backgroundColor: 'rgba(76, 217, 100, 0.15)',
+                        color: '#1F2937',
+                      },
+                    },
+                  }}
                 />
               </Stack>
             )}
