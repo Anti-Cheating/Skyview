@@ -65,10 +65,9 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
   const isCompleted = interview.status === 'completed';
   const isInterviewer = userRole === USER_ROLES.INTERVIEWER;
   const isCandidate = userRole === USER_ROLES.CANDIDATE;
-  const isExtensionType = interview.interview_type === 'extension';
-  const canMonitor = isInterviewer && isExtensionType && !isCompleted;
-  const canCandidateJoin = isCandidate && isExtensionType && !isCompleted;
-  const canAction = isCompleted || canMonitor || canCandidateJoin;
+  const canMonitor = isInterviewer && !isCompleted;
+  const canCandidateJoin = isCandidate && !isCompleted;
+  const canJoin = canMonitor || canCandidateJoin;
 
   let actionLabel: string;
   let tooltipMessage: string;
@@ -81,17 +80,10 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
   } else if (canCandidateJoin) {
     actionLabel = 'Join Interview';
     tooltipMessage = '';
-  } else if (isInterviewer && !isExtensionType) {
-    actionLabel = 'Open Falcon App';
-    tooltipMessage = 'Application-type interviews are managed in the Falcon desktop app';
   } else {
-    actionLabel = 'Join in Falcon App';
-    tooltipMessage = 'Application-type interviews require the Falcon desktop app';
+    actionLabel = 'View Details';
+    tooltipMessage = '';
   }
-
-  const handleCandidateJoin = () => {
-    navigate(`/interviews/${interview.id}/join`);
-  };
 
   const handleAction = () => {
     if (canMonitor) {
@@ -99,10 +91,10 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
       return;
     }
     if (canCandidateJoin) {
-      void handleCandidateJoin();
+      navigate(`/interviews/${interview.id}/join`);
       return;
     }
-    if (canAction && onJoin) {
+    if (onJoin) {
       onJoin(interview);
     }
   };
@@ -440,7 +432,7 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
               variant="contained"
               fullWidth
               startIcon={
-                canAction ? (
+                canJoin ? (
                   <VideoCallIcon sx={{ fontSize: 14 }} />
                 ) : (
                   <AccessTimeIcon sx={{ fontSize: 14 }} />
@@ -455,10 +447,10 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
                 fontWeight: 600,
                 mt: 'auto',
                 borderRadius: 1.5,
-                bgcolor: canAction ? 'primary.main' : '#E0E0E0',
-                color: canAction ? '#FFFFFF' : '#9E9E9E',
+                bgcolor: canJoin ? 'primary.main' : '#E0E0E0',
+                color: canJoin ? '#FFFFFF' : '#9E9E9E',
                 boxShadow: 'none',
-                '&:hover': canAction
+                '&:hover': canJoin
                   ? {
                       bgcolor: 'primary.dark',
                       boxShadow: '0 4px 12px rgba(76, 217, 100, 0.4)',

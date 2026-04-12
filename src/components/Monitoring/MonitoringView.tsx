@@ -29,6 +29,7 @@ import { USER_ROLES } from '../../config/constants';
 import { useAuth } from '../../contexts/AuthContext';
 import AnalyticsPanel from './AnalyticsPanel';
 import CandidateSetupCard from './CandidateSetupCard';
+import FalconDownloadCard from '../common/FalconDownloadCard';
 import { TOKENS } from '../../theme';
 
 const LIGHT_BG = TOKENS.bgCard;
@@ -249,32 +250,32 @@ export default function MonitoringView() {
         </Box>
       </Box>
 
-      {/* Pre-join checklist (extension-type only).
-          Shown in TWO scenarios:
-            1. Initial setup: candidate hasn't completed joined yet
-            2. Mid-interview revocation: screen_recording flipped back to false
-               after having been true (candidate disabled in System Settings).
-          Application-type interviews never see this. */}
-      {interview.interview_type === 'extension' && (
-        !riskData.candidateStatus?.joined
-          ? <CandidateSetupCard status={riskData.candidateStatus} />
-          : !riskData.candidateStatus?.screen_recording
-            ? <CandidateSetupCard status={riskData.candidateStatus} revoked />
-            : null
-      )}
+      {interview.interview_type === 'application' ? (
+        <FalconDownloadCard />
+      ) : (
+        /* Extension-type: full monitoring UI */
+        <>
+          {/* Pre-join checklist */}
+          {!riskData.candidateStatus?.joined
+            ? <CandidateSetupCard status={riskData.candidateStatus} />
+            : !riskData.candidateStatus?.screen_recording
+              ? <CandidateSetupCard status={riskData.candidateStatus} revoked />
+              : null
+          }
 
-      {/* AnalyticsPanel — fills the rest. Has its own dark styling, three tabs,
-          start/stop controls, score timeline, summary stats. */}
-      <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        <AnalyticsPanel
-          interview={interview}
-          riskData={riskData}
-          isMonitoring={isMonitoring}
-          onStartMonitoring={handleStartMonitoring}
-          onStopMonitoring={handleStopMonitoring}
-          onClose={handleExit}
-        />
-      </Box>
+          {/* AnalyticsPanel */}
+          <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            <AnalyticsPanel
+              interview={interview}
+              riskData={riskData}
+              isMonitoring={isMonitoring}
+              onStartMonitoring={handleStartMonitoring}
+              onStopMonitoring={handleStopMonitoring}
+              onClose={handleExit}
+            />
+          </Box>
+        </>
+      )}
     </Box>
   );
 }

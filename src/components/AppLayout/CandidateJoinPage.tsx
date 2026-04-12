@@ -25,7 +25,6 @@ import {
   Extension as ExtensionIcon,
   Shield as ShieldIcon,
   VideoCall as VideoCallIcon,
-  GetApp as DownloadIcon,
 } from '@mui/icons-material';
 import { InterviewService } from '../../services/interview.service';
 import {
@@ -41,6 +40,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { USER_ROLES } from '../../config/constants';
 import type { InterviewSession } from '../../types/interview.types';
 import { TOKENS } from '../../theme';
+import FalconDownloadCard from '../common/FalconDownloadCard';
 
 const BRAND = TOKENS.brand;
 const LIGHT_BG = TOKENS.bgCard;
@@ -300,7 +300,10 @@ export default function CandidateJoinPage() {
         </Box>
       </Box>
 
-      {/* Steps — upper-third, centered card */}
+      {interview.interview_type === 'application' ? (
+        <FalconDownloadCard />
+      ) : (
+      /* Steps — upper-third, centered card */
       <Box sx={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', pt: { xs: 3, md: 6 }, px: { xs: 2, md: 3 }, pb: 3 }}>
         <Box
           sx={{
@@ -312,55 +315,6 @@ export default function CandidateJoinPage() {
             boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
           }}
         >
-        {interview.interview_type === 'application' ? (
-          /* ── Application type: Falcon desktop app flow ── */
-          <>
-            <StepRow
-              number={1}
-              icon={<DownloadIcon sx={{ fontSize: 18 }} />}
-              title="Download Trueyy App"
-              done={false}
-              active
-              first
-            >
-              <Typography sx={{ fontSize: '0.75rem', color: '#6B7280', mb: 1 }}>
-                Download and install the Trueyy desktop app to join your monitored interview.
-              </Typography>
-              <Button
-                variant="contained"
-                size="small"
-                onClick={() => window.open('https://www.trueyy.com/', '_blank', 'noopener')}
-                sx={{
-                  bgcolor: BRAND,
-                  color: '#fff',
-                  textTransform: 'none',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  py: 0.5,
-                  px: 2,
-                  borderRadius: '6px',
-                  '&:hover': { bgcolor: '#3CB853' },
-                  boxShadow: 'none',
-                }}
-              >
-                Download App
-              </Button>
-            </StepRow>
-
-            <StepRow
-              number={2}
-              icon={<VideoCallIcon sx={{ fontSize: 18 }} />}
-              title="Open Meeting in App"
-              done={false}
-              active={false}
-              last
-            >
-              <Typography sx={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                Open the Trueyy app and join using your interview code
-              </Typography>
-            </StepRow>
-          </>
-        ) : (
           /* ── Extension type: Chrome extension flow ── */
           <>
           {/* Step rows — each is a self-contained row with its own bg */}
@@ -539,9 +493,9 @@ export default function CandidateJoinPage() {
             )}
           </StepRow>
           </>
-        )}
         </Box>
       </Box>
+      )}
     </Box>
   );
 }
