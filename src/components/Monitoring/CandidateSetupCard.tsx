@@ -83,8 +83,8 @@ export default function CandidateSetupCard({ status, revoked }: Props) {
   return (
     <Box
       sx={{
-        m: 3,
-        p: 3,
+        m: { xs: 2, md: 3 },
+        p: { xs: 2, md: 3 },
         bgcolor: "#FFFFFF",
         border: "1px solid #E5E7EB",
         borderRadius: 2,

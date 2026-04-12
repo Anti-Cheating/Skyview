@@ -435,7 +435,7 @@ export default function AnalyticsPanel({
     <Box sx={{ height: '100%', width: '100%', bgcolor: DARK_BG, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* ─── Header (status on left, Start/Stop compact on right) ─── */}
-      <Box sx={{ px: 2, py: 1.2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${DARK_BORDER}`, gap: 2 }}>
+      <Box sx={{ px: { xs: 1.5, md: 2 }, py: 1.2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${DARK_BORDER}`, gap: 1, flexWrap: 'wrap' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
           <Box sx={{ width: 28, height: 28, borderRadius: '8px', bgcolor: isConnected ? `${BRAND}18` : 'rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: isConnected ? BRAND : DARK_TEXT_MUTED, ...(isConnected && isMonitoring && { boxShadow: `0 0 8px ${BRAND}` }) }} />
@@ -448,7 +448,7 @@ export default function AnalyticsPanel({
           </Box>
         </Box>
         {(onStartMonitoring || onStopMonitoring) && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, flexShrink: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0, flexWrap: 'wrap' }}>
             <Tooltip
               title={
                 !isMonitoring

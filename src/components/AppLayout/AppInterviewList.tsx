@@ -151,14 +151,14 @@ export default function AppInterviewList() {
   );
 
   return (
-    <Box sx={{ width: '100%', p: 3 }}>
+    <Box sx={{ width: '100%', p: { xs: 2, md: 3 } }}>
       <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-          <Box>
-            <Typography variant="h5" fontWeight={700} sx={{ fontSize: '1.5rem', color: '#1F2937', letterSpacing: '-0.01em', mb: 0.5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h5" fontWeight={700} sx={{ fontSize: { xs: '1.2rem', md: '1.5rem' }, color: '#1F2937', letterSpacing: '-0.01em', mb: 0.5 }}>
               Interviews
             </Typography>
-            <Typography variant="body2" sx={{ color: '#6B7280', fontSize: '0.875rem' }}>
+            <Typography variant="body2" sx={{ color: '#6B7280', fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
               {userRole === USER_ROLES.CANDIDATE
                 ? 'Manage and join your scheduled interviews'
                 : 'Review and conduct interviews with candidates'}
@@ -169,15 +169,19 @@ export default function AppInterviewList() {
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => navigate('/interviews/new')}
+              size="small"
               sx={{
                 textTransform: 'none',
                 fontWeight: 600,
-                borderRadius: '10px',
-                px: 2.5,
-                py: 1,
+                borderRadius: '8px',
+                px: 2,
+                py: 0.75,
+                fontSize: '0.8rem',
                 bgcolor: '#4CD964',
                 color: '#fff',
                 boxShadow: 'none',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
                 '&:hover': {
                   bgcolor: '#3CB853',
                   boxShadow: '0 4px 12px rgba(76, 217, 100, 0.3)',

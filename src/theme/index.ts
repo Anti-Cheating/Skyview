@@ -14,17 +14,50 @@
 
 import { createTheme } from '@mui/material/styles';
 
+// ── Centralized design tokens ────────────────────────────────────────
+// Every component should reference these via theme.palette.* or the
+// TOKENS export — never hardcode hex values inline.
+export const TOKENS = {
+  // Brand
+  brand: '#4CD964',
+  brandHover: '#3CB853',
+  brandLight: '#6DE884',
+  brandBg: 'rgba(76, 217, 100, 0.12)',
+
+  // Sidebar / dark chrome
+  sidebar: '#0B1A10',
+  sidebarHover: '#142A1A',
+  sidebarText: '#FFFFFF',
+
+  // Content / light chrome
+  bg: '#F8F9FA',
+  bgCard: '#FFFFFF',
+  border: '#E5E7EB',
+  borderLight: '#F3F4F6',
+
+  // Text
+  textPrimary: '#1F2937',
+  textSecondary: '#6B7280',
+  textMuted: '#9CA3AF',
+
+  // Status
+  success: '#059669',
+  error: '#DC2626',
+  errorLight: '#F87171',
+  warning: '#FACC15',
+} as const;
+
 const colors = {
   primary: {
-    main: '#4CD964',
-    light: '#6DE884',
-    dark: '#3BB954',
+    main: TOKENS.brand,
+    light: TOKENS.brandLight,
+    dark: TOKENS.brandHover,
     contrastText: '#FFFFFF',
   },
   secondary: {
-    main: '#4CD964',
-    light: '#6DE884',
-    dark: '#3BB954',
+    main: TOKENS.brand,
+    light: TOKENS.brandLight,
+    dark: TOKENS.brandHover,
     contrastText: '#FFFFFF',
   },
   success: {
@@ -33,12 +66,12 @@ const colors = {
     dark: '#3ACE70',
   },
   warning: {
-    main: '#FACC15',
+    main: TOKENS.warning,
     light: '#FBDC45',
     dark: '#D9BC05',
   },
   error: {
-    main: '#F87171',
+    main: TOKENS.errorLight,
     light: '#F89191',
     dark: '#D85151',
   },
@@ -48,15 +81,15 @@ const colors = {
     dark: '#2563eb',
   },
   background: {
-    default: '#F8F9FA',
-    paper: '#FFFFFF',
+    default: TOKENS.bg,
+    paper: TOKENS.bgCard,
   },
   text: {
-    primary: '#1F2937',
-    secondary: '#6B7280',
-    disabled: '#9CA3AF',
+    primary: TOKENS.textPrimary,
+    secondary: TOKENS.textSecondary,
+    disabled: TOKENS.textMuted,
   },
-  divider: '#E5E7EB',
+  divider: TOKENS.border,
 };
 
 export const theme = createTheme({
@@ -108,16 +141,16 @@ export const theme = createTheme({
           textTransform: 'none',
         },
         contained: {
-          backgroundColor: '#4CD964',
+          backgroundColor: TOKENS.brand,
           color: '#FFFFFF',
           boxShadow: '0 2px 4px rgba(76, 217, 100, 0.2)',
           '&:hover': {
-            backgroundColor: '#6DE884',
+            backgroundColor: TOKENS.brandLight,
             boxShadow: '0 4px 8px rgba(76, 217, 100, 0.3)',
           },
           '&:disabled': {
-            backgroundColor: '#E5E7EB',
-            color: '#9CA3AF',
+            backgroundColor: TOKENS.border,
+            color: TOKENS.textMuted,
           },
         },
       },
@@ -126,8 +159,8 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: '12px !important',
-          backgroundColor: '#FFFFFF',
-          border: '1px solid #E5E7EB',
+          backgroundColor: TOKENS.bgCard,
+          border: `1px solid ${TOKENS.border}`,
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.06)',
           overflow: 'hidden',
         },
@@ -137,9 +170,9 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: '12px !important',
-          backgroundColor: '#FFFFFF',
+          backgroundColor: TOKENS.bgCard,
           backgroundImage: 'none',
-          border: '1px solid #E5E7EB',
+          border: `1px solid ${TOKENS.border}`,
           overflow: 'hidden',
         },
         elevation1: {
@@ -157,7 +190,7 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           boxShadow: '0 2px 4px rgba(0, 0, 0, 0.06)',
-          background: '#4CD964',
+          background: TOKENS.brand,
           borderRadius: '0 !important',
         },
       },
@@ -186,8 +219,8 @@ export const theme = createTheme({
       styleOverrides: {
         paper: {
           borderRadius: '0 !important',
-          backgroundColor: '#0B1A10',
-          color: '#FFFFFF',
+          backgroundColor: TOKENS.sidebar,
+          color: TOKENS.sidebarText,
           border: 'none',
         },
       },

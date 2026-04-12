@@ -40,10 +40,11 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { USER_ROLES } from '../../config/constants';
 import type { InterviewSession } from '../../types/interview.types';
+import { TOKENS } from '../../theme';
 
-const BRAND = '#4CD964';
-const LIGHT_BG = '#FFFFFF';
-const LIGHT_BORDER = '#E5E7EB';
+const BRAND = TOKENS.brand;
+const LIGHT_BG = TOKENS.bgCard;
+const LIGHT_BORDER = TOKENS.border;
 
 interface StepState {
   extension: 'pending' | 'checking' | 'done' | 'missing';
@@ -300,7 +301,7 @@ export default function CandidateJoinPage() {
       </Box>
 
       {/* Steps — upper-third, centered card */}
-      <Box sx={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', pt: 6, px: 3, pb: 3 }}>
+      <Box sx={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', pt: { xs: 3, md: 6 }, px: { xs: 2, md: 3 }, pb: 3 }}>
         <Box
           sx={{
             width: 460,

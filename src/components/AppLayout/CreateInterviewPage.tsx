@@ -152,7 +152,7 @@ export default function CreateInterviewPage() {
   };
 
   return (
-    <Box sx={{ width: '100%', p: 3 }}>
+    <Box sx={{ width: '100%', p: { xs: 2, md: 3 } }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
@@ -161,7 +161,7 @@ export default function CreateInterviewPage() {
               variant="h5"
               fontWeight={700}
               sx={{
-                fontSize: '1.5rem',
+                fontSize: { xs: '1.2rem', md: '1.5rem' },
                 color: '#1F2937',
                 letterSpacing: '-0.01em',
                 mb: 0.5,
@@ -169,7 +169,7 @@ export default function CreateInterviewPage() {
             >
               New Interview
             </Typography>
-            <Typography variant="body2" sx={{ color: '#6B7280', fontSize: '0.875rem' }}>
+            <Typography variant="body2" sx={{ color: '#6B7280', fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
               Schedule a meeting and invite a candidate
             </Typography>
           </Box>
@@ -210,7 +210,7 @@ export default function CreateInterviewPage() {
             overflow: 'hidden',
           }}
         >
-          <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
             {success && (
               <Alert severity="success" sx={{ borderRadius: '10px' }}>
                 Interview created successfully! Redirecting...
@@ -223,7 +223,7 @@ export default function CreateInterviewPage() {
             )}
 
             {/* Row 1: Title + Description */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
               <Box>
                 <Label>Interview Title</Label>
                 <TextField
@@ -251,7 +251,7 @@ export default function CreateInterviewPage() {
             </Box>
 
             {/* Row 2: Candidate name + email */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 3 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
               <Box>
                 <Label>Candidate First Name</Label>
                 <TextField
@@ -367,7 +367,7 @@ export default function CreateInterviewPage() {
             </Box>
 
             {/* Row 3: Provider/Link + Schedule + Duration */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 3 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
               {interviewType === 'application' ? (
                 <Box>
                   <Label>Meeting Provider</Label>
@@ -443,20 +443,21 @@ export default function CreateInterviewPage() {
           {/* Footer */}
           <Box
             sx={{
-              px: 4, py: 2.5,
+              px: { xs: 2, md: 4 }, py: 2,
               borderTop: '1px solid #F3F4F6',
               display: 'flex',
               justifyContent: 'flex-end',
-              gap: 1.5,
+              gap: 1,
               bgcolor: '#FAFAFA',
             }}
           >
             <Button
               onClick={() => navigate('/interviews')}
               disabled={loading}
+              size="small"
               sx={{
                 textTransform: 'none', color: '#6B7280', fontWeight: 600,
-                borderRadius: '10px', px: 3, py: 1, fontSize: '0.875rem',
+                borderRadius: '8px', px: 2, py: 0.75, fontSize: '0.8rem',
                 border: '1px solid #E5E7EB',
                 '&:hover': { bgcolor: '#F3F4F6' },
               }}
@@ -467,11 +468,13 @@ export default function CreateInterviewPage() {
               onClick={handleSubmit}
               variant="contained"
               disabled={loading || success}
-              startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null}
+              size="small"
+              startIcon={loading ? <CircularProgress size={14} color="inherit" /> : null}
               sx={{
-                textTransform: 'none', fontWeight: 600, borderRadius: '10px',
-                px: 4, py: 1, fontSize: '0.875rem',
+                textTransform: 'none', fontWeight: 600, borderRadius: '8px',
+                px: 2.5, py: 0.75, fontSize: '0.8rem',
                 bgcolor: '#4CD964', color: '#fff', boxShadow: 'none',
+                whiteSpace: 'nowrap',
                 '&:hover': { bgcolor: '#3CB853', boxShadow: '0 4px 12px rgba(76, 217, 100, 0.3)' },
                 '&.Mui-disabled': { bgcolor: '#E5E7EB', color: '#9CA3AF' },
               }}

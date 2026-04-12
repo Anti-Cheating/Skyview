@@ -29,10 +29,11 @@ import { USER_ROLES } from '../../config/constants';
 import { useAuth } from '../../contexts/AuthContext';
 import AnalyticsPanel from './AnalyticsPanel';
 import CandidateSetupCard from './CandidateSetupCard';
+import { TOKENS } from '../../theme';
 
-const LIGHT_BG = '#FFFFFF';
-const LIGHT_BORDER = '#E5E7EB';
-const BRAND = '#4CD964';
+const LIGHT_BG = TOKENS.bgCard;
+const LIGHT_BORDER = TOKENS.border;
+const BRAND = TOKENS.brand;
 
 export default function MonitoringView() {
   const { id: interviewId } = useParams<{ id: string }>();
@@ -152,12 +153,13 @@ export default function MonitoringView() {
           display: 'flex',
           alignItems: 'center',
           gap: 2,
-          px: 3,
+          px: { xs: 2, md: 3 },
           py: 1.5,
           borderBottom: `1px solid ${LIGHT_BORDER}`,
           bgcolor: LIGHT_BG,
           color: '#1F2937',
           flexShrink: 0,
+          flexWrap: 'wrap',
         }}
       >
         <IconButton
@@ -174,7 +176,7 @@ export default function MonitoringView() {
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography
             sx={{
-              fontSize: '1rem',
+              fontSize: { xs: '0.85rem', md: '1rem' },
               fontWeight: 700,
               color: '#1F2937',
               overflow: 'hidden',
@@ -184,19 +186,13 @@ export default function MonitoringView() {
           >
             {interview.title}
           </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography sx={{ fontSize: '0.75rem', color: '#6B7280' }}>
-              {candidateName}
-            </Typography>
-            <Typography sx={{ fontSize: '0.75rem', color: '#D1D5DB' }}>•</Typography>
-            <Typography sx={{ fontSize: '0.75rem', color: '#6B7280' }}>
-              {interview.interview_type === 'extension' ? 'Chrome Extension' : 'Falcon App'}
-            </Typography>
-          </Box>
+          <Typography sx={{ fontSize: '0.7rem', color: '#6B7280', display: { xs: 'none', sm: 'block' } }}>
+            {candidateName} · {interview.interview_type === 'extension' ? 'Chrome Extension' : 'Falcon App'}
+          </Typography>
         </Box>
 
         {/* Connection / monitoring status */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
           <Chip
             icon={<DotIcon sx={{ fontSize: '12px !important' }} />}
             label={riskData.isConnected ? 'Connected' : 'Disconnected'}
@@ -245,6 +241,7 @@ export default function MonitoringView() {
                 bgcolor: '#F3F4F6',
                 color: '#1F2937',
                 border: '1px solid #E5E7EB',
+                display: { xs: 'none', sm: 'flex' },
                 '&:hover': { bgcolor: '#E5E7EB' },
               }}
             />

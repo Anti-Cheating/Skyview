@@ -57,12 +57,12 @@ function StatCard({ title, value, icon, bgColor, onClick }: StatCardProps) {
           : {},
       }}
     >
-      <CardContent sx={{ p: 3 }}>
+      <CardContent sx={{ p: { xs: 2, md: 3 } }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
           <Box
             sx={{
-              width: 56,
-              height: 56,
+              width: { xs: 40, md: 56 },
+              height: { xs: 40, md: 56 },
               borderRadius: '12px',
               bgcolor: bgColor,
               display: 'flex',
@@ -73,10 +73,10 @@ function StatCard({ title, value, icon, bgColor, onClick }: StatCardProps) {
             {icon}
           </Box>
         </Box>
-        <Typography variant="h3" sx={{ fontSize: '2.5rem', fontWeight: 700, color: '#1F2937', mb: 0.5, lineHeight: 1 }}>
+        <Typography variant="h3" sx={{ fontSize: { xs: '1.8rem', md: '2.5rem' }, fontWeight: 700, color: '#1F2937', mb: 0.5, lineHeight: 1 }}>
           {value}
         </Typography>
-        <Typography variant="body2" sx={{ fontSize: '0.875rem', color: '#6B7280', fontWeight: 500 }}>
+        <Typography variant="body2" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' }, color: '#6B7280', fontWeight: 500 }}>
           {title}
         </Typography>
       </CardContent>
@@ -184,8 +184,8 @@ export default function AppDashboard() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h5" fontWeight={700} sx={{ fontSize: '1.5rem', mb: 3, color: '#1F2937', letterSpacing: '-0.01em' }}>
+    <Box sx={{ p: { xs: 2, md: 3 } }}>
+      <Typography variant="h5" fontWeight={700} sx={{ fontSize: { xs: '1.2rem', md: '1.5rem' }, mb: 3, color: '#1F2937', letterSpacing: '-0.01em' }}>
         Dashboard
       </Typography>
 

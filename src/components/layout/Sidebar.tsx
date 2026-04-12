@@ -32,6 +32,7 @@ import {
 } from '@mui/icons-material';
 import { SidebarProps } from './sidebar.types';
 import { TruoyyLogo } from './TruoyyLogo';
+import { TOKENS } from '../../theme';
 import { useAuth } from '../../contexts/AuthContext';
 
 const iconMap: Record<string, React.ComponentType<any>> = {
@@ -145,8 +146,8 @@ export function Sidebar({
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        bgcolor: '#0B1A10',
-        color: '#FFFFFF',
+        bgcolor: TOKENS.sidebar,
+        color: TOKENS.sidebarText,
       }}
     >
       {/* Logo Section */}
@@ -397,11 +398,11 @@ export function Sidebar({
                 px: itemPadding,
                 py: 0.75,
                 flex: 1,
-                bgcolor: activeId === profile?.id ? '#142A1A' : 'transparent',
+                bgcolor: activeId === profile?.id ? TOKENS.sidebarHover : 'transparent',
                 color: '#FFFFFF',
                 transition: 'all 0.2s ease',
                 justifyContent: collapsed ? 'center' : 'flex-start',
-                '&:hover': { bgcolor: '#142A1A' },
+                '&:hover': { bgcolor: TOKENS.sidebarHover },
                 '&:focus-visible': {
                   outline: `2px solid ${theme.palette.primary.main}`,
                   outlineOffset: 2,
@@ -449,7 +450,7 @@ export function Sidebar({
                 sx={{
                   color: '#FFFFFF',
                   '&:hover': {
-                    bgcolor: '#142A1A',
+                    bgcolor: TOKENS.sidebarHover,
                     color: theme.palette.primary.main,
                   },
                 }}
