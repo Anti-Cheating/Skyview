@@ -21,6 +21,10 @@ export default function Login() {
   const [emailError, setEmailError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Note: post-login redirect (including ?returnTo=) is handled by AuthRoute
+  // in App.tsx — once `login()` flips isAuthenticated to true, AuthRoute
+  // re-renders and Navigates to the right place. We don't navigate here.
+
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setEmail(value);
@@ -38,6 +42,9 @@ export default function Login() {
 
     try {
       await login({ email, password });
+      // AuthRoute (App.tsx) handles the post-login redirect, including
+      // ?returnTo= (which is how the /authorize-extension flow comes back
+      // here after login).
     } catch (err: any) {
       const apiError = err as ApiError;
       if (apiError.status === 401) setError('Invalid email or password');

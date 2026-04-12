@@ -25,6 +25,7 @@ import {
   Info as InfoIcon,
   AccessTime as AccessTimeIcon,
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import type { InterviewSession } from '../../types/interview.types';
 import { USER_ROLES } from '../../config/constants';
 
@@ -35,6 +36,7 @@ interface AppInterviewCardProps {
 }
 
 export default function AppInterviewCard({ interview, userRole, onJoin }: AppInterviewCardProps) {
+  const navigate = useNavigate();
   // Format date and time
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -54,12 +56,56 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
 
   const { date, time } = formatDateTime(interview.scheduled_start_at);
 
-  // Skyview: joining is not supported. Only completed interviews are actionable
-  // (View Details). Everything else shows "Join Not Available".
+  // Action button behavior depends on role + interview type:
+  //   - Interviewer + extension  → "Open Monitoring" (→ /interviews/:id/monitor)
+  //   - Interviewer + application → "Open Falcon App" (disabled — interviewer needs desktop app)
+  //   - Candidate   + extension  → "Join Interview" (→ message Jarvis extension)
+  //   - Completed                → "View Details"
+  //   - Otherwise (candidate + application) → "Join in Falcon App"
   const isCompleted = interview.status === 'completed';
-  const canAction = isCompleted;
-  const actionLabel = isCompleted ? 'View Details' : 'Join Not Available';
-  const tooltipMessage = isCompleted ? '' : 'Joining interviews is not available in Skyview';
+  const isInterviewer = userRole === USER_ROLES.INTERVIEWER;
+  const isCandidate = userRole === USER_ROLES.CANDIDATE;
+  const isExtensionType = interview.interview_type === 'extension';
+  const canMonitor = isInterviewer && isExtensionType && !isCompleted;
+  const canCandidateJoin = isCandidate && isExtensionType && !isCompleted;
+  const canAction = isCompleted || canMonitor || canCandidateJoin;
+
+  let actionLabel: string;
+  let tooltipMessage: string;
+  if (isCompleted) {
+    actionLabel = 'View Details';
+    tooltipMessage = '';
+  } else if (canMonitor) {
+    actionLabel = 'Open Monitoring';
+    tooltipMessage = '';
+  } else if (canCandidateJoin) {
+    actionLabel = 'Join Interview';
+    tooltipMessage = '';
+  } else if (isInterviewer && !isExtensionType) {
+    actionLabel = 'Open Falcon App';
+    tooltipMessage = 'Application-type interviews are managed in the Falcon desktop app';
+  } else {
+    actionLabel = 'Join in Falcon App';
+    tooltipMessage = 'Application-type interviews require the Falcon desktop app';
+  }
+
+  const handleCandidateJoin = () => {
+    navigate(`/interviews/${interview.id}/join`);
+  };
+
+  const handleAction = () => {
+    if (canMonitor) {
+      navigate(`/interviews/${interview.id}/monitor`);
+      return;
+    }
+    if (canCandidateJoin) {
+      void handleCandidateJoin();
+      return;
+    }
+    if (canAction && onJoin) {
+      onJoin(interview);
+    }
+  };
 
   // Get participant information based on role
   const getParticipantInfo = () => {
@@ -400,11 +446,7 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
                   <AccessTimeIcon sx={{ fontSize: 14 }} />
                 )
               }
-              onClick={() => {
-                if (canAction && onJoin) {
-                  onJoin(interview);
-                }
-              }}
+              onClick={handleAction}
               size="small"
               sx={{
                 fontSize: '0.75rem',

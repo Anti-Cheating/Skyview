@@ -2,6 +2,11 @@ export const ENV = {
   // API Endpoints
   AUTH_API_URL: import.meta.env.VITE_AUTH_API_URL || 'http://localhost:4000',
 
+  // Jarvis Chrome extension ID — derived from the public key in
+  // Jarvis/candidate/manifest.json. Used by Skyview to send messages
+  // to the extension via chrome.runtime.sendMessage.
+  EXTENSION_ID: import.meta.env.VITE_EXTENSION_ID || 'kegdnlfmpkhmcfkaendochifoncjnkna',
+
   // App Configuration
   APP_NAME: import.meta.env.VITE_APP_NAME || 'Skyview',
   APP_VERSION: import.meta.env.VITE_APP_VERSION || '1.0.0',

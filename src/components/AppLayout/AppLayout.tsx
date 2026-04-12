@@ -1,18 +1,17 @@
-import { useState } from 'react';
 import { Box } from '@mui/material';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar } from '../layout/Sidebar';
 import type { LogoConfig, NavItem, SecondaryNavItem, ProfileConfig } from '../layout/sidebar.types';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserDisplayName } from '../../utils/user.utils';
-import AppDashboard from './AppDashboard';
-import AppInterviewList from './AppInterviewList';
 
 const DRAWER_WIDTH = 260;
 const DRAWER_WIDTH_COLLAPSED = 64;
 
 export default function AppLayout() {
   const { user } = useAuth();
-  const [currentView, setCurrentView] = useState<string>('dashboard');
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Sidebar is always open in Skyview — never collapsed
   const sidebarCollapsed = false;
@@ -24,7 +23,7 @@ export default function AppLayout() {
   };
 
   const sidebarItems: NavItem[] = [
-    { id: 'dashboard', label: 'Dashboard', iconName: 'Dashboard', route: '/dashboard', badge: null },
+    { id: 'dashboard', label: 'Dashboard', iconName: 'Dashboard', route: '/', badge: null },
     { id: 'interviews', label: 'Interviews', iconName: 'Interviews', route: '/interviews', badge: null },
   ];
 
@@ -37,12 +36,15 @@ export default function AppLayout() {
     route: '/profile',
   };
 
+  // Derive active sidebar item from current URL
+  const getActiveId = (): string => {
+    if (location.pathname.startsWith('/interviews')) return 'interviews';
+    if (location.pathname.startsWith('/profile')) return 'profile';
+    return 'dashboard';
+  };
+
   const handleNavigate = (route: string) => {
-    if (route === '/dashboard' || route === '/' || route === '/profile') {
-      setCurrentView('dashboard');
-    } else if (route === '/interviews') {
-      setCurrentView('interviews');
-    }
+    navigate(route);
   };
 
   return (
@@ -55,7 +57,7 @@ export default function AppLayout() {
         collapsed={sidebarCollapsed}
         onToggle={() => {}}
         onNavigate={handleNavigate}
-        activeId={currentView}
+        activeId={getActiveId()}
         width={DRAWER_WIDTH}
         collapsedWidth={DRAWER_WIDTH_COLLAPSED}
       />
@@ -71,8 +73,7 @@ export default function AppLayout() {
           position: 'relative',
         }}
       >
-        {currentView === 'dashboard' && <AppDashboard onNavigate={handleNavigate} />}
-        {currentView === 'interviews' && <AppInterviewList />}
+        <Outlet />
       </Box>
     </Box>
   );

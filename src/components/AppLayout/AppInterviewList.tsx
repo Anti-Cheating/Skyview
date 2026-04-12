@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { InterviewListShimmer } from '../common/Shimmer';
 import {
   Box,
@@ -9,12 +10,14 @@ import {
   Pagination,
   Stack,
   Chip,
+  Button,
   useTheme,
 } from '@mui/material';
 import {
   EventBusy as EventBusyIcon,
   History as HistoryIcon,
   CalendarToday as CalendarTodayIcon,
+  Add as AddIcon,
 } from '@mui/icons-material';
 import AppInterviewCard from './AppInterviewCard';
 import { InterviewService } from '../../services/interview.service';
@@ -43,6 +46,7 @@ export default function AppInterviewList() {
   const { user } = useAuth();
   const { showError } = useSnackbar();
   const theme = useTheme();
+  const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
   const [upcomingInterviews, setUpcomingInterviews] = useState<InterviewSession[]>([]);
   const [pastInterviews, setPastInterviews] = useState<InterviewSession[]>([]);
@@ -54,6 +58,7 @@ export default function AppInterviewList() {
   const [error, setError] = useState<string | null>(null);
 
   const userRole = user?.role || USER_ROLES.CANDIDATE;
+  const isInterviewer = userRole === USER_ROLES.INTERVIEWER;
 
   const fetchUpcoming = async (page: number) => {
     setLoading(true);
@@ -148,15 +153,40 @@ export default function AppInterviewList() {
   return (
     <Box sx={{ width: '100%', p: 3 }}>
       <Box sx={{ mb: 4 }}>
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="h5" fontWeight={700} sx={{ fontSize: '1.5rem', color: '#1F2937', letterSpacing: '-0.01em', mb: 0.5 }}>
-            Interviews
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#6B7280', fontSize: '0.875rem' }}>
-            {userRole === USER_ROLES.CANDIDATE
-              ? 'Manage and join your scheduled interviews'
-              : 'Review and conduct interviews with candidates'}
-          </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+          <Box>
+            <Typography variant="h5" fontWeight={700} sx={{ fontSize: '1.5rem', color: '#1F2937', letterSpacing: '-0.01em', mb: 0.5 }}>
+              Interviews
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#6B7280', fontSize: '0.875rem' }}>
+              {userRole === USER_ROLES.CANDIDATE
+                ? 'Manage and join your scheduled interviews'
+                : 'Review and conduct interviews with candidates'}
+            </Typography>
+          </Box>
+          {isInterviewer && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => navigate('/interviews/new')}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                borderRadius: '10px',
+                px: 2.5,
+                py: 1,
+                bgcolor: '#4CD964',
+                color: '#fff',
+                boxShadow: 'none',
+                '&:hover': {
+                  bgcolor: '#3CB853',
+                  boxShadow: '0 4px 12px rgba(76, 217, 100, 0.3)',
+                },
+              }}
+            >
+              New Interview
+            </Button>
+          )}
         </Box>
 
         <Box sx={{ borderBottom: 1, borderColor: '#E5E7EB', mb: 3 }}>
