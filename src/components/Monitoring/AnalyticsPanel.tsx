@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -412,10 +412,10 @@ export default function AnalyticsPanel({
   const { results, latestResult, averageScore, recentScore, highestRisk, isConnected, pulseAlerts, imageAnalysisResults } = riskData;
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
 
-  // Skyview (web): no Electron viewer — open the clicked screenshot in a new tab
+  // Lightbox state
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
   const openScreenshotViewer = (urls: string[], startIndex: number) => {
-    const url = urls[startIndex];
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    setLightbox({ urls, index: startIndex });
   };
   const [activeTab, setActiveTab] = useState(0);
 
@@ -733,11 +733,7 @@ export default function AnalyticsPanel({
                       </Box>
                       {ia.summary && <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.5, mb: 0.5 }}>{ia.summary}</Typography>}
                       {ia.thumbnail_urls?.length > 0 && (
-                        <Box sx={{ display: 'flex', gap: 0.5, mb: 0.5, flexWrap: 'wrap' }}>
-                          {ia.thumbnail_urls.slice(0, 6).map((url, i) => (
-                            <Box key={i} component="img" src={url} alt="" onClick={() => openScreenshotViewer(ia.thumbnail_urls, i)} sx={{ width: 52, height: 34, objectFit: 'cover', borderRadius: '6px', border: `1px solid ${DARK_BORDER}`, cursor: 'pointer', '&:hover': { opacity: 0.8 }, transition: 'opacity 0.15s' }} />
-                          ))}
-                        </Box>
+                        <ThumbnailCarousel urls={ia.thumbnail_urls} onClickThumb={(i) => openScreenshotViewer(ia.thumbnail_urls, i)} />
                       )}
                       {ia.image_signals?.length > 0 && (
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
@@ -765,6 +761,186 @@ export default function AnalyticsPanel({
         </Box>
       )}
 
+      {/* ─── Lightbox modal ─── */}
+      {lightbox && (
+        <ScreenshotLightbox
+          urls={lightbox.urls}
+          index={lightbox.index}
+          onClose={() => setLightbox(null)}
+          onChange={(i) => setLightbox((prev) => prev ? { ...prev, index: i } : null)}
+        />
+      )}
+
+    </Box>
+  );
+}
+
+// ── Screenshot lightbox — fullscreen modal with prev/next ────────────
+
+function ScreenshotLightbox({
+  urls, index, onClose, onChange,
+}: {
+  urls: string[];
+  index: number;
+  onClose: () => void;
+  onChange: (i: number) => void;
+}) {
+  const goPrev = () => { if (index > 0) onChange(index - 1); };
+  const goNext = () => { if (index < urls.length - 1) onChange(index + 1); };
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowLeft') goPrev();
+      if (e.key === 'ArrowRight') goNext();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  });
+
+  const arrowBtn = {
+    position: 'absolute' as const, top: '50%', transform: 'translateY(-50%)',
+    width: 40, height: 40, borderRadius: '50%',
+    bgcolor: 'rgba(0,0,0,0.5)', color: '#fff', display: 'flex',
+    alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+    fontSize: '22px', fontWeight: 700, backdropFilter: 'blur(4px)',
+    '&:hover': { bgcolor: 'rgba(0,0,0,0.75)' },
+    transition: 'background 0.15s',
+  };
+
+  return (
+    <Box
+      onClick={onClose}
+      sx={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        bgcolor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      {/* Close button */}
+      <Box
+        onClick={onClose}
+        sx={{
+          position: 'absolute', top: 16, right: 16,
+          width: 36, height: 36, borderRadius: '50%',
+          bgcolor: 'rgba(255,255,255,0.1)', color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', fontSize: '18px',
+          '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' },
+        }}
+      >
+        ✕
+      </Box>
+
+      {/* Counter */}
+      <Box sx={{ position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)' }}>
+        <Typography sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', fontWeight: 600 }}>
+          {index + 1} / {urls.length}
+        </Typography>
+      </Box>
+
+      {/* Left arrow */}
+      {index > 0 && (
+        <Box onClick={(e) => { e.stopPropagation(); goPrev(); }} sx={{ ...arrowBtn, left: 16 }}>
+          ‹
+        </Box>
+      )}
+
+      {/* Image */}
+      <Box
+        component="img"
+        src={urls[index]}
+        alt=""
+        onClick={(e) => e.stopPropagation()}
+        sx={{
+          maxWidth: '85vw', maxHeight: '85vh',
+          objectFit: 'contain', borderRadius: '8px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        }}
+      />
+
+      {/* Right arrow */}
+      {index < urls.length - 1 && (
+        <Box onClick={(e) => { e.stopPropagation(); goNext(); }} sx={{ ...arrowBtn, right: 16 }}>
+          ›
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+// ── Thumbnail carousel — arrows only when content overflows ──────────
+
+function ThumbnailCarousel({ urls, onClickThumb }: { urls: string[]; onClickThumb: (i: number) => void }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showLeft, setShowLeft] = useState(false);
+  const [showRight, setShowRight] = useState(false);
+
+  const checkOverflow = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setShowLeft(el.scrollLeft > 4);
+    setShowRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    checkOverflow();
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(checkOverflow);
+    ro.observe(el);
+    el.addEventListener('scroll', checkOverflow, { passive: true });
+    return () => { ro.disconnect(); el.removeEventListener('scroll', checkOverflow); };
+  }, [checkOverflow, urls.length]);
+
+  const scroll = (dir: number) => {
+    scrollRef.current?.scrollBy({ left: dir * 300, behavior: 'smooth' });
+  };
+
+  const arrowSx = {
+    position: 'absolute' as const, top: '50%', transform: 'translateY(-50%)',
+    zIndex: 2, width: 28, height: 28, borderRadius: '50%',
+    bgcolor: 'rgba(0,0,0,0.55)', color: '#fff', display: 'flex',
+    alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+    fontSize: '16px', fontWeight: 700, backdropFilter: 'blur(4px)',
+    '&:hover': { bgcolor: 'rgba(0,0,0,0.8)' },
+    transition: 'opacity 0.2s',
+  };
+
+  return (
+    <Box sx={{ position: 'relative', mb: 0.8 }}>
+      {showLeft && (
+        <Box onClick={() => scroll(-1)} sx={{ ...arrowSx, left: 0 }}>‹</Box>
+      )}
+      <Box
+        ref={scrollRef}
+        sx={{
+          display: 'flex', gap: 0.8, overflowX: 'auto',
+          px: (showLeft || showRight) ? 3.5 : 0,
+          scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' },
+        }}
+      >
+        {urls.map((url, i) => (
+          <Box
+            key={i}
+            component="img"
+            src={url}
+            alt=""
+            onClick={() => onClickThumb(i)}
+            sx={{
+              width: 160, minWidth: 160, height: 100,
+              objectFit: 'cover', borderRadius: '8px',
+              border: `1px solid ${DARK_BORDER}`, cursor: 'pointer',
+              '&:hover': { opacity: 0.85, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' },
+              transition: 'opacity 0.15s, box-shadow 0.15s',
+            }}
+          />
+        ))}
+      </Box>
+      {showRight && (
+        <Box onClick={() => scroll(1)} sx={{ ...arrowSx, right: 0 }}>›</Box>
+      )}
     </Box>
   );
 }
