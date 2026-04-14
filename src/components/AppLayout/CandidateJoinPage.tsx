@@ -315,7 +315,6 @@ export default function CandidateJoinPage() {
             boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
           }}
         >
-          /* ── Extension type: Chrome extension flow ── */
           <>
           {/* Step rows — each is a self-contained row with its own bg */}
           <StepRow
