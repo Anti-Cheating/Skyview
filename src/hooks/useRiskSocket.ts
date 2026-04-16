@@ -65,6 +65,13 @@ export interface TranscriptFragment {
   text: string;
   is_final: boolean;
   timestamp: string;
+  // Populated by the Cortex Deepgram proxy for both interviewer and
+  // candidate streams. Older payloads (pre-Phase 2) omit these — treat a
+  // missing role as "candidate" to match the original Falcon flow.
+  speaker_role?: "interviewer" | "candidate";
+  participant_id?: string;
+  start_ms?: number;
+  end_ms?: number;
 }
 
 export interface CandidateStatus {
@@ -253,12 +260,27 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     });
 
     socket.on('live-transcript', (data: TranscriptFragment) => {
+      // Normalize missing speaker_role to "candidate" to keep the pre-Phase-2
+      // Falcon flow working unchanged.
+      const incoming: TranscriptFragment = {
+        ...data,
+        speaker_role: data.speaker_role ?? 'candidate',
+      };
       setTranscriptFragments(prev => {
-        // If last entry is interim, always replace it (whether new is interim or final)
-        if (prev.length > 0 && !prev[prev.length - 1].is_final) {
-          return [...prev.slice(0, -1), data];
+        // Interim replacement must be per-speaker now that both interviewer
+        // and candidate push fragments concurrently — otherwise the
+        // candidate's in-progress utterance gets clobbered by the
+        // interviewer's and vice versa.
+        for (let i = prev.length - 1; i >= 0; i--) {
+          const f = prev[i];
+          if (f.speaker_role === incoming.speaker_role) {
+            if (!f.is_final) {
+              return [...prev.slice(0, i), incoming, ...prev.slice(i + 1)];
+            }
+            break;
+          }
         }
-        return [...prev, data];
+        return [...prev, incoming];
       });
     });
 

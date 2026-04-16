@@ -118,21 +118,52 @@ export default function LiveTranscriptFeed({ fragments }: LiveTranscriptFeedProp
             },
           }}
         >
-          {fragments.map((f, i) => (
-            <Typography
-              key={i}
-              component="span"
-              sx={{
-                fontSize: '0.8rem',
-                lineHeight: 1.7,
-                color: theme.palette.text.primary,
-                opacity: f.is_final ? 1 : 0.4,
-                transition: 'opacity 0.3s',
-              }}
-            >
-              {f.text}{' '}
-            </Typography>
-          ))}
+          {/*
+            Render each fragment as its own line prefixed with the speaker
+            role, so Interviewer and Candidate utterances are visually
+            distinct. Falls back to "Candidate" when speaker_role is absent
+            (pre-Phase-2 payloads).
+          */}
+          {fragments.map((f, i) => {
+            const role = f.speaker_role ?? 'candidate';
+            const isInterviewer = role === 'interviewer';
+            return (
+              <Box
+                key={i}
+                sx={{
+                  display: 'flex',
+                  gap: 0.8,
+                  alignItems: 'baseline',
+                  opacity: f.is_final ? 1 : 0.4,
+                  transition: 'opacity 0.3s',
+                  mb: 0.3,
+                }}
+              >
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    color: isInterviewer ? '#6366f1' : '#10b981',
+                    flexShrink: 0,
+                    minWidth: isInterviewer ? 74 : 68,
+                  }}
+                >
+                  {isInterviewer ? 'Interviewer' : 'Candidate'}
+                </Typography>
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: '0.8rem',
+                    lineHeight: 1.6,
+                    color: theme.palette.text.primary,
+                  }}
+                >
+                  {f.text}
+                </Typography>
+              </Box>
+            );
+          })}
         </Box>
       )}
 
