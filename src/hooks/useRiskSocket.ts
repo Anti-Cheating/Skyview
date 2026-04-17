@@ -81,6 +81,12 @@ export interface CandidateStatus {
   updated_at: string | null;
 }
 
+export interface InterviewerStatus {
+  extension_installed: boolean;
+  mic_granted: boolean;
+  updated_at: string | null;
+}
+
 export interface UseRiskSocketReturn {
   results: WindowResult[];
   latestResult: WindowResult | null;
@@ -110,6 +116,8 @@ export interface UseRiskSocketReturn {
   // for this session, or it's an application-type interview).
   candidateStatus: CandidateStatus | null;
   setInitialCandidateStatus: (status: CandidateStatus | null) => void;
+  interviewerStatus: InterviewerStatus | null;
+  setInitialInterviewerStatus: (status: InterviewerStatus | null) => void;
 }
 
 function getRiskPriority(risk: string): number {
@@ -133,14 +141,15 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
   const [remoteStopRequested, setRemoteStopRequested] = useState(false);
   const [remoteCaptureRequested, setRemoteCaptureRequested] = useState(false);
   const [candidateStatus, setCandidateStatus] = useState<CandidateStatus | null>(null);
+  const [interviewerStatus, setInterviewerStatus] = useState<InterviewerStatus | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
-  // Allow MonitoringView to seed the candidate status from the GET
-  // /interview-sessions/:id payload (which now returns extension_status)
-  // before any socket events arrive — so an interviewer who opens the
-  // page after the candidate set up still sees the right state.
   const setInitialCandidateStatus = useCallback((status: CandidateStatus | null) => {
     setCandidateStatus((prev) => prev ?? status);
+  }, []);
+
+  const setInitialInterviewerStatus = useCallback((status: InterviewerStatus | null) => {
+    setInterviewerStatus((prev) => prev ?? status);
   }, []);
 
   const isImageAnalysisProcessing = pendingImageAnalysisCount > 0;
@@ -259,6 +268,15 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
       });
     });
 
+    socket.on('interviewer-status', (data: { sessionId: string; extension_installed?: boolean; mic_granted?: boolean; updated_at?: string }) => {
+      console.log('[RiskSocket] interviewer-status received:', data);
+      setInterviewerStatus({
+        extension_installed: !!data.extension_installed,
+        mic_granted: !!data.mic_granted,
+        updated_at: data.updated_at ?? new Date().toISOString(),
+      });
+    });
+
     socket.on('live-transcript', (data: TranscriptFragment) => {
       // Normalize missing speaker_role to "candidate" to keep the pre-Phase-2
       // Falcon flow working unchanged.
@@ -317,5 +335,7 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     emitCaptureScreenshots,
     candidateStatus,
     setInitialCandidateStatus,
+    interviewerStatus,
+    setInitialInterviewerStatus,
   };
 }

@@ -5,7 +5,8 @@ export const ENV = {
   // Jarvis Chrome extension ID — derived from the public key in
   // Jarvis/candidate/manifest.json. Used by Skyview to send messages
   // to the extension via chrome.runtime.sendMessage.
-  EXTENSION_ID: import.meta.env.VITE_EXTENSION_ID || 'kegdnlfmpkhmcfkaendochifoncjnkna',
+  CANDIDATE_EXTENSION_ID: import.meta.env.VITE_CANDIDATE_EXTENSION_ID || 'kegdnlfmpkhmcfkaendochifoncjnkna',
+  INTERVIEWER_EXTENSION_ID: import.meta.env.VITE_INTERVIEWER_EXTENSION_ID || 'hndnfgieajhbkedfnodnfgghpaliankg',
 
   // App Configuration
   APP_NAME: import.meta.env.VITE_APP_NAME || 'Skyview',

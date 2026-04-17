@@ -27,6 +27,7 @@ import {
   Shield as ShieldIcon,
   Warning as WarningIcon,
   CameraAlt as CameraIcon,
+  VideoCall as VideoCallIcon,
   FiberManualRecord as DotIcon,
   TrendingUp as TrendUpIcon,
   TrendingDown as TrendDownIcon,
@@ -407,7 +408,7 @@ export default function AnalyticsPanel({
   onStopMonitoring,
   onClose: _onClose,
   participantId: _participantId,
-  interview: _interview,
+  interview,
 }: AnalyticsPanelProps) {
   const { results, latestResult, averageScore, recentScore, highestRisk, isConnected, pulseAlerts, imageAnalysisResults } = riskData;
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
@@ -449,6 +450,32 @@ export default function AnalyticsPanel({
         </Box>
         {(onStartMonitoring || onStopMonitoring) && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0, flexWrap: 'wrap' }}>
+            {interview?.provider_metadata?.join_url && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<VideoCallIcon sx={{ fontSize: '14px !important' }} />}
+                onClick={() =>
+                  window.open(
+                    interview.provider_metadata.join_url,
+                    '_blank',
+                    'noopener,noreferrer'
+                  )
+                }
+                sx={{
+                  fontSize: '0.7rem',
+                  textTransform: 'none',
+                  py: 0.5,
+                  px: 1.5,
+                  borderRadius: '8px',
+                  borderColor: DARK_BORDER,
+                  color: DARK_TEXT,
+                  '&:hover': { borderColor: DARK_TEXT_SECONDARY, bgcolor: 'rgba(0,0,0,0.04)' },
+                }}
+              >
+                Open meeting link
+              </Button>
+            )}
             <Tooltip
               title={
                 !isMonitoring

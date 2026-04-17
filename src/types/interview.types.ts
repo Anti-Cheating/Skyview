@@ -40,6 +40,12 @@ export interface ExtensionStatus {
   updated_at: string;
 }
 
+export interface InterviewerExtensionStatus {
+  extension_installed: boolean;
+  mic_granted: boolean;
+  updated_at: string;
+}
+
 export interface InterviewSession {
   id: string;
   title: string;
@@ -55,6 +61,7 @@ export interface InterviewSession {
   // Pre-join setup state populated by Jarvis extension via socket events.
   // Null until the candidate's extension first connects for this session.
   extension_status?: ExtensionStatus | null;
+  interviewer_extension_status?: InterviewerExtensionStatus | null;
   status: string;
   duration_minutes?: number;
   timezone?: string;

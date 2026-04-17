@@ -23,12 +23,14 @@ import {
   FiberManualRecord as DotIcon,
 } from '@mui/icons-material';
 import { useRiskSocket } from '../../hooks/useRiskSocket';
+import { useInterviewerExtension } from '../../hooks/useInterviewerExtension';
 import { InterviewService } from '../../services/interview.service';
 import type { InterviewSession } from '../../types/interview.types';
 import { USER_ROLES } from '../../config/constants';
 import { useAuth } from '../../contexts/AuthContext';
 import AnalyticsPanel from './AnalyticsPanel';
 import CandidateSetupCard from './CandidateSetupCard';
+import InterviewerSetupCard from './InterviewerSetupCard';
 import FalconDownloadCard from '../common/FalconDownloadCard';
 import { TOKENS } from '../../theme';
 
@@ -48,6 +50,7 @@ export default function MonitoringView() {
   const [isMonitoring, setIsMonitoring] = useState(false);
 
   const riskData = useRiskSocket(interviewId ?? null);
+  const interviewerExt = useInterviewerExtension();
 
   // Fetch interview details
   useEffect(() => {
@@ -89,13 +92,31 @@ export default function MonitoringView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interviewId]);
 
+  // Send auth + session to the interviewer extension once interview loads
+  // and the extension is detected. Mirrors the Skyview → candidate
+  // extension handshake done by extensionBridge.ts, but for the
+  // interviewer's mic-only extension.
+  useEffect(() => {
+    if (!interviewId || !interviewerExt.installed || !user) return;
+    // Skyview stores the JWT under STORAGE_KEYS.ACCESS_TOKEN = "auth_access_token".
+    const token = localStorage.getItem('auth_access_token') || '';
+    if (token && user.id) {
+      interviewerExt.sendAuth(token, { id: user.id, email: user.email || '' });
+      interviewerExt.joinSession(interviewId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interviewId, interviewerExt.installed, user]);
+
   const handleStartMonitoring = () => {
     riskData.emitStartMonitoring();
+    // Also tell the interviewer extension to start mic capture
+    interviewerExt.startMic();
     setIsMonitoring(true);
   };
 
   const handleStopMonitoring = () => {
     riskData.emitStopMonitoring();
+    interviewerExt.stopMic();
     setIsMonitoring(false);
   };
 
@@ -137,7 +158,6 @@ export default function MonitoringView() {
     ? `${candidateParticipant.candidate.first_name} ${candidateParticipant.candidate.last_name}`.trim()
     : 'Candidate';
 
-  const joinUrl = interview.provider_metadata?.join_url;
 
   return (
     <Box
@@ -188,7 +208,9 @@ export default function MonitoringView() {
             {interview.title}
           </Typography>
           <Typography sx={{ fontSize: '0.7rem', color: '#6B7280', display: { xs: 'none', sm: 'block' } }}>
-            {candidateName} · {interview.interview_type === 'extension' ? 'Chrome Extension' : 'Falcon App'}
+            {interviewerExt.installed && interviewerExt.micGranted
+              ? `${candidateName} · ${interview.interview_type === 'extension' ? 'Chrome Extension' : 'Falcon App'}`
+              : 'Setup your monitoring before joining'}
           </Typography>
         </Box>
 
@@ -229,24 +251,9 @@ export default function MonitoringView() {
               }}
             />
           )}
-          {joinUrl && (
-            <Chip
-              label="Open meeting link"
-              size="small"
-              clickable
-              onClick={() => window.open(joinUrl, '_blank', 'noopener,noreferrer')}
-              sx={{
-                height: 24,
-                fontSize: '0.7rem',
-                fontWeight: 600,
-                bgcolor: '#F3F4F6',
-                color: '#1F2937',
-                border: '1px solid #E5E7EB',
-                display: { xs: 'none', sm: 'flex' },
-                '&:hover': { bgcolor: '#E5E7EB' },
-              }}
-            />
-          )}
+          {/* "Open meeting link" moved to AnalyticsPanel header next to
+              Capture / Start / Stop so all interviewer actions live in
+              one toolbar. */}
         </Box>
       </Box>
 
@@ -255,7 +262,7 @@ export default function MonitoringView() {
       ) : (
         /* Extension-type: full monitoring UI */
         <>
-          {/* Pre-join checklist */}
+          {/* Pre-join checklists */}
           {!riskData.candidateStatus?.joined
             ? <CandidateSetupCard status={riskData.candidateStatus} />
             : !riskData.candidateStatus?.screen_recording
@@ -263,17 +270,33 @@ export default function MonitoringView() {
               : null
           }
 
-          {/* AnalyticsPanel */}
-          <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            <AnalyticsPanel
-              interview={interview}
-              riskData={riskData}
-              isMonitoring={isMonitoring}
-              onStartMonitoring={handleStartMonitoring}
-              onStopMonitoring={handleStopMonitoring}
-              onClose={handleExit}
+          {/* Interviewer mic setup — 2-step stepper mirroring the
+              CandidateJoinPage design. Hidden once both steps are done;
+              Risk Analytics takes over and surfaces the "Open meeting
+              link" chip in the header for joining the meeting. */}
+          {!(interviewerExt.installed && interviewerExt.micGranted) && (
+            <InterviewerSetupCard
+              installed={interviewerExt.installed}
+              micGranted={interviewerExt.micGranted}
+              checking={interviewerExt.checking}
+              onEnableMic={interviewerExt.enableMic}
+              onRetryMic={interviewerExt.retryMic}
             />
-          </Box>
+          )}
+
+          {/* AnalyticsPanel — shown once both stepper steps are done. */}
+          {interviewerExt.installed && interviewerExt.micGranted && (
+            <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <AnalyticsPanel
+                interview={interview}
+                riskData={riskData}
+                isMonitoring={isMonitoring}
+                onStartMonitoring={handleStartMonitoring}
+                onStopMonitoring={handleStopMonitoring}
+                onClose={handleExit}
+              />
+            </Box>
+          )}
         </>
       )}
     </Box>

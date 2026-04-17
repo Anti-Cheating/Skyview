@@ -60,7 +60,7 @@ function sendExternalMessage(message: unknown): Promise<unknown> {
       return;
     }
     try {
-      chromeApi.runtime.sendMessage(ENV.EXTENSION_ID, message, (response) => {
+      chromeApi.runtime.sendMessage(ENV.CANDIDATE_EXTENSION_ID, message, (response) => {
         const lastError = chromeApi.runtime?.lastError?.message;
         if (lastError) {
           reject(new Error(lastError));
