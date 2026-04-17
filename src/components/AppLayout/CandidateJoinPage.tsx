@@ -1,15 +1,22 @@
 /**
- * CandidateJoinPage — 3-step setup flow for extension-type interviews
+ * CandidateJoinPage — 3-step setup flow for extension-type interviews.
  *
  * Route: /interviews/:id/join
  *
+ * Architecture (post-helper migration):
+ *   The Chrome extension has been removed. Skyview now talks directly
+ *   to the Trueyy Helper daemon running on 127.0.0.1:48123 via
+ *   helperBridge + useHelper. If the helper isn't installed we show the
+ *   HelperDownloadCard; otherwise we POST /session/join once the
+ *   interview is loaded and let the helper drive the rest.
+ *
  * Steps:
- *   1. Install Extension — detect via ping, show download link if missing
- *   2. Enable Monitoring — Sentinel handshake + Screen Recording permission
- *   3. Join Meeting — opens meeting tab once permission is granted
+ *   1. Trueyy Helper installed (detected via local /health)
+ *   2. Permissions granted (screen recording + microphone)
+ *   3. Join Meeting — opens the meeting URL in a new tab
  */
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -27,30 +34,20 @@ import {
   VideoCall as VideoCallIcon,
 } from '@mui/icons-material';
 import { InterviewService } from '../../services/interview.service';
-import {
-  pingExtension,
-  sendJoinInterviewToExtension,
-  sendAuthToExtension,
-  enableMonitoring,
-  getMonitoringState,
-  openMeeting,
-  resetMonitoring,
-} from '../../services/extensionBridge';
 import { useAuth } from '../../contexts/AuthContext';
-import { USER_ROLES } from '../../config/constants';
+import { useHelper } from '../../hooks/useHelper';
+import { openSettingsPane } from '../../services/helperBridge';
+import { USER_ROLES, STORAGE_KEYS } from '../../config/constants';
+import { ENV } from '../../config/env';
 import type { InterviewSession } from '../../types/interview.types';
 import { TOKENS } from '../../theme';
 import FalconDownloadCard from '../common/FalconDownloadCard';
+import HelperDownloadCard from '../Monitoring/HelperDownloadCard';
+import StepRow from '../common/StepRow';
 
 const BRAND = TOKENS.brand;
 const LIGHT_BG = TOKENS.bgCard;
 const LIGHT_BORDER = TOKENS.border;
-
-interface StepState {
-  extension: 'pending' | 'checking' | 'done' | 'missing';
-  monitoring: 'pending' | 'connecting' | 'done' | 'permission-needed';
-  meeting: 'pending' | 'opening' | 'done';
-}
 
 export default function CandidateJoinPage() {
   const { id: interviewId } = useParams<{ id: string }>();
@@ -62,20 +59,9 @@ export default function CandidateJoinPage() {
   const [interview, setInterview] = useState<InterviewSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [steps, setSteps] = useState<StepState>({
-    extension: 'checking',
-    monitoring: 'pending',
-    meeting: 'pending',
-  });
-  const [permError, setPermError] = useState<string | null>(null);
-  // Per-permission state from Sentinel's preflight-result. Drives the
-  // 2-row (Screen Recording + Microphone) view in step 2.
-  const [permStatus, setPermStatus] = useState<{ screen: boolean; mic: boolean }>({
-    screen: false,
-    mic: false,
-  });
+  const [meetingOpened, setMeetingOpened] = useState(false);
 
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const helper = useHelper(2000);
 
   // ── Role gate: only candidates can access this page ─────────────────
   useEffect(() => {
@@ -93,7 +79,6 @@ export default function CandidateJoinPage() {
         const resp = await InterviewService.getById(interviewId);
         if (cancelled) return;
         if (resp.success && resp.data) {
-          // Verify this candidate is actually a participant
           const isParticipant = resp.data.interview_session_participants?.some(
             (p) => p.candidate_id === user.id
           );
@@ -112,170 +97,63 @@ export default function CandidateJoinPage() {
       }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interviewId, user?.id]);
+  }, [interviewId, user?.id, navigate]);
 
-  // ── Step 1: Detect extension ───────────────────────────────────────
+  // ── Once helper is reachable AND interview is loaded, bind the ────
+  // session: POST /session/join. Helper connects to Cortex, runs
+  // preflight, and starts reporting status via /status.
   useEffect(() => {
+    if (!helper.installed) return;
+    if (!interview || !interviewId || !user?.id) return;
+    // Skip if already bound to this session
+    if (helper.status?.session_id === interviewId) return;
+
+    const candidatePartId = interview.interview_session_participants?.find(
+      (p) => p.candidate_id === user.id
+    )?.id;
+    if (!candidatePartId) return;
+
+    const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN) || '';
+    if (!token) return;
+
     (async () => {
-      setSteps((s) => ({ ...s, extension: 'checking' }));
-      const available = await pingExtension();
-      setSteps((s) => ({ ...s, extension: available ? 'done' : 'missing' }));
-    })();
-  }, []);
-
-  // ── Continuous poll: pick up state changes from background/overlay ──
-  // Runs while step 2 is not done. When the overlay triggers enable-
-  // monitoring and Sentinel reports ready, this poll catches it and
-  // flips step 2 → done, step 3 → active — no extra click needed.
-  useEffect(() => {
-    if (steps.extension !== 'done' || steps.monitoring === 'done') return;
-
-    const interval = setInterval(async () => {
-      try {
-        const state = await getMonitoringState();
-        if (state.ready) {
-          setSteps((s) => {
-            if (s.monitoring === 'done') return s;
-            return { ...s, monitoring: 'done', meeting: 'pending' };
-          });
-          setPermError(null);
-        }
-      } catch (_) { /* keep polling */ }
-    }, 1500);
-
-    return () => clearInterval(interval);
-  }, [steps.extension, steps.monitoring]);
-
-  // ── Stop explicit polling on unmount ─────────────────────────────────
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, []);
-
-  // ── Step 2: Enable Monitoring ──────────────────────────────────────
-  const handleEnableMonitoring = useCallback(async () => {
-    if (!interview || !interviewId) return;
-    setSteps((s) => ({ ...s, monitoring: 'connecting' }));
-    setPermError(null);
-
-    try {
-      // Send auth tokens to the extension so it can authenticate with
-      // Cortex. This replaces the old /authorize-extension page — since
-      // the candidate is already logged into Skyview, we just hand the
-      // tokens over automatically. No separate authorize step needed.
-      if (user) {
-        await sendAuthToExtension(user);
-      }
-
-      // Send join-interview to store session in extension
-      const joinUrl = interview.provider_metadata?.join_url ?? null;
-      await sendJoinInterviewToExtension({
-        sessionId: interviewId,
-        joinUrl: joinUrl as string | null,
-        interview,
+      const r = await helper.join({
+        session_id: interviewId,
+        participant_id: candidatePartId,
+        role: 'candidate',
+        token,
+        cortex_url: ENV.AUTH_API_URL,
       });
-
-      // Then enable monitoring (spawns Sentinel)
-      const resp = await enableMonitoring();
-      if (!resp.ok) {
-        if (resp.error === 'native-host-unavailable') {
-          setPermError('Trueyy Helper is not installed. Run install.sh first.');
-        } else {
-          setPermError(resp.error || 'Failed to connect');
-        }
-        setSteps((s) => ({ ...s, monitoring: 'permission-needed' }));
-        return;
+      if (!r.ok) {
+        setError(r.error || 'Failed to start session on helper');
       }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [helper.installed, interview, interviewId, user?.id, helper.status?.session_id]);
 
-      // Poll for Sentinel ready state
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(async () => {
-        try {
-          const state = await getMonitoringState();
-          if (state.ready) {
-            if (pollRef.current) clearInterval(pollRef.current);
-            pollRef.current = null;
-            setPermStatus({ screen: true, mic: true });
-            setSteps((s) => ({ ...s, monitoring: 'done', meeting: 'pending' }));
-          } else if (state.permission) {
-            if (pollRef.current) clearInterval(pollRef.current);
-            pollRef.current = null;
-            setPermStatus({
-              screen: !!state.permission.screen_recording_ok,
-              mic: !!state.permission.microphone_ok,
-            });
-            setSteps((s) => ({ ...s, monitoring: 'permission-needed' }));
-          }
-        } catch (_) { /* keep polling */ }
-      }, 1000);
-    } catch (err: any) {
-      setPermError(err?.message || 'Failed to connect to extension');
-      setSteps((s) => ({ ...s, monitoring: 'permission-needed' }));
-    }
-  }, [interview, interviewId]);
+  // ── Step 3: Open Meeting ──────────────────────────────────────────
+  const handleOpenMeeting = useCallback(() => {
+    const url = interview?.provider_metadata?.join_url;
+    if (!url) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
+    setMeetingOpened(true);
+  }, [interview]);
 
-  // ── Step 2b: Retry after permission grant ──────────────────────────
-  const handleRetry = useCallback(async () => {
-    setSteps((s) => ({ ...s, monitoring: 'connecting' }));
-    setPermError(null);
-    try {
-      const resp = await resetMonitoring();
-      if (!resp.ok) {
-        setSteps((s) => ({ ...s, monitoring: 'permission-needed' }));
-        setPermError(resp.error || 'Failed to restart');
-        return;
-      }
-      // Poll for result
-      setTimeout(async () => {
-        try {
-          const state = await getMonitoringState();
-          if (state.ready) {
-            setPermStatus({ screen: true, mic: true });
-            setSteps((s) => ({ ...s, monitoring: 'done', meeting: 'pending' }));
-          } else {
-            setPermStatus({
-              screen: !!state.permission?.screen_recording_ok,
-              mic: !!state.permission?.microphone_ok,
-            });
-            setSteps((s) => ({ ...s, monitoring: 'permission-needed' }));
-            setPermError(null);
-          }
-        } catch (_) {
-          setSteps((s) => ({ ...s, monitoring: 'permission-needed' }));
-        }
-      }, 2000);
-    } catch (err: any) {
-      setSteps((s) => ({ ...s, monitoring: 'permission-needed' }));
-      setPermError(err?.message || 'Failed');
-    }
-  }, []);
+  // ── Permission request buttons — route through the helper daemon ──
+  // Chrome/Safari block x-apple.systempreferences: URLs via window.open,
+  // so we POST to the helper which shells out to `open` (that works).
+  const openScreenRecordingSettings = () => openSettingsPane('screen_recording');
+  const openMicSettings = () => openSettingsPane('microphone');
 
-  // ── Step 3: Open Meeting ───────────────────────────────────────────
-  const handleOpenMeeting = useCallback(async () => {
-    setSteps((s) => ({ ...s, meeting: 'opening' }));
-    try {
-      const resp = await openMeeting();
-      if (resp.ok) {
-        setSteps((s) => ({ ...s, meeting: 'done' }));
-      } else {
-        setSteps((s) => ({ ...s, meeting: 'pending' }));
-      }
-    } catch (_) {
-      setSteps((s) => ({ ...s, meeting: 'pending' }));
-    }
-  }, []);
+  // ── Render ────────────────────────────────────────────────────────
 
-  // ── Render ─────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <CircularProgress sx={{ color: BRAND }} />
       </Box>
     );
   }
-
   if (error || !interview) {
     return (
       <Box sx={{ p: 3 }}>
@@ -284,30 +162,32 @@ export default function CandidateJoinPage() {
     );
   }
 
+  // Derived UI state from helper status + local flags
+  const extensionState = helper.checking
+    ? 'checking'
+    : helper.installed ? 'done' : 'missing';
+  const screenOk = !!helper.status?.screen_recording_ok || interview.interview_type !== 'extension';
+  const micOk = !!helper.status?.microphone_ok;
+  const monitoringState = !helper.installed
+    ? 'pending'
+    : screenOk && micOk
+      ? 'done'
+      : 'permission-needed';
+  const meetingState = meetingOpened ? 'done' : monitoringState === 'done' ? 'pending' : 'pending';
+
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: '#F9FAFB' }}>
-      {/* Header — same as MonitoringView */}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          px: 3,
-          py: 1.5,
-          borderBottom: `1px solid ${LIGHT_BORDER}`,
-          bgcolor: LIGHT_BG,
-          flexShrink: 0,
-        }}
-      >
-        <IconButton
-          onClick={() => navigate('/interviews')}
-          size="small"
-          sx={{ color: '#6B7280', '&:hover': { bgcolor: 'rgba(0,0,0,0.04)', color: '#1F2937' } }}
-        >
+    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#F9FAFB' }}>
+      {/* Header */}
+      <Box sx={{
+        display: 'flex', alignItems: 'center', gap: 2,
+        px: { xs: 2, md: 3 }, py: 1.5,
+        borderBottom: `1px solid ${LIGHT_BORDER}`, bgcolor: LIGHT_BG,
+      }}>
+        <IconButton onClick={() => navigate('/')} size="small" sx={{ color: '#6B7280' }}>
           <ArrowBackIcon />
         </IconButton>
-        <Box sx={{ flex: 1 }}>
-          <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: '#1F2937' }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: '#1F2937', lineHeight: 1.2 }}>
             {interview.title}
           </Typography>
           <Typography sx={{ fontSize: '0.75rem', color: '#6B7280' }}>
@@ -318,352 +198,121 @@ export default function CandidateJoinPage() {
 
       {interview.interview_type === 'application' ? (
         <FalconDownloadCard />
+      ) : !helper.installed && !helper.checking ? (
+        <HelperDownloadCard checking={helper.checking} onRetry={() => helper.refresh()} />
       ) : (
-      /* Steps — upper-third, centered card */
-      <Box sx={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', pt: { xs: 3, md: 6 }, px: { xs: 2, md: 3 }, pb: 3 }}>
-        <Box
-          sx={{
-            width: 460,
-            maxWidth: '100%',
-            bgcolor: LIGHT_BG,
-            borderRadius: '12px',
-            border: `1px solid ${LIGHT_BORDER}`,
+        <Box sx={{
+          flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+          pt: { xs: 3, md: 6 }, px: { xs: 2, md: 3 }, pb: 3,
+        }}>
+          <Box sx={{
+            width: 460, maxWidth: '100%', bgcolor: LIGHT_BG,
+            borderRadius: '12px', border: `1px solid ${LIGHT_BORDER}`,
             boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-          }}
-        >
-          <>
-          {/* Step rows — each is a self-contained row with its own bg */}
-          <StepRow
-            number={1}
-            icon={<ExtensionIcon sx={{ fontSize: 18 }} />}
-            title="Install Extension"
-            done={steps.extension === 'done'}
-            active={steps.extension !== 'done'}
-            first
-          >
-            {steps.extension === 'checking' && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CircularProgress size={12} sx={{ color: BRAND }} />
-                <Typography sx={{ fontSize: '0.75rem', color: '#6B7280' }}>Detecting...</Typography>
-              </Box>
-            )}
-            {steps.extension === 'done' && (
-              <Typography sx={{ fontSize: '0.75rem', color: '#059669' }}>
-                Trueyy Candidate Monitor detected
-              </Typography>
-            )}
-            {steps.extension === 'missing' && (
-              <>
-                <Typography sx={{ fontSize: '0.75rem', color: '#DC2626', mb: 0.75 }}>
-                  Extension not found
-                </Typography>
-                <Button
-                  size="small"
-                  variant="text"
-                  onClick={() => window.location.reload()}
-                  sx={{ fontSize: '0.7rem', textTransform: 'none', p: 0, minWidth: 0, color: BRAND, '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' } }}
-                >
-                  Reload page
-                </Button>
-              </>
-            )}
-          </StepRow>
+          }}>
+            {/* Step 1 — Helper installed */}
+            <StepRow number={1} icon={<ExtensionIcon sx={{ fontSize: 18 }} />} title="Install Trueyy Helper"
+              done={extensionState === 'done'} active={extensionState !== 'done'} first>
+              {extensionState === 'checking' && <Status busy text="Detecting..." />}
+              {extensionState === 'done' && <Status ok text="Trueyy Helper detected" />}
+              {extensionState === 'missing' && <Status err text="Helper not running" />}
+            </StepRow>
 
-          <StepRow
-            number={2}
-            icon={<ShieldIcon sx={{ fontSize: 18 }} />}
-            title="Enable Monitoring"
-            done={steps.monitoring === 'done'}
-            active={steps.extension === 'done' && steps.monitoring !== 'done'}
-          >
-            {steps.monitoring === 'pending' && steps.extension === 'done' && (
-              <>
-                <Typography sx={{ fontSize: '0.75rem', color: '#6B7280', mb: 1 }}>
-                  Grants Screen Recording and Microphone access to Trueyy Helper
-                </Typography>
-                <Button
-                  variant="contained"
-                  size="small"
-                  onClick={handleEnableMonitoring}
-                  sx={{
-                    bgcolor: BRAND,
-                    color: '#fff',
-                    textTransform: 'none',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    py: 0.5,
-                    px: 2,
-                    borderRadius: '6px',
-                    '&:hover': { bgcolor: '#3CB853' },
-                    boxShadow: 'none',
-                  }}
-                >
-                  Enable Monitoring
-                </Button>
-              </>
-            )}
-            {steps.monitoring === 'connecting' && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CircularProgress size={12} sx={{ color: BRAND }} />
-                <Typography sx={{ fontSize: '0.75rem', color: '#6B7280' }}>Connecting...</Typography>
-              </Box>
-            )}
-            {steps.monitoring === 'done' && (
-              <Typography sx={{ fontSize: '0.75rem', color: '#059669' }}>
-                Screen Recording &amp; Microphone granted
-              </Typography>
-            )}
-            {steps.monitoring === 'permission-needed' && (
-              <>
-                {permError && (
-                  <Typography sx={{ fontSize: '0.688rem', color: '#DC2626', mb: 0.75 }}>
-                    {permError}
+            {/* Step 2 — Permissions */}
+            <StepRow number={2} icon={<ShieldIcon sx={{ fontSize: 18 }} />} title="Grant Permissions"
+              done={monitoringState === 'done'}
+              active={extensionState === 'done' && monitoringState !== 'done'}>
+              {monitoringState === 'pending' && helper.installed && (
+                <Status busy text="Connecting to helper..." />
+              )}
+              {monitoringState === 'done' && (
+                <Status ok text="Screen Recording & Microphone granted" />
+              )}
+              {monitoringState === 'permission-needed' && (
+                <>
+                  <PermissionRow title="Screen Recording"
+                    desc="Required for app / window monitoring"
+                    done={screenOk} onEnable={openScreenRecordingSettings} />
+                  <PermissionRow title="Microphone"
+                    desc="Required for live transcription"
+                    done={micOk} onEnable={openMicSettings} />
+                  <Typography sx={{ fontSize: '0.7rem', color: '#6B7280', mt: 1 }}>
+                    Toggle <strong>Trueyy Helper</strong> ON in each pane, then return here. This page updates automatically.
                   </Typography>
-                )}
+                </>
+              )}
+            </StepRow>
 
-                {/* Two per-permission rows — mirrors the candidate side
-                    panel's state-permissions-combined view so both screen
-                    recording + mic are actionable here. Each opens its
-                    own Settings pane; Try Again below re-probes. */}
-                <PermissionRow
-                  title="Screen Recording"
-                  desc="Required for app / window monitoring"
-                  done={permStatus.screen}
-                  onEnable={() =>
-                    window.open('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture')
-                  }
-                />
-                <PermissionRow
-                  title="Microphone"
-                  desc="Required for live transcription"
-                  done={permStatus.mic}
-                  onEnable={() =>
-                    window.open('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone')
-                  }
-                />
-
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={handleRetry}
+            {/* Step 3 — Join Meeting */}
+            <StepRow number={3} icon={<VideoCallIcon sx={{ fontSize: 18 }} />} title="Join Meeting"
+              done={meetingState === 'done'}
+              active={monitoringState === 'done' && meetingState !== 'done'} last>
+              {monitoringState === 'done' && meetingState === 'pending' && (
+                <Button variant="contained" size="small" onClick={handleOpenMeeting}
+                  disabled={!interview.provider_metadata?.join_url}
                   sx={{
-                    mt: 1,
-                    textTransform: 'none',
-                    fontSize: '0.688rem',
-                    py: 0.25,
-                    px: 1.5,
-                    borderRadius: '6px',
-                    borderColor: LIGHT_BORDER,
-                    color: '#6B7280',
-                    '&:hover': { borderColor: '#9CA3AF', bgcolor: '#F9FAFB' },
-                  }}
-                >
-                  Try Again
+                    bgcolor: BRAND, color: '#fff', textTransform: 'none',
+                    fontSize: '0.75rem', fontWeight: 600, py: 0.5, px: 2,
+                    borderRadius: '6px', '&:hover': { bgcolor: '#3CB853' },
+                    boxShadow: 'none',
+                  }}>
+                  Open Meeting
                 </Button>
-              </>
-            )}
-          </StepRow>
-
-          <StepRow
-            number={3}
-            icon={<VideoCallIcon sx={{ fontSize: 18 }} />}
-            title="Join Meeting"
-            done={steps.meeting === 'done'}
-            active={steps.monitoring === 'done' && steps.meeting !== 'done'}
-            last
-          >
-            {steps.monitoring === 'done' && steps.meeting === 'pending' && (
-              <Button
-                variant="contained"
-                size="small"
-                onClick={handleOpenMeeting}
-                sx={{
-                  bgcolor: BRAND,
-                  color: '#fff',
-                  textTransform: 'none',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  py: 0.5,
-                  px: 2,
-                  borderRadius: '6px',
-                  '&:hover': { bgcolor: '#3CB853' },
-                  boxShadow: 'none',
-                }}
-              >
-                Open Meeting
-              </Button>
-            )}
-            {steps.meeting === 'opening' && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CircularProgress size={12} sx={{ color: BRAND }} />
-                <Typography sx={{ fontSize: '0.75rem', color: '#6B7280' }}>Opening...</Typography>
-              </Box>
-            )}
-            {steps.meeting === 'done' && (
-              <Typography sx={{ fontSize: '0.75rem', color: '#059669' }}>
-                Meeting opened — you can close this tab
-              </Typography>
-            )}
-          </StepRow>
-          </>
+              )}
+              {meetingState === 'done' && <Status ok text="Meeting opened — keep this tab open" />}
+            </StepRow>
+          </Box>
         </Box>
-      </Box>
       )}
     </Box>
   );
 }
 
-// ── Step row subcomponent ─────────────────────────────────────────────
-//
-// Each step is a distinct row inside the card. Done rows get a green
-// tinted background; the active row is white with full opacity; future
-// rows are dimmed. Matching the CandidateSetupCard row pattern.
+// ── Small helper components ─────────────────────────────────────────
 
-function StepRow({
-  number,
-  icon,
-  title,
-  done,
-  active,
-  first,
-  last,
-  children,
-}: {
-  number: number;
-  icon: React.ReactNode;
-  title: string;
-  done: boolean;
-  active: boolean;
-  first?: boolean;
-  last?: boolean;
-  children?: React.ReactNode;
-}) {
-  const ROW_BG_DONE = 'rgba(76, 217, 100, 0.06)';
-  const ROW_BG_ACTIVE = '#FFFFFF';
-  const ROW_BG_PENDING = '#FAFAFA';
-
+function Status({ busy, ok, err, text }: { busy?: boolean; ok?: boolean; err?: boolean; text: string }) {
+  const color = ok ? '#059669' : err ? '#DC2626' : '#6B7280';
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        gap: 1.5,
-        px: 2.5,
-        py: 2,
-        bgcolor: done ? ROW_BG_DONE : active ? ROW_BG_ACTIVE : ROW_BG_PENDING,
-        borderBottom: last ? 'none' : `1px solid ${LIGHT_BORDER}`,
-        borderRadius: first && last ? '12px' : first ? '12px 12px 0 0' : last ? '0 0 12px 12px' : 0,
-        opacity: !active && !done ? 0.45 : 1,
-        transition: 'background 0.2s, opacity 0.2s',
-      }}
-    >
-      {/* Step number circle */}
-      <Box
-        sx={{
-          width: 28,
-          height: 28,
-          borderRadius: '50%',
-          bgcolor: done ? BRAND : active ? '#1F2937' : '#D1D5DB',
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '0.7rem',
-          fontWeight: 700,
-          flexShrink: 0,
-          mt: 0.25,
-        }}
-      >
-        {done ? <CheckIcon sx={{ fontSize: 16 }} /> : number}
-      </Box>
-
-      {/* Content */}
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: children ? 0.5 : 0 }}>
-          <Box sx={{ color: done ? BRAND : active ? '#1F2937' : '#9CA3AF', display: 'flex' }}>{icon}</Box>
-          <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: done ? '#065F46' : '#1F2937' }}>
-            {title}
-          </Typography>
-        </Box>
-        {children}
-      </Box>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      {busy && <CircularProgress size={12} sx={{ color: BRAND }} />}
+      <Typography sx={{ fontSize: '0.75rem', color }}>{text}</Typography>
     </Box>
   );
 }
 
-// ── Per-permission mini-row inside step 2's permission-needed view ────
-//
-// Same visual treatment as the side panel's state-permissions-combined
-// rows — green tint + ✓ when done, neutral tint + Enable button when
-// still pending. Click Enable to open the matching System Settings pane.
-function PermissionRow({
-  title,
-  desc,
-  done,
-  onEnable,
-}: {
-  title: string;
-  desc: string;
-  done: boolean;
-  onEnable: () => void;
+
+function PermissionRow({ title, desc, done, onEnable }: {
+  title: string; desc: string; done: boolean; onEnable: () => void;
 }) {
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1,
-        px: 1.25,
-        py: 1,
-        mt: 0.75,
-        borderRadius: '8px',
-        bgcolor: done ? 'rgba(76, 217, 100, 0.06)' : '#FAFAFA',
-        border: `1px solid ${done ? 'rgba(76, 217, 100, 0.3)' : LIGHT_BORDER}`,
-      }}
-    >
-      <Box
-        sx={{
-          width: 22,
-          height: 22,
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          bgcolor: done ? BRAND : '#E5E7EB',
-          color: done ? '#fff' : '#6B7280',
-          fontSize: '0.7rem',
-          fontWeight: 700,
-          flexShrink: 0,
-        }}
-      >
+    <Box sx={{
+      display: 'flex', alignItems: 'center', gap: 1, px: 1.25, py: 1, mt: 0.75,
+      borderRadius: '8px',
+      bgcolor: done ? 'rgba(76, 217, 100, 0.06)' : '#FAFAFA',
+      border: `1px solid ${done ? 'rgba(76, 217, 100, 0.3)' : LIGHT_BORDER}`,
+    }}>
+      <Box sx={{
+        width: 22, height: 22, borderRadius: '50%',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        bgcolor: done ? BRAND : '#E5E7EB', color: done ? '#fff' : '#6B7280',
+        fontSize: '0.7rem', fontWeight: 700, flexShrink: 0,
+      }}>
         {done ? <CheckIcon sx={{ fontSize: 14 }} /> : '⏳'}
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: done ? '#065F46' : '#1F2937' }}>
-          {title}
-        </Typography>
+        <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: done ? '#065F46' : '#1F2937' }}>{title}</Typography>
         <Typography sx={{ fontSize: '0.688rem', color: '#6B7280' }}>
           {done ? 'Granted to Trueyy Helper' : desc}
         </Typography>
       </Box>
       {!done && (
-        <Button
-          size="small"
-          variant="contained"
-          onClick={onEnable}
+        <Button size="small" variant="contained" onClick={onEnable}
           sx={{
-            bgcolor: BRAND,
-            color: '#fff',
-            textTransform: 'none',
-            fontSize: '0.688rem',
-            py: 0.25,
-            px: 1.25,
-            borderRadius: '6px',
-            minWidth: 0,
-            flexShrink: 0,
-            '&:hover': { bgcolor: '#3CB853' },
-            boxShadow: 'none',
-          }}
-        >
+            bgcolor: BRAND, color: '#fff', textTransform: 'none',
+            fontSize: '0.688rem', py: 0.25, px: 1.25, borderRadius: '6px',
+            minWidth: 0, flexShrink: 0,
+            '&:hover': { bgcolor: '#3CB853' }, boxShadow: 'none',
+          }}>
           Enable
         </Button>
       )}

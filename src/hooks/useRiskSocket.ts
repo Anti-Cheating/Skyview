@@ -215,8 +215,13 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
   useEffect(() => {
     if (!sessionId) return;
 
+    // Pass our JWT as socket auth so Cortex's new middleware can
+    // identify the user. In dev Cortex lets anonymous through; in
+    // production it rejects, so this is the auth path for both.
+    const token = localStorage.getItem('auth_access_token') || '';
     const socket = io(ENV.AUTH_API_URL, {
       transports: ['websocket', 'polling'],
+      auth: token ? { token } : undefined,
     });
 
     socketRef.current = socket;

@@ -21,11 +21,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { USER_ROLES } from '../../config/constants';
 import { getUserDisplayName } from '../../utils/user.utils';
-import {
-  isExtensionAvailable,
-  pingExtension,
-  sendAuthToExtension,
-} from '../../services/extensionBridge';
+import { checkHelperHealth } from '../../services/helperBridge';
 
 interface StatCardProps {
   title: string;
@@ -92,34 +88,36 @@ export default function AppDashboard() {
   const [upcomingCount, setUpcomingCount] = useState(0);
   const [pastCount, setPastCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [extensionInstalled, setExtensionInstalled] = useState<boolean | null>(null);
+  // `helperInstalled` is a historical name kept because the dashboard
+  // template UI still renders chips around it. It now reflects whether
+  // the Trueyy Helper daemon is reachable on localhost:48123.
+  const [helperInstalled, setHelperInstalled] = useState<boolean | null>(null);
   const [reauthBusy, setReauthBusy] = useState(false);
 
   const userRole = user?.role || USER_ROLES.CANDIDATE;
   const isCandidate = userRole === USER_ROLES.CANDIDATE;
 
-  // Detect whether the Jarvis extension is reachable from this origin
   useEffect(() => {
     if (!isCandidate) return;
-    if (!isExtensionAvailable()) {
-      setExtensionInstalled(false);
-      return;
-    }
-    pingExtension().then(setExtensionInstalled);
+    (async () => {
+      const health = await checkHelperHealth();
+      setHelperInstalled(!!health?.ok);
+    })();
   }, [isCandidate]);
 
   const handleReauthorize = async () => {
-    if (!user) return;
+    // Helper picks up the current JWT on each /session/join; there's no
+    // persistent auth to re-send. This action is kept as a health check.
     setReauthBusy(true);
     try {
-      await sendAuthToExtension(user);
-      showSuccess('Trueyy extension reauthorized.');
-      setExtensionInstalled(true);
-    } catch (err: any) {
-      showError(
-        err?.message ||
-          'Could not reach the Trueyy extension. Make sure it is installed and try again.'
-      );
+      const health = await checkHelperHealth();
+      if (health?.ok) {
+        setHelperInstalled(true);
+        showSuccess('Trueyy Helper is running.');
+      } else {
+        setHelperInstalled(false);
+        showError('Trueyy Helper is not running. Install it or check that it started at login.');
+      }
     } finally {
       setReauthBusy(false);
     }
@@ -245,7 +243,7 @@ export default function AppDashboard() {
               width: 44,
               height: 44,
               borderRadius: '12px',
-              bgcolor: extensionInstalled ? 'rgba(76, 217, 100, 0.15)' : 'rgba(245, 158, 11, 0.12)',
+              bgcolor: helperInstalled ? 'rgba(76, 217, 100, 0.15)' : 'rgba(245, 158, 11, 0.12)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -255,7 +253,7 @@ export default function AppDashboard() {
             <ExtensionIcon
               sx={{
                 fontSize: 22,
-                color: extensionInstalled ? theme.palette.primary.main : '#F59E0B',
+                color: helperInstalled ? theme.palette.primary.main : '#F59E0B',
               }}
             />
           </Box>
@@ -264,9 +262,9 @@ export default function AppDashboard() {
               Trueyy Chrome Extension
             </Typography>
             <Typography sx={{ fontSize: '0.813rem', color: '#6B7280' }}>
-              {extensionInstalled === null
+              {helperInstalled === null
                 ? 'Checking…'
-                : extensionInstalled
+                : helperInstalled
                 ? 'Installed and connected. You\'re ready to join an extension-type interview.'
                 : 'Not detected. Install the extension, then click Reauthorize to link it to your account.'}
             </Typography>

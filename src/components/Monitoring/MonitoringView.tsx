@@ -23,8 +23,12 @@ import {
   FiberManualRecord as DotIcon,
 } from '@mui/icons-material';
 import { useRiskSocket } from '../../hooks/useRiskSocket';
-import { useInterviewerExtension } from '../../hooks/useInterviewerExtension';
+import { useHelper } from '../../hooks/useHelper';
+import { openSettingsPane } from '../../services/helperBridge';
 import { InterviewService } from '../../services/interview.service';
+import { ENV } from '../../config/env';
+import { STORAGE_KEYS } from '../../config/constants';
+import HelperDownloadCard from './HelperDownloadCard';
 import type { InterviewSession } from '../../types/interview.types';
 import { USER_ROLES } from '../../config/constants';
 import { useAuth } from '../../contexts/AuthContext';
@@ -50,7 +54,7 @@ export default function MonitoringView() {
   const [isMonitoring, setIsMonitoring] = useState(false);
 
   const riskData = useRiskSocket(interviewId ?? null);
-  const interviewerExt = useInterviewerExtension();
+  const helper = useHelper(2000);
 
   // Fetch interview details
   useEffect(() => {
@@ -93,31 +97,40 @@ export default function MonitoringView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interviewId]);
 
-  // Send auth + session to the interviewer extension once interview loads
-  // and the extension is detected. Mirrors the Skyview → candidate
-  // extension handshake done by extensionBridge.ts, but for the
-  // interviewer's mic-only extension.
+  // Bind the interviewer's helper to this session once it's loaded.
+  // Helper → Cortex, runs preflight, mic-only mode. Replaces the
+  // Chrome-extension handshake entirely.
   useEffect(() => {
-    if (!interviewId || !interviewerExt.installed || !user) return;
-    // Skyview stores the JWT under STORAGE_KEYS.ACCESS_TOKEN = "auth_access_token".
-    const token = localStorage.getItem('auth_access_token') || '';
-    if (token && user.id) {
-      interviewerExt.sendAuth(token, { id: user.id, email: user.email || '' });
-      interviewerExt.joinSession(interviewId);
-    }
+    if (!interviewId || !helper.installed || !user || !interview) return;
+    if (helper.status?.session_id === interviewId) return; // already bound
+
+    const interviewerPartId = interview.interview_session_participants?.find(
+      (p) => p.interviewer_id === user.id
+    )?.id;
+    if (!interviewerPartId) return;
+
+    const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN) || '';
+    if (!token) return;
+
+    helper.join({
+      session_id: interviewId,
+      participant_id: interviewerPartId,
+      role: 'interviewer',
+      token,
+      cortex_url: ENV.AUTH_API_URL,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [interviewId, interviewerExt.installed, user]);
+  }, [interviewId, helper.installed, helper.status?.session_id, user, interview]);
 
   const handleStartMonitoring = () => {
+    // Helper listens for remote-start-monitoring on the Cortex socket
+    // and spawns MicCapture itself — no direct extension call needed.
     riskData.emitStartMonitoring();
-    // Also tell the interviewer extension to start mic capture
-    interviewerExt.startMic();
     setIsMonitoring(true);
   };
 
   const handleStopMonitoring = () => {
     riskData.emitStopMonitoring();
-    interviewerExt.stopMic();
     setIsMonitoring(false);
   };
 
@@ -209,8 +222,8 @@ export default function MonitoringView() {
             {interview.title}
           </Typography>
           <Typography sx={{ fontSize: '0.7rem', color: '#6B7280', display: { xs: 'none', sm: 'block' } }}>
-            {interviewerExt.installed && interviewerExt.micGranted
-              ? `${candidateName} · ${interview.interview_type === 'extension' ? 'Chrome Extension' : 'Falcon App'}`
+            {helper.installed && helper.status?.microphone_ok
+              ? `${candidateName} · ${interview.interview_type === 'extension' ? 'Trueyy Helper' : 'Falcon App'}`
               : 'Setup your monitoring before joining'}
           </Typography>
         </Box>
@@ -271,22 +284,24 @@ export default function MonitoringView() {
               : null
           }
 
-          {/* Interviewer mic setup — 2-step stepper mirroring the
-              CandidateJoinPage design. Hidden once both steps are done;
-              Risk Analytics takes over and surfaces the "Open meeting
-              link" chip in the header for joining the meeting. */}
-          {!(interviewerExt.installed && interviewerExt.micGranted) && (
+          {/* Interviewer helper setup — show download card until the
+              local Trueyy Helper daemon is reachable + mic permission
+              is granted. Once ready, hide the card and render Risk
+              Analytics below. */}
+          {!helper.installed ? (
+            <HelperDownloadCard checking={helper.checking} onRetry={() => helper.refresh()} />
+          ) : !helper.status?.microphone_ok ? (
             <InterviewerSetupCard
-              installed={interviewerExt.installed}
-              micGranted={interviewerExt.micGranted}
-              checking={interviewerExt.checking}
-              onEnableMic={interviewerExt.enableMic}
-              onRetryMic={interviewerExt.retryMic}
+              installed={helper.installed}
+              micGranted={!!helper.status?.microphone_ok}
+              checking={helper.checking}
+              onEnableMic={() => openSettingsPane('microphone')}
+              onRetryMic={() => helper.refresh()}
             />
-          )}
+          ) : null}
 
-          {/* AnalyticsPanel — shown once both stepper steps are done. */}
-          {interviewerExt.installed && interviewerExt.micGranted && (
+          {/* AnalyticsPanel — shown once the helper reports mic granted. */}
+          {helper.installed && helper.status?.microphone_ok && (
             <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
               <AnalyticsPanel
                 interview={interview}
