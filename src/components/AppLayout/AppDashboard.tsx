@@ -97,13 +97,11 @@ export default function AppDashboard() {
   const userRole = user?.role || USER_ROLES.CANDIDATE;
   const isCandidate = userRole === USER_ROLES.CANDIDATE;
 
-  useEffect(() => {
-    if (!isCandidate) return;
-    (async () => {
-      const health = await checkHelperHealth();
-      setHelperInstalled(!!health?.ok);
-    })();
-  }, [isCandidate]);
+  // Do NOT auto-probe the helper on dashboard mount. The daemon runs
+  // under launchd socket activation — any /health request wakes it, which
+  // burns resources when the user is just browsing their interview list.
+  // Helper status is verified on the join page (where it actually matters)
+  // or via the explicit "Reauthorize" button below.
 
   const handleReauthorize = async () => {
     // Helper picks up the current JWT on each /session/join; there's no
@@ -263,10 +261,10 @@ export default function AppDashboard() {
             </Typography>
             <Typography sx={{ fontSize: '0.813rem', color: '#6B7280' }}>
               {helperInstalled === null
-                ? 'Checking…'
+                ? 'Click Reauthorize to verify the helper is installed and running.'
                 : helperInstalled
                 ? 'Installed and connected. You\'re ready to join an extension-type interview.'
-                : 'Not detected. Install the extension, then click Reauthorize to link it to your account.'}
+                : 'Not detected. Install the helper, then click Reauthorize to verify.'}
             </Typography>
           </Box>
           <Button

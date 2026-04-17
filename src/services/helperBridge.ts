@@ -110,10 +110,22 @@ export async function leaveSession(): Promise<void> {
  * Opens macOS System Settings → Privacy → {Microphone | Screen Recording}
  * via the helper. Browsers can't reliably open x-apple.systempreferences:
  * URLs, but `open` on the daemon side always works.
+ *
+ * Debounced per-pane to 2s — macOS Ventura+ stacks a new System Settings
+ * window every time `open` is called with the same URL, so impatient
+ * double-clicks would otherwise pile up multiple panes on screen.
  */
+const _lastOpenAt: Record<string, number> = {};
+const OPEN_COOLDOWN_MS = 2000;
+
 export async function openSettingsPane(
   pane: 'microphone' | 'screen_recording'
 ): Promise<boolean> {
+  const now = Date.now();
+  if (now - (_lastOpenAt[pane] || 0) < OPEN_COOLDOWN_MS) {
+    return true;
+  }
+  _lastOpenAt[pane] = now;
   try {
     const resp = await fetch(`${HELPER_BASE}/open-settings`, {
       method: 'POST',
