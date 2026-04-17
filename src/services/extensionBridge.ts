@@ -130,7 +130,16 @@ export async function pingExtension(): Promise<boolean> {
 export interface MonitoringState {
   ok: boolean;
   ready: boolean;
-  permission: { message?: string } | null;
+  // `permission` now carries the full preflight result when at least
+  // one permission is missing — includes the `missing` array + per-flag
+  // booleans so the stepper can render both Screen Recording + Mic rows.
+  permission: {
+    message?: string;
+    permission?: string;
+    missing?: string[];
+    screen_recording_ok?: boolean;
+    microphone_ok?: boolean;
+  } | null;
   captureActive: boolean;
 }
 

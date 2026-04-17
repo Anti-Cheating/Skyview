@@ -77,6 +77,7 @@ export interface TranscriptFragment {
 export interface CandidateStatus {
   extension_installed: boolean;
   screen_recording: boolean;
+  mic_granted: boolean;
   joined: boolean;
   updated_at: string | null;
 }
@@ -263,6 +264,7 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
       setCandidateStatus({
         extension_installed: !!data.extension_installed,
         screen_recording: !!data.screen_recording,
+        mic_granted: !!data.mic_granted,
         joined: !!data.joined,
         updated_at: data.updated_at ?? new Date().toISOString(),
       });

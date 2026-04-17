@@ -68,6 +68,12 @@ export default function CandidateJoinPage() {
     meeting: 'pending',
   });
   const [permError, setPermError] = useState<string | null>(null);
+  // Per-permission state from Sentinel's preflight-result. Drives the
+  // 2-row (Screen Recording + Microphone) view in step 2.
+  const [permStatus, setPermStatus] = useState<{ screen: boolean; mic: boolean }>({
+    screen: false,
+    mic: false,
+  });
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -191,10 +197,15 @@ export default function CandidateJoinPage() {
           if (state.ready) {
             if (pollRef.current) clearInterval(pollRef.current);
             pollRef.current = null;
+            setPermStatus({ screen: true, mic: true });
             setSteps((s) => ({ ...s, monitoring: 'done', meeting: 'pending' }));
           } else if (state.permission) {
             if (pollRef.current) clearInterval(pollRef.current);
             pollRef.current = null;
+            setPermStatus({
+              screen: !!state.permission.screen_recording_ok,
+              mic: !!state.permission.microphone_ok,
+            });
             setSteps((s) => ({ ...s, monitoring: 'permission-needed' }));
           }
         } catch (_) { /* keep polling */ }
@@ -221,10 +232,15 @@ export default function CandidateJoinPage() {
         try {
           const state = await getMonitoringState();
           if (state.ready) {
+            setPermStatus({ screen: true, mic: true });
             setSteps((s) => ({ ...s, monitoring: 'done', meeting: 'pending' }));
           } else {
+            setPermStatus({
+              screen: !!state.permission?.screen_recording_ok,
+              mic: !!state.permission?.microphone_ok,
+            });
             setSteps((s) => ({ ...s, monitoring: 'permission-needed' }));
-            setPermError('Still not granted. Toggle Trueyy Helper ON in Screen Recording, then quit Chrome (⌘Q) and reopen.');
+            setPermError(null);
           }
         } catch (_) {
           setSteps((s) => ({ ...s, monitoring: 'permission-needed' }));
@@ -363,7 +379,7 @@ export default function CandidateJoinPage() {
             {steps.monitoring === 'pending' && steps.extension === 'done' && (
               <>
                 <Typography sx={{ fontSize: '0.75rem', color: '#6B7280', mb: 1 }}>
-                  Monitors apps, keyboard activity, and screen captures
+                  Grants Screen Recording and Microphone access to Trueyy Helper
                 </Typography>
                 <Button
                   variant="contained"
@@ -394,58 +410,56 @@ export default function CandidateJoinPage() {
             )}
             {steps.monitoring === 'done' && (
               <Typography sx={{ fontSize: '0.75rem', color: '#059669' }}>
-                Screen Recording granted
+                Screen Recording &amp; Microphone granted
               </Typography>
             )}
             {steps.monitoring === 'permission-needed' && (
               <>
-                <Typography sx={{ fontSize: '0.75rem', color: '#6B7280', mb: 0.5 }}>
-                  Enable <strong>Screen Recording</strong> for <strong>Trueyy Helper</strong>
-                </Typography>
                 {permError && (
-                  <Typography sx={{ fontSize: '0.688rem', color: '#DC2626', mb: 0.5 }}>
+                  <Typography sx={{ fontSize: '0.688rem', color: '#DC2626', mb: 0.75 }}>
                     {permError}
                   </Typography>
                 )}
-                <Box sx={{ display: 'flex', gap: 0.75, mt: 0.5 }}>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={() => {
-                      window.open('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
-                    }}
-                    sx={{
-                      bgcolor: BRAND,
-                      color: '#fff',
-                      textTransform: 'none',
-                      fontSize: '0.688rem',
-                      py: 0.25,
-                      px: 1.5,
-                      borderRadius: '6px',
-                      '&:hover': { bgcolor: '#3CB853' },
-                      boxShadow: 'none',
-                    }}
-                  >
-                    Open Settings
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={handleRetry}
-                    sx={{
-                      textTransform: 'none',
-                      fontSize: '0.688rem',
-                      py: 0.25,
-                      px: 1.5,
-                      borderRadius: '6px',
-                      borderColor: LIGHT_BORDER,
-                      color: '#6B7280',
-                      '&:hover': { borderColor: '#9CA3AF', bgcolor: '#F9FAFB' },
-                    }}
-                  >
-                    Try Again
-                  </Button>
-                </Box>
+
+                {/* Two per-permission rows — mirrors the candidate side
+                    panel's state-permissions-combined view so both screen
+                    recording + mic are actionable here. Each opens its
+                    own Settings pane; Try Again below re-probes. */}
+                <PermissionRow
+                  title="Screen Recording"
+                  desc="Required for app / window monitoring"
+                  done={permStatus.screen}
+                  onEnable={() =>
+                    window.open('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture')
+                  }
+                />
+                <PermissionRow
+                  title="Microphone"
+                  desc="Required for live transcription"
+                  done={permStatus.mic}
+                  onEnable={() =>
+                    window.open('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone')
+                  }
+                />
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleRetry}
+                  sx={{
+                    mt: 1,
+                    textTransform: 'none',
+                    fontSize: '0.688rem',
+                    py: 0.25,
+                    px: 1.5,
+                    borderRadius: '6px',
+                    borderColor: LIGHT_BORDER,
+                    color: '#6B7280',
+                    '&:hover': { borderColor: '#9CA3AF', bgcolor: '#F9FAFB' },
+                  }}
+                >
+                  Try Again
+                </Button>
               </>
             )}
           </StepRow>
@@ -572,6 +586,87 @@ function StepRow({
         </Box>
         {children}
       </Box>
+    </Box>
+  );
+}
+
+// ── Per-permission mini-row inside step 2's permission-needed view ────
+//
+// Same visual treatment as the side panel's state-permissions-combined
+// rows — green tint + ✓ when done, neutral tint + Enable button when
+// still pending. Click Enable to open the matching System Settings pane.
+function PermissionRow({
+  title,
+  desc,
+  done,
+  onEnable,
+}: {
+  title: string;
+  desc: string;
+  done: boolean;
+  onEnable: () => void;
+}) {
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        px: 1.25,
+        py: 1,
+        mt: 0.75,
+        borderRadius: '8px',
+        bgcolor: done ? 'rgba(76, 217, 100, 0.06)' : '#FAFAFA',
+        border: `1px solid ${done ? 'rgba(76, 217, 100, 0.3)' : LIGHT_BORDER}`,
+      }}
+    >
+      <Box
+        sx={{
+          width: 22,
+          height: 22,
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: done ? BRAND : '#E5E7EB',
+          color: done ? '#fff' : '#6B7280',
+          fontSize: '0.7rem',
+          fontWeight: 700,
+          flexShrink: 0,
+        }}
+      >
+        {done ? <CheckIcon sx={{ fontSize: 14 }} /> : '⏳'}
+      </Box>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: done ? '#065F46' : '#1F2937' }}>
+          {title}
+        </Typography>
+        <Typography sx={{ fontSize: '0.688rem', color: '#6B7280' }}>
+          {done ? 'Granted to Trueyy Helper' : desc}
+        </Typography>
+      </Box>
+      {!done && (
+        <Button
+          size="small"
+          variant="contained"
+          onClick={onEnable}
+          sx={{
+            bgcolor: BRAND,
+            color: '#fff',
+            textTransform: 'none',
+            fontSize: '0.688rem',
+            py: 0.25,
+            px: 1.25,
+            borderRadius: '6px',
+            minWidth: 0,
+            flexShrink: 0,
+            '&:hover': { bgcolor: '#3CB853' },
+            boxShadow: 'none',
+          }}
+        >
+          Enable
+        </Button>
+      )}
     </Box>
   );
 }

@@ -36,6 +36,7 @@ export type InterviewType = "application" | "extension";
 export interface ExtensionStatus {
   extension_installed: boolean;
   screen_recording: boolean;
+  mic_granted: boolean;
   joined: boolean;
   updated_at: string;
 }

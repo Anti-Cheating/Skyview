@@ -40,7 +40,7 @@ const ROW_BG_DONE = "rgba(76, 217, 100, 0.08)";
 const ROW_BG_PENDING = "#F9FAFB";
 
 interface CheckRow {
-  key: keyof Pick<CandidateStatus, "extension_installed" | "screen_recording" | "joined">;
+  key: keyof Pick<CandidateStatus, "extension_installed" | "screen_recording" | "mic_granted" | "joined">;
   title: string;
   doneText: string;
   pendingText: string;
@@ -60,6 +60,12 @@ const ROWS: CheckRow[] = [
     pendingText: "Waiting for the candidate to enable Screen Recording for Trueyy Helper",
   },
   {
+    key: "mic_granted",
+    title: "Microphone permission",
+    doneText: "Granted to Trueyy Helper on macOS",
+    pendingText: "Waiting for the candidate to enable Microphone for Trueyy Helper",
+  },
+  {
     key: "joined",
     title: "Joined meeting",
     doneText: "Candidate has opened the meeting tab",
@@ -74,6 +80,7 @@ export default function CandidateSetupCard({ status, revoked }: Props) {
   const flags: CandidateStatus = status ?? {
     extension_installed: false,
     screen_recording: false,
+    mic_granted: false,
     joined: false,
     updated_at: null,
   };
