@@ -83,7 +83,9 @@ export function useInterviewerExtension(): UseInterviewerExtensionReturn {
             setMicGranted(false);
           } else {
             setInstalled(true);
-            if (r.mic_granted) setMicGranted(true);
+            // Use the live value so mid-interview revocation propagates
+            // to MonitoringView within ~3s (hook's poll interval).
+            setMicGranted(!!r.mic_granted);
           }
           setChecking(false);
         }
