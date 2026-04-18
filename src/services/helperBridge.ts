@@ -10,12 +10,34 @@
 
 const HELPER_BASE = 'http://127.0.0.1:48123';
 
-// Download URL for the .pkg installer. Swap this with your production
-// hosted URL once the .pkg is uploaded. Dev placeholder points at
-// localhost:8080 in case you serve it from a dev static server.
-const HELPER_DOWNLOAD_URL =
-  (import.meta as { env?: Record<string, string> }).env?.VITE_HELPER_DOWNLOAD_URL ||
+// Per-OS download URLs for the helper installer. Each candidate gets the
+// right artifact automatically. Fallbacks point at downloads.trueyy.com —
+// set VITE_HELPER_DOWNLOAD_URL_MAC / _WIN in your env to override for
+// staging or CDN moves without a code change.
+const env = (import.meta as { env?: Record<string, string> }).env || {};
+const HELPER_DOWNLOAD_URL_MAC =
+  env.VITE_HELPER_DOWNLOAD_URL_MAC ||
+  env.VITE_HELPER_DOWNLOAD_URL ||           // legacy single-URL var (Mac-era)
   'https://downloads.trueyy.com/TrueyyHelper-1.0.0.pkg';
+const HELPER_DOWNLOAD_URL_WIN =
+  env.VITE_HELPER_DOWNLOAD_URL_WIN ||
+  'https://downloads.trueyy.com/TrueyyHelperSetup-1.0.0.exe';
+
+export type HelperPlatform = 'mac' | 'windows' | 'unknown';
+
+/**
+ * Rough-but-reliable OS detection from navigator hints. Good enough for
+ * picking which installer to download — we don't need the exact kernel
+ * version, just mac vs. windows.
+ */
+export function detectHelperPlatform(): HelperPlatform {
+  if (typeof navigator === 'undefined') return 'unknown';
+  const plat = (navigator.platform || '').toLowerCase();
+  const ua = (navigator.userAgent || '').toLowerCase();
+  if (plat.includes('mac') || ua.includes('mac os x')) return 'mac';
+  if (plat.includes('win') || ua.includes('windows')) return 'windows';
+  return 'unknown';
+}
 
 export interface HelperHealth {
   ok: boolean;
@@ -139,8 +161,34 @@ export async function openSettingsPane(
   }
 }
 
-export function getHelperDownloadUrl(): string {
-  return HELPER_DOWNLOAD_URL;
+/**
+ * Push a refreshed access token into the running helper daemon. Called
+ * after Skyview's auto-refresh so the daemon's pulse / windows /
+ * image-analysis / R2-upload calls stop hitting Cortex with an expired
+ * JWT mid-session. Safe to call when no session is active — the daemon
+ * returns 400 and we silently swallow it.
+ */
+export async function pushHelperToken(token: string): Promise<boolean> {
+  try {
+    const resp = await fetch(`${HELPER_BASE}/session/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    if (!resp.ok) return false;
+    const body = (await resp.json()) as { ok?: boolean };
+    return !!body.ok;
+  } catch {
+    return false;
+  }
+}
+
+export function getHelperDownloadUrl(platform?: HelperPlatform): string {
+  const p = platform ?? detectHelperPlatform();
+  if (p === 'windows') return HELPER_DOWNLOAD_URL_WIN;
+  // Mac + unknown → Mac installer (falls back gracefully; unknown is rare
+  // enough that pointing them at the Mac .pkg + a support link is fine).
+  return HELPER_DOWNLOAD_URL_MAC;
 }
 
 export function isHelperReachable(health: HelperHealth | null): boolean {

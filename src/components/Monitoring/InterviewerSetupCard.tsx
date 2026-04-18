@@ -20,6 +20,11 @@ import {
 } from '@mui/icons-material';
 import { TOKENS } from '../../theme';
 import StepRow from '../common/StepRow';
+import { detectHelperPlatform } from '../../services/helperBridge';
+
+const IS_WINDOWS = detectHelperPlatform() === 'windows';
+const SETTINGS_APP_NAME = IS_WINDOWS ? 'Windows Settings' : 'System Settings';
+const MIC_PATH        = IS_WINDOWS ? 'Privacy & security → Microphone' : 'Microphone';
 
 const BRAND = TOKENS.brand;
 const LIGHT_BG = TOKENS.bgCard;
@@ -167,7 +172,7 @@ export default function InterviewerSetupCard({
           {micState === 'denied' && (
             <>
               <Typography sx={{ fontSize: '0.75rem', color: '#6B7280', mb: 0.5 }}>
-                Enable <strong>Trueyy Helper</strong> in System Settings → Microphone, then Try Again.
+                Enable <strong>Trueyy Helper</strong> in {SETTINGS_APP_NAME} → {MIC_PATH}, then Try Again.
               </Typography>
               <Box sx={{ display: 'flex', gap: 0.75, mt: 0.5 }}>
                 <Button

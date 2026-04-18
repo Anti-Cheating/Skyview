@@ -12,7 +12,7 @@ import {
   Download as DownloadIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
-import { getHelperDownloadUrl } from '../../services/helperBridge';
+import { getHelperDownloadUrl, detectHelperPlatform } from '../../services/helperBridge';
 import { TOKENS } from '../../theme';
 
 const BRAND = TOKENS.brand;
@@ -27,7 +27,12 @@ interface Props {
 }
 
 export default function HelperDownloadCard({ checking, onRetry }: Props) {
-  const url = getHelperDownloadUrl();
+  const platform = detectHelperPlatform();
+  const url = getHelperDownloadUrl(platform);
+  const downloadLabel =
+    platform === 'windows' ? 'Download for Windows'
+    : platform === 'mac'    ? 'Download for macOS'
+    :                         'Download installer';
 
   return (
     <Box
@@ -102,7 +107,7 @@ export default function HelperDownloadCard({ checking, onRetry }: Props) {
               boxShadow: 'none',
             }}
           >
-            Download for macOS
+            {downloadLabel}
           </Button>
           {onRetry && (
             <Button

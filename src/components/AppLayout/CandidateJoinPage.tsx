@@ -36,7 +36,7 @@ import {
 import { InterviewService } from '../../services/interview.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { useHelper } from '../../hooks/useHelper';
-import { openSettingsPane } from '../../services/helperBridge';
+import { openSettingsPane, detectHelperPlatform } from '../../services/helperBridge';
 import { USER_ROLES, STORAGE_KEYS } from '../../config/constants';
 import { ENV } from '../../config/env';
 import type { InterviewSession } from '../../types/interview.types';
@@ -237,7 +237,9 @@ export default function CandidateJoinPage() {
                     desc="Required for live transcription"
                     done={micOk} onEnable={openMicSettings} />
                   <Typography sx={{ fontSize: '0.7rem', color: '#6B7280', mt: 1 }}>
-                    Toggle <strong>Trueyy Helper</strong> ON in each pane, then return here. This page updates automatically.
+                    {detectHelperPlatform() === 'windows'
+                      ? <>Enable <strong>Microphone access</strong> (and <strong>Let desktop apps access your microphone</strong>) in Windows Settings, then return here. This page updates automatically.</>
+                      : <>Toggle <strong>Trueyy Helper</strong> ON in each pane, then return here. This page updates automatically.</>}
                   </Typography>
                 </>
               )}
