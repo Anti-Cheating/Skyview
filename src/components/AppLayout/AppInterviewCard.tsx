@@ -15,6 +15,7 @@ import {
   Divider,
   Tooltip,
   IconButton,
+  CircularProgress,
 } from '@mui/material';
 import {
   VideoCall as VideoCallIcon,
@@ -26,18 +27,23 @@ import {
   AccessTime as AccessTimeIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import axios from 'axios';
 import type { InterviewSession } from '../../types/interview.types';
 import { USER_ROLES } from '../../config/constants';
+import { ENV } from '../../config/env';
 import { MOCK_INTERVIEW_SCENARIO_MAP } from '../../mockData/interviewsMock';
 
 interface AppInterviewCardProps {
   interview: InterviewSession;
   userRole: string;
   onJoin?: (interview: InterviewSession) => void;
+  onRefresh?: () => void;
 }
 
-export default function AppInterviewCard({ interview, userRole, onJoin }: AppInterviewCardProps) {
+export default function AppInterviewCard({ interview, userRole, onJoin, onRefresh }: AppInterviewCardProps) {
   const navigate = useNavigate();
+  const [analysisLoading, setAnalysisLoading] = useState(false);
   // Format date and time
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -100,6 +106,20 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
     }
   };
 
+  const startAnalysis = async () => {
+    setAnalysisLoading(true);
+    try {
+      await axios.post(`${ENV.CORTEX_API_URL}/interviews/${interview.id}/analyze`);
+      // Cortex returns 202 immediately, analysis runs in background
+      // Refresh so analysis_status updates to "pending"
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error('Failed to start analysis:', err);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
   const handleViewAnalysis = () => {
     const isMockInterview = interview.id in MOCK_INTERVIEW_SCENARIO_MAP;
     const scenario = isMockInterview
@@ -108,6 +128,62 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
 
     const url = `/interview/${interview.id}/analysis${scenario ? `?mock=${scenario}` : ''}`;
     navigate(url);
+  };
+
+  const getAnalysisButton = () => {
+    const status = interview.analysis_status;
+
+    if (status === 'ready') {
+      return (
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={handleViewAnalysis}
+          sx={{
+            bgcolor: '#4CD964',
+            color: '#FFFFFF',
+            fontWeight: 600,
+            textTransform: 'none',
+            '&:hover': { bgcolor: '#34C759' },
+          }}
+        >
+          View Analysis
+        </Button>
+      );
+    } else if (status === 'pending') {
+      return (
+        <Button
+          disabled
+          fullWidth
+          startIcon={<CircularProgress size={16} />}
+          sx={{
+            fontWeight: 600,
+            textTransform: 'none',
+          }}
+        >
+          Analyzing...
+        </Button>
+      );
+    } else {
+      return (
+        <Button
+          variant="outlined"
+          fullWidth
+          onClick={startAnalysis}
+          disabled={analysisLoading}
+          startIcon={analysisLoading ? <CircularProgress size={16} /> : undefined}
+          sx={{
+            borderColor: '#4CD964',
+            color: '#4CD964',
+            fontWeight: 600,
+            textTransform: 'none',
+            '&:hover': { bgcolor: 'rgba(76, 217, 100, 0.1)' },
+          }}
+        >
+          {analysisLoading ? 'Starting...' : 'Analyze'}
+        </Button>
+      );
+    }
   };
 
   // Get participant information based on role
@@ -442,35 +518,39 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
               }}
             >
               <span style={{ width: '100%' }}>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  startIcon={
-                    canJoin ? (
-                      <VideoCallIcon sx={{ fontSize: 14 }} />
-                    ) : (
-                      <AccessTimeIcon sx={{ fontSize: 14 }} />
-                    )
-                  }
-                  onClick={handleAction}
-                  size="small"
-                  sx={{
-                    fontSize: '0.75rem',
-                    py: 0.625,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    borderRadius: 1.5,
-                    bgcolor: 'primary.main',
-                    color: '#FFFFFF',
-                    boxShadow: 'none',
-                    '&:hover': {
-                      bgcolor: 'primary.dark',
-                      boxShadow: '0 4px 12px rgba(76, 217, 100, 0.4)',
-                    },
-                  }}
-                >
-                  {actionLabel}
-                </Button>
+                {isCompleted ? (
+                  getAnalysisButton()
+                ) : (
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    startIcon={
+                      canJoin ? (
+                        <VideoCallIcon sx={{ fontSize: 14 }} />
+                      ) : (
+                        <AccessTimeIcon sx={{ fontSize: 14 }} />
+                      )
+                    }
+                    onClick={handleAction}
+                    size="small"
+                    sx={{
+                      fontSize: '0.75rem',
+                      py: 0.625,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      borderRadius: 1.5,
+                      bgcolor: 'primary.main',
+                      color: '#FFFFFF',
+                      boxShadow: 'none',
+                      '&:hover': {
+                        bgcolor: 'primary.dark',
+                        boxShadow: '0 4px 12px rgba(76, 217, 100, 0.4)',
+                      },
+                    }}
+                  >
+                    {actionLabel}
+                  </Button>
+                )}
               </span>
             </Tooltip>
           )}

@@ -1,27 +1,38 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Card, Typography, Chip } from '@mui/material';
-import { MOCK_PAST_INTERVIEWS, MOCK_INTERVIEW_SCENARIO_MAP } from '../../mockData/interviewsMock';
+import { Box, Card, Typography, Button, CircularProgress } from '@mui/material';
+import axios from 'axios';
+import { ENV } from '../../config/env';
+import { InterviewService } from '../../services/interview.service';
 import type { InterviewSession } from '../../types/interview.types';
 
 export default function PastInterviewsView() {
   const navigate = useNavigate();
+  const [interviews, setInterviews] = useState<InterviewSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [analysisLoading, setAnalysisLoading] = useState<Record<string, boolean>>({});
 
-  const getRiskScore = (interviewId: string): number => {
-    const scenario = MOCK_INTERVIEW_SCENARIO_MAP[interviewId as keyof typeof MOCK_INTERVIEW_SCENARIO_MAP];
-    if (!scenario) return 0;
-    if (scenario === 'critical') return 89;
-    if (scenario === 'moderate') return 70;
-    if (scenario === 'research') return 55;
-    if (scenario === 'clean') return 11;
-    return 0;
+  useEffect(() => {
+    fetchPastInterviews();
+  }, []);
+
+  const fetchPastInterviews = async () => {
+    try {
+      setLoading(true);
+      const res = await InterviewService.getPastInterviews();
+      if (res.success) {
+        setInterviews(res.data || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch past interviews:', e);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const getRiskLevel = (interviewId: string): string => {
-    const score = getRiskScore(interviewId);
-    if (score >= 67) return 'CRITICAL';
-    if (score >= 50) return 'MEDIUM';
-    if (score >= 30) return 'LOW';
-    return 'CLEAN';
+  const getRiskScore = (): number => {
+    // Will be fetched from analysis when ready
+    return 0;
   };
 
   const getRiskColor = (level: string): string => {
@@ -55,11 +66,102 @@ export default function PastInterviewsView() {
     return '';
   };
 
-  const handleCardClick = (interview: InterviewSession) => {
-    const scenario = MOCK_INTERVIEW_SCENARIO_MAP[interview.id as keyof typeof MOCK_INTERVIEW_SCENARIO_MAP];
-    const url = `/interview/${interview.id}/analysis${scenario ? `?mock=${scenario}` : ''}`;
-    navigate(url);
+  const startAnalysis = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAnalysisLoading(prev => ({ ...prev, [id]: true }));
+    try {
+      await axios.post(`${ENV.CORTEX_API_URL}/interviews/${id}/analyze`);
+      await fetchPastInterviews();
+    } catch (err) {
+      console.error('Failed to start analysis:', err);
+    } finally {
+      setAnalysisLoading(prev => ({ ...prev, [id]: false }));
+    }
   };
+
+  const handleViewAnalysis = (interview: InterviewSession, e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigate(`/interview/${interview.id}/analysis`);
+  };
+
+  const getAnalysisButton = (interview: InterviewSession) => {
+    const status = interview.analysis_status;
+    const isLoading = analysisLoading[interview.id];
+
+    if (status === 'ready') {
+      return (
+        <Button
+          variant="contained"
+          size="small"
+          onClick={(e) => handleViewAnalysis(interview, e)}
+          sx={{
+            bgcolor: '#4CD964',
+            color: '#FFFFFF',
+            fontWeight: 600,
+            fontSize: '12px',
+            textTransform: 'none',
+            '&:hover': { bgcolor: '#34C759' },
+          }}
+        >
+          View Analysis
+        </Button>
+      );
+    } else if (status === 'pending') {
+      return (
+        <Button
+          disabled
+          size="small"
+          sx={{
+            fontWeight: 600,
+            fontSize: '12px',
+            textTransform: 'none',
+          }}
+          startIcon={<CircularProgress size={14} />}
+        >
+          Analyzing...
+        </Button>
+      );
+    } else {
+      return (
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={(e) => startAnalysis(interview.id, e)}
+          disabled={isLoading}
+          sx={{
+            borderColor: '#4CD964',
+            color: '#4CD964',
+            fontWeight: 600,
+            fontSize: '12px',
+            textTransform: 'none',
+            '&:hover': { bgcolor: 'rgba(76, 217, 100, 0.1)' },
+          }}
+          startIcon={isLoading ? <CircularProgress size={14} /> : undefined}
+        >
+          {isLoading ? 'Starting...' : 'Analyze'}
+        </Button>
+      );
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!interviews.length) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 3, color: '#1F2937', fontSize: '1.5rem' }}>
+          Past Interviews
+        </Typography>
+        <Typography sx={{ color: '#6B7280' }}>No past interviews yet.</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ p: 3 }}>
@@ -68,28 +170,24 @@ export default function PastInterviewsView() {
       </Typography>
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {MOCK_PAST_INTERVIEWS.map((interview) => {
-          const riskScore = getRiskScore(interview.id);
-          const riskLevel = getRiskLevel(interview.id);
-          const riskColor = getRiskColor(riskLevel);
+        {interviews.map((interview) => {
+          const riskScore = getRiskScore();
+          const riskColor = getRiskColor('CLEAN');
 
           return (
             <Card
               key={interview.id}
-              onClick={() => handleCardClick(interview)}
               sx={{
                 p: 3,
                 display: 'flex',
                 gap: 3,
                 alignItems: 'center',
-                cursor: 'pointer',
                 border: '1px solid #E5E7EB',
                 borderRadius: 2,
                 transition: 'all 0.2s ease',
                 '&:hover': {
                   borderColor: '#4CD964',
                   boxShadow: '0 8px 16px rgba(76, 217, 100, 0.15)',
-                  transform: 'translateY(-2px)',
                 },
               }}
             >
@@ -112,7 +210,7 @@ export default function PastInterviewsView() {
                   {riskScore}
                 </Typography>
                 <Typography sx={{ fontSize: '10px', fontWeight: 700, color: riskColor, letterSpacing: '0.5px' }}>
-                  {riskLevel}
+                  PENDING
                 </Typography>
               </Box>
 
@@ -129,21 +227,12 @@ export default function PastInterviewsView() {
                 </Typography>
               </Box>
 
-              {/* Date & Status */}
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, flexShrink: 0 }}>
-                <Chip
-                  label="Completed"
-                  size="small"
-                  sx={{
-                    bgcolor: '#E8F5E9',
-                    color: '#2E7D32',
-                    fontWeight: 600,
-                    fontSize: '11px',
-                  }}
-                />
+              {/* Action Section */}
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
                 <Typography sx={{ fontSize: '12px', color: '#9CA3AF' }}>
                   {formatDate(interview.scheduled_start_at)}
                 </Typography>
+                {getAnalysisButton(interview)}
               </Box>
             </Card>
           );

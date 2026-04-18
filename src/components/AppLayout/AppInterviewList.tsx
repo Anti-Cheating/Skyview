@@ -25,7 +25,6 @@ import type { InterviewSession } from '../../types/interview.types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { USER_ROLES } from '../../config/constants';
-import { MOCK_PAST_INTERVIEWS } from '../../mockData/interviewsMock';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -94,11 +93,23 @@ export default function AppInterviewList() {
     setLoading(true);
     setError(null);
     try {
-      // Always use mock data for past interviews to ensure analysis works
-      setPastInterviews(MOCK_PAST_INTERVIEWS);
-      setPastHasMore(false);
+      const offset = (page - 1) * ITEMS_PER_PAGE;
+      const response = userRole === USER_ROLES.CANDIDATE
+        ? await InterviewService.getPastInterviews(undefined, ITEMS_PER_PAGE, offset)
+        : await InterviewService.getPastInterviewsForInterviewer(undefined, ITEMS_PER_PAGE, offset);
+
+      if (response.success) {
+        const interviews = response.data || [];
+        setPastInterviews(interviews);
+        setPastHasMore(interviews.length === ITEMS_PER_PAGE);
+      } else {
+        const msg = response.message || 'Failed to fetch past interviews';
+        setError(msg);
+        showError(msg);
+      }
     } catch (err: any) {
-      const msg = err.message || 'Failed to fetch past interviews.';
+      const msg = err.status === 401 ? 'Your session has expired. Please log in again.'
+        : err.message || 'Failed to fetch past interviews.';
       setError(msg);
       showError(msg);
     } finally {

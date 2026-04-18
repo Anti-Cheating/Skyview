@@ -31,7 +31,6 @@ export default function AppLayout() {
   const sidebarItems: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', iconName: 'Dashboard', route: '/', badge: null },
     { id: 'interviews', label: 'Interviews', iconName: 'Interviews', route: '/interviews', badge: null },
-    { id: 'past-interviews', label: 'Past Interviews', iconName: 'History', route: '/interviews/past', badge: null },
   ];
 
   const sidebarSecondary: SecondaryNavItem[] = [];
@@ -45,7 +44,6 @@ export default function AppLayout() {
 
   // Derive active sidebar item from current URL
   const getActiveId = (): string => {
-    if (location.pathname === '/interviews/past') return 'past-interviews';
     if (location.pathname.startsWith('/interviews')) return 'interviews';
     if (location.pathname.startsWith('/profile')) return 'profile';
     return 'dashboard';

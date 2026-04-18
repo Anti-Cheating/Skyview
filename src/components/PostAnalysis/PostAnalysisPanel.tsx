@@ -197,6 +197,7 @@ export const PostAnalysisPanel: React.FC = () => {
   if (loading) return <div className="post-analysis-loading">Loading analysis...</div>;
   if (error)   return <div className="post-analysis-error">Error: {error}</div>;
   if (!analysis) return <div className="post-analysis-empty">No analysis available</div>;
+  if (analysis?.status === 'pending') return <div className="post-analysis-loading">Analysis is being processed. Please check back shortly...</div>;
 
   const getRiskColor = (risk: string) => {
     switch (risk.toUpperCase()) {

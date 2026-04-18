@@ -61,6 +61,8 @@ export interface InterviewSession {
   interview_session_participants: InterviewParticipant[];
   created_at?: string;
   updated_at?: string;
+  // Analysis status: pending (processing) | ready (complete) | null/undefined (not started)
+  analysis_status?: "pending" | "ready" | "failed" | null;
 }
 
 export interface InterviewSessionResponse {
