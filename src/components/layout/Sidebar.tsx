@@ -29,6 +29,7 @@ import {
   CameraAlt as CameraIcon,
   ExitToApp as ExitIcon,
   VideoCall as VideoCallIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import { SidebarProps } from './sidebar.types';
 import { TruoyyLogo } from './TruoyyLogo';
@@ -52,6 +53,7 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   ExitToApp: ExitIcon,
   VideoCall: VideoCallIcon,
   Interviews: VideoCallIcon,
+  History: HistoryIcon,
 };
 
 const getInitials = (label: string): string => {
@@ -192,6 +194,7 @@ export function Sidebar({
           overflowY: 'auto',
           overflowX: 'hidden',
           py: 1,
+          minHeight: 0,
         }}
       >
         <List ref={listRef} sx={{ px: padding, py: 0 }}>

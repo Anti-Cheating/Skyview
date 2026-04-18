@@ -28,6 +28,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import type { InterviewSession } from '../../types/interview.types';
 import { USER_ROLES } from '../../config/constants';
+import { MOCK_INTERVIEW_SCENARIO_MAP } from '../../mockData/interviewsMock';
 
 interface AppInterviewCardProps {
   interview: InterviewSession;
@@ -62,7 +63,7 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
   //   - Candidate   + extension  → "Join Interview" (→ message Jarvis extension)
   //   - Completed                → "View Details"
   //   - Otherwise (candidate + application) → "Join in Falcon App"
-  const isCompleted = interview.status === 'completed';
+  const isCompleted = interview.status === 'completed' || !!interview.actual_end_at;
   const isInterviewer = userRole === USER_ROLES.INTERVIEWER;
   const isCandidate = userRole === USER_ROLES.CANDIDATE;
   const canMonitor = isInterviewer && !isCompleted;
@@ -97,6 +98,16 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
     if (onJoin) {
       onJoin(interview);
     }
+  };
+
+  const handleViewAnalysis = () => {
+    const isMockInterview = interview.id in MOCK_INTERVIEW_SCENARIO_MAP;
+    const scenario = isMockInterview
+      ? MOCK_INTERVIEW_SCENARIO_MAP[interview.id as keyof typeof MOCK_INTERVIEW_SCENARIO_MAP]
+      : undefined;
+
+    const url = `/interview/${interview.id}/analysis${scenario ? `?mock=${scenario}` : ''}`;
+    navigate(url);
   };
 
   // Get participant information based on role
@@ -406,68 +417,91 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
           )}
         </Box>
 
-        {/* Action Button — Skyview: join is not supported */}
-        <Tooltip
-          title={tooltipMessage}
-          arrow
-          placement="top"
-          PopperProps={{
-            sx: {
-              '& .MuiTooltip-tooltip': {
-                bgcolor: '#212121',
-                color: '#FFFFFF',
-                fontSize: '0.813rem',
-                padding: '8px 12px',
-                maxWidth: 250,
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              },
-              '& .MuiTooltip-arrow': {
-                color: '#212121',
-              },
-            },
-          }}
-        >
-          <span>
+        {/* Action Buttons */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 'auto' }}>
+          {/* Primary Action Button — only if joinable */}
+          {canJoin && (
+            <Tooltip
+              title={tooltipMessage}
+              arrow
+              placement="top"
+              PopperProps={{
+                sx: {
+                  '& .MuiTooltip-tooltip': {
+                    bgcolor: '#212121',
+                    color: '#FFFFFF',
+                    fontSize: '0.813rem',
+                    padding: '8px 12px',
+                    maxWidth: 250,
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                  },
+                  '& .MuiTooltip-arrow': {
+                    color: '#212121',
+                  },
+                },
+              }}
+            >
+              <span style={{ width: '100%' }}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  startIcon={
+                    canJoin ? (
+                      <VideoCallIcon sx={{ fontSize: 14 }} />
+                    ) : (
+                      <AccessTimeIcon sx={{ fontSize: 14 }} />
+                    )
+                  }
+                  onClick={handleAction}
+                  size="small"
+                  sx={{
+                    fontSize: '0.75rem',
+                    py: 0.625,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderRadius: 1.5,
+                    bgcolor: 'primary.main',
+                    color: '#FFFFFF',
+                    boxShadow: 'none',
+                    '&:hover': {
+                      bgcolor: 'primary.dark',
+                      boxShadow: '0 4px 12px rgba(76, 217, 100, 0.4)',
+                    },
+                  }}
+                >
+                  {actionLabel}
+                </Button>
+              </span>
+            </Tooltip>
+          )}
+
+          {/* View Analysis Button — shows for completed interviews */}
+          {isCompleted && (
             <Button
-              variant="contained"
+              variant="outlined"
               fullWidth
-              startIcon={
-                canJoin ? (
-                  <VideoCallIcon sx={{ fontSize: 14 }} />
-                ) : (
-                  <AccessTimeIcon sx={{ fontSize: 14 }} />
-                )
-              }
-              onClick={handleAction}
+              onClick={handleViewAnalysis}
               size="small"
               sx={{
                 fontSize: '0.75rem',
                 py: 0.625,
                 textTransform: 'none',
                 fontWeight: 600,
-                mt: 'auto',
                 borderRadius: 1.5,
-                bgcolor: canJoin ? 'primary.main' : '#E0E0E0',
-                color: canJoin ? '#FFFFFF' : '#9E9E9E',
+                borderColor: 'primary.main',
+                color: 'primary.main',
+                bgcolor: 'transparent',
                 boxShadow: 'none',
-                '&:hover': canJoin
-                  ? {
-                      bgcolor: 'primary.dark',
-                      boxShadow: '0 4px 12px rgba(76, 217, 100, 0.4)',
-                    }
-                  : {
-                      bgcolor: '#E0E0E0',
-                    },
-                '&.Mui-disabled': {
-                  bgcolor: '#E0E0E0',
-                  color: '#9E9E9E',
+                '&:hover': {
+                  bgcolor: 'rgba(76, 217, 100, 0.08)',
+                  borderColor: 'primary.dark',
                 },
               }}
             >
-              {actionLabel}
+              View Analysis
             </Button>
-          </span>
-        </Tooltip>
+          )}
+        </Box>
       </CardContent>
     </Card>
   );

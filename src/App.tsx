@@ -12,6 +12,9 @@ import AppInterviewList from './components/AppLayout/AppInterviewList';
 import CreateInterviewPage from './components/AppLayout/CreateInterviewPage';
 import MonitoringView from './components/Monitoring/MonitoringView';
 import CandidateJoinPage from './components/AppLayout/CandidateJoinPage';
+import PostAnalysisPanel from './components/PostAnalysis/PostAnalysisPanel';
+import PreviewPage from './components/PostAnalysis/PreviewPage';
+import PastInterviewsView from './components/AppLayout/PastInterviewsView';
 
 /**
  * Detects if Skyview was opened from Falcon (via ?src=falcon param)
@@ -91,10 +94,14 @@ function AppRoutes() {
         <Route path="/" element={<PrivateRoute><AppLayout /></PrivateRoute>}>
           <Route index element={<AppDashboard />} />
           <Route path="interviews" element={<AppInterviewList />} />
+          <Route path="interviews/past" element={<PastInterviewsView />} />
           <Route path="interviews/new" element={<CreateInterviewPage />} />
           <Route path="interviews/:id/join" element={<CandidateJoinPage />} />
           <Route path="interviews/:id/monitor" element={<MonitoringView />} />
+          <Route path="interview/:sessionId/analysis" element={<PostAnalysisPanel />} />
         </Route>
+        {/* Post-analysis preview — demo page for testing mock scenarios */}
+        <Route path="/analysis-preview" element={<PrivateRoute><PreviewPage /></PrivateRoute>} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </>
