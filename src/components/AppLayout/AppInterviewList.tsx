@@ -65,9 +65,7 @@ export default function AppInterviewList() {
     setError(null);
     try {
       const offset = (page - 1) * ITEMS_PER_PAGE;
-      const response = userRole === USER_ROLES.CANDIDATE
-        ? await InterviewService.getUpcomingInterviews(undefined, ITEMS_PER_PAGE, offset)
-        : await InterviewService.getUpcomingInterviewsForInterviewer(undefined, ITEMS_PER_PAGE, offset);
+      const response = await InterviewService.getUpcoming(ITEMS_PER_PAGE, offset);
 
       if (response.success) {
         const interviews = response.data || [];
@@ -93,9 +91,7 @@ export default function AppInterviewList() {
     setError(null);
     try {
       const offset = (page - 1) * ITEMS_PER_PAGE;
-      const response = userRole === USER_ROLES.CANDIDATE
-        ? await InterviewService.getPastInterviews(undefined, ITEMS_PER_PAGE, offset)
-        : await InterviewService.getPastInterviewsForInterviewer(undefined, ITEMS_PER_PAGE, offset);
+      const response = await InterviewService.getPast(ITEMS_PER_PAGE, offset);
 
       if (response.success) {
         const interviews = response.data || [];

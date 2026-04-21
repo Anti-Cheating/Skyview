@@ -125,15 +125,8 @@ export default function AppDashboard() {
     const fetchCounts = async () => {
       setLoading(true);
       try {
-        const upcomingResponse =
-          userRole === USER_ROLES.CANDIDATE
-            ? await InterviewService.getUpcomingInterviews(undefined, 100, 0)
-            : await InterviewService.getUpcomingInterviewsForInterviewer(undefined, 100, 0);
-
-        const pastResponse =
-          userRole === USER_ROLES.CANDIDATE
-            ? await InterviewService.getPastInterviews(undefined, 100, 0)
-            : await InterviewService.getPastInterviewsForInterviewer(undefined, 100, 0);
+        const upcomingResponse = await InterviewService.getUpcoming(100, 0);
+        const pastResponse = await InterviewService.getPast(100, 0);
 
         if (upcomingResponse.success) {
           setUpcomingCount(upcomingResponse.data?.length || 0);
