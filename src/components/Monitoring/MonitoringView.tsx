@@ -210,9 +210,8 @@ export default function MonitoringView() {
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography
+            variant="h3"
             sx={{
-              fontSize: { xs: '0.85rem', md: '1rem' },
-              fontWeight: 700,
               color: '#1F2937',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -221,7 +220,7 @@ export default function MonitoringView() {
           >
             {interview.title}
           </Typography>
-          <Typography sx={{ fontSize: '0.7rem', color: '#6B7280', display: { xs: 'none', sm: 'block' } }}>
+          <Typography variant="caption" sx={{ display: { xs: 'none', sm: 'block' }, color: '#6B7280' }}>
             {helper.installed && helper.status?.microphone_ok
               ? `${candidateName} · ${interview.interview_type === 'extension' ? 'Trueyy Helper' : 'Falcon App'}`
               : 'Setup your monitoring before joining'}
@@ -236,7 +235,6 @@ export default function MonitoringView() {
             size="small"
             sx={{
               height: 24,
-              fontSize: '0.7rem',
               fontWeight: 600,
               bgcolor: riskData.isConnected ? 'rgba(76, 217, 100, 0.15)' : 'rgba(239, 68, 68, 0.15)',
               color: riskData.isConnected ? BRAND : '#ef4444',
@@ -250,7 +248,6 @@ export default function MonitoringView() {
               size="small"
               sx={{
                 height: 24,
-                fontSize: '0.7rem',
                 fontWeight: 600,
                 bgcolor: 'rgba(76, 217, 100, 0.15)',
                 color: BRAND,

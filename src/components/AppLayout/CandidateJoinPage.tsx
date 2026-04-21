@@ -20,12 +20,12 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
-  Typography,
   Button,
   CircularProgress,
   Alert,
   IconButton,
 } from '@mui/material';
+import { CardTitle, Secondary, Caption } from '../layout/Typography';
 import {
   CheckCircle as CheckIcon,
   ArrowBack as ArrowBackIcon,
@@ -187,12 +187,12 @@ export default function CandidateJoinPage() {
           <ArrowBackIcon />
         </IconButton>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: '#1F2937', lineHeight: 1.2 }}>
+          <CardTitle sx={{ fontWeight: 700, color: TOKENS.textPrimary }}>
             {interview.title}
-          </Typography>
-          <Typography sx={{ fontSize: '0.75rem', color: '#6B7280' }}>
+          </CardTitle>
+          <Secondary sx={{ color: TOKENS.textSecondary }}>
             Setup your monitoring before joining
-          </Typography>
+          </Secondary>
         </Box>
       </Box>
 
@@ -236,11 +236,11 @@ export default function CandidateJoinPage() {
                   <PermissionRow title="Microphone"
                     desc="Required for live transcription"
                     done={micOk} onEnable={openMicSettings} />
-                  <Typography sx={{ fontSize: '0.7rem', color: '#6B7280', mt: 1 }}>
+                  <Caption sx={{ display: 'block', color: TOKENS.textSecondary, mt: 1 }}>
                     {detectHelperPlatform() === 'windows'
                       ? <>Enable <strong>Microphone access</strong> (and <strong>Let desktop apps access your microphone</strong>) in Windows Settings, then return here. This page updates automatically.</>
                       : <>Toggle <strong>Trueyy Helper</strong> ON in each pane, then return here. This page updates automatically.</>}
-                  </Typography>
+                  </Caption>
                 </>
               )}
             </StepRow>
@@ -253,8 +253,8 @@ export default function CandidateJoinPage() {
                 <Button variant="contained" size="small" onClick={handleOpenMeeting}
                   disabled={!interview.provider_metadata?.join_url}
                   sx={{
-                    bgcolor: BRAND, color: '#fff', textTransform: 'none',
-                    fontSize: '0.75rem', fontWeight: 600, py: 0.5, px: 2,
+                    bgcolor: BRAND, color: '#fff',
+                    fontWeight: 600, py: 0.5, px: 2,
                     borderRadius: '6px', '&:hover': { bgcolor: '#3CB853' },
                     boxShadow: 'none',
                   }}>
@@ -273,11 +273,11 @@ export default function CandidateJoinPage() {
 // ── Small helper components ─────────────────────────────────────────
 
 function Status({ busy, ok, err, text }: { busy?: boolean; ok?: boolean; err?: boolean; text: string }) {
-  const color = ok ? '#059669' : err ? '#DC2626' : '#6B7280';
+  const color = ok ? TOKENS.success : err ? TOKENS.error : TOKENS.textSecondary;
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
       {busy && <CircularProgress size={12} sx={{ color: BRAND }} />}
-      <Typography sx={{ fontSize: '0.75rem', color }}>{text}</Typography>
+      <Secondary sx={{ color }}>{text}</Secondary>
     </Box>
   );
 }
@@ -302,10 +302,12 @@ function PermissionRow({ title, desc, done, onEnable }: {
         {done ? <CheckIcon sx={{ fontSize: 14 }} /> : '⏳'}
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: done ? '#065F46' : '#1F2937' }}>{title}</Typography>
-        <Typography sx={{ fontSize: '0.688rem', color: '#6B7280' }}>
+        <Secondary sx={{ fontWeight: 600, color: done ? '#065F46' : TOKENS.textPrimary }}>
+          {title}
+        </Secondary>
+        <Caption sx={{ display: 'block', color: TOKENS.textSecondary }}>
           {done ? 'Granted to Trueyy Helper' : desc}
-        </Typography>
+        </Caption>
       </Box>
       {!done && (
         <Button size="small" variant="contained" onClick={onEnable}

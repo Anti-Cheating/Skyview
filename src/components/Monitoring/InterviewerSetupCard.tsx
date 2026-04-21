@@ -6,14 +6,10 @@
  * Steps:
  *   1. Install Extension — detected via ping
  *   2. Enable Microphone — native helper mic permission
- *
- * Once both are done, MonitoringView hides this card and unlocks the
- * Risk Analytics panel (which itself surfaces the "Open meeting link"
- * action).
  */
 
 import { useState } from 'react';
-import { Box, Typography, Button, CircularProgress } from '@mui/material';
+import { Box, Button, CircularProgress } from '@mui/material';
 import {
   Extension as ExtensionIcon,
   Mic as MicIcon,
@@ -21,6 +17,7 @@ import {
 import { TOKENS } from '../../theme';
 import StepRow from '../common/StepRow';
 import { detectHelperPlatform } from '../../services/helperBridge';
+import { Secondary } from '../layout/Typography';
 
 const IS_WINDOWS = detectHelperPlatform() === 'windows';
 const SETTINGS_APP_NAME = IS_WINDOWS ? 'Windows Settings' : 'System Settings';
@@ -94,26 +91,24 @@ export default function InterviewerSetupCard({
           {extensionState === 'checking' && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CircularProgress size={12} sx={{ color: BRAND }} />
-              <Typography sx={{ fontSize: '0.75rem', color: '#6B7280' }}>Detecting...</Typography>
+              <Secondary sx={{ color: TOKENS.textSecondary }}>Detecting...</Secondary>
             </Box>
           )}
           {extensionState === 'done' && (
-            <Typography sx={{ fontSize: '0.75rem', color: '#059669' }}>
+            <Secondary sx={{ color: TOKENS.success }}>
               Trueyy Interviewer Monitor detected
-            </Typography>
+            </Secondary>
           )}
           {extensionState === 'missing' && (
             <>
-              <Typography sx={{ fontSize: '0.75rem', color: '#DC2626', mb: 0.75 }}>
+              <Secondary sx={{ color: TOKENS.error, mb: 0.75 }}>
                 Extension not found
-              </Typography>
+              </Secondary>
               <Button
                 size="small"
                 variant="text"
                 onClick={() => window.location.reload()}
                 sx={{
-                  fontSize: '0.7rem',
-                  textTransform: 'none',
                   p: 0,
                   minWidth: 0,
                   color: BRAND,
@@ -137,9 +132,9 @@ export default function InterviewerSetupCard({
         >
           {micState === 'pending' && extensionState === 'done' && (
             <>
-              <Typography sx={{ fontSize: '0.75rem', color: '#6B7280', mb: 1 }}>
+              <Secondary sx={{ color: TOKENS.textSecondary, mb: 1 }}>
                 Grants microphone access to Trueyy Helper for live transcription
-              </Typography>
+              </Secondary>
               <Button
                 variant="contained"
                 size="small"
@@ -150,8 +145,6 @@ export default function InterviewerSetupCard({
                 sx={{
                   bgcolor: BRAND,
                   color: '#fff',
-                  textTransform: 'none',
-                  fontSize: '0.75rem',
                   fontWeight: 600,
                   py: 0.5,
                   px: 2,
@@ -165,15 +158,15 @@ export default function InterviewerSetupCard({
             </>
           )}
           {micState === 'done' && (
-            <Typography sx={{ fontSize: '0.75rem', color: '#059669' }}>
+            <Secondary sx={{ color: TOKENS.success }}>
               Microphone granted
-            </Typography>
+            </Secondary>
           )}
           {micState === 'denied' && (
             <>
-              <Typography sx={{ fontSize: '0.75rem', color: '#6B7280', mb: 0.5 }}>
+              <Secondary sx={{ color: TOKENS.textSecondary, mb: 0.5 }}>
                 Enable <strong>Trueyy Helper</strong> in {SETTINGS_APP_NAME} → {MIC_PATH}, then Try Again.
-              </Typography>
+              </Secondary>
               <Box sx={{ display: 'flex', gap: 0.75, mt: 0.5 }}>
                 <Button
                   size="small"
@@ -182,8 +175,6 @@ export default function InterviewerSetupCard({
                   sx={{
                     bgcolor: BRAND,
                     color: '#fff',
-                    textTransform: 'none',
-                    fontSize: '0.688rem',
                     py: 0.25,
                     px: 1.5,
                     borderRadius: '6px',
@@ -198,13 +189,11 @@ export default function InterviewerSetupCard({
                   variant="outlined"
                   onClick={onRetryMic}
                   sx={{
-                    textTransform: 'none',
-                    fontSize: '0.688rem',
                     py: 0.25,
                     px: 1.5,
                     borderRadius: '6px',
                     borderColor: LIGHT_BORDER,
-                    color: '#6B7280',
+                    color: TOKENS.textSecondary,
                     '&:hover': { borderColor: '#9CA3AF', bgcolor: '#F9FAFB' },
                   }}
                 >
@@ -219,4 +208,3 @@ export default function InterviewerSetupCard({
     </Box>
   );
 }
-

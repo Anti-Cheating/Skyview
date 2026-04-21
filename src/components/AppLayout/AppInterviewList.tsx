@@ -25,6 +25,8 @@ import type { InterviewSession } from '../../types/interview.types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { USER_ROLES } from '../../config/constants';
+import { useInterviewList } from '../../contexts/InterviewCacheContext';
+import { useDelayedFlag } from '../../hooks/useDelayedFlag';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -48,87 +50,101 @@ export default function AppInterviewList() {
   const theme = useTheme();
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
-  const [upcomingInterviews, setUpcomingInterviews] = useState<InterviewSession[]>([]);
-  const [pastInterviews, setPastInterviews] = useState<InterviewSession[]>([]);
+
+  // Page-1 data comes from the app-wide cache (stale-while-revalidate).
+  // Subsequent pages bypass the cache and hit the API directly — those
+  // are active-use interactions, not background fetches, so showing a
+  // brief loader there is acceptable.
+  const upcomingCache = useInterviewList('upcoming');
+  const pastCache     = useInterviewList('past');
+
   const [upcomingPage, setUpcomingPage] = useState(1);
   const [pastPage, setPastPage] = useState(1);
-  const [upcomingHasMore, setUpcomingHasMore] = useState(false);
-  const [pastHasMore, setPastHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [pagedUpcoming, setPagedUpcoming] = useState<InterviewSession[] | null>(null);
+  const [pagedPast, setPagedPast] = useState<InterviewSession[] | null>(null);
+  const [pageLoading, setPageLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const userRole = user?.role || USER_ROLES.CANDIDATE;
   const isInterviewer = userRole === USER_ROLES.INTERVIEWER;
 
-  const fetchUpcoming = async (page: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const offset = (page - 1) * ITEMS_PER_PAGE;
-      const response = await InterviewService.getUpcoming(ITEMS_PER_PAGE, offset);
+  // Resolved list shown for the active tab — prefer the explicit paged
+  // result when the user has navigated past page 1, otherwise fall back
+  // to the cached full list.
+  const upcomingInterviews = upcomingPage === 1
+    ? (upcomingCache.data ?? [])
+    : (pagedUpcoming ?? []);
+  const pastInterviews = pastPage === 1
+    ? (pastCache.data ?? [])
+    : (pagedPast ?? []);
 
-      if (response.success) {
-        const interviews = response.data || [];
-        setUpcomingInterviews(interviews);
-        setUpcomingHasMore(interviews.length === ITEMS_PER_PAGE);
-      } else {
-        const msg = response.message || 'Failed to fetch upcoming interviews';
-        setError(msg);
-        showError(msg);
-      }
-    } catch (err: any) {
-      const msg = err.status === 401 ? 'Your session has expired. Please log in again.'
-        : err.message || 'Failed to fetch upcoming interviews.';
-      setError(msg);
-      showError(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // "Has more" = we have a full page's worth of results; signals that
+  // advancing pagination will likely find additional rows.
+  const upcomingHasMore = upcomingPage === 1
+    ? (upcomingCache.data?.length ?? 0) > ITEMS_PER_PAGE
+    : (pagedUpcoming?.length ?? 0) === ITEMS_PER_PAGE;
+  const pastHasMore = pastPage === 1
+    ? (pastCache.data?.length ?? 0) > ITEMS_PER_PAGE
+    : (pagedPast?.length ?? 0) === ITEMS_PER_PAGE;
 
-  const fetchPast = async (page: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const offset = (page - 1) * ITEMS_PER_PAGE;
-      const response = await InterviewService.getPast(ITEMS_PER_PAGE, offset);
+  // `loading` is only true on the very first fetch when there is no
+  // cached data at all. Returning visitors render instantly from cache.
+  const loading = tabValue === 0
+    ? (upcomingPage === 1 ? upcomingCache.loading : pageLoading)
+    : (pastPage === 1 ? pastCache.loading : pageLoading);
 
-      if (response.success) {
-        const interviews = response.data || [];
-        setPastInterviews(interviews);
-        setPastHasMore(interviews.length === ITEMS_PER_PAGE);
-      } else {
-        const msg = response.message || 'Failed to fetch past interviews';
-        setError(msg);
-        showError(msg);
-      }
-    } catch (err: any) {
-      const msg = err.status === 401 ? 'Your session has expired. Please log in again.'
-        : err.message || 'Failed to fetch past interviews.';
-      setError(msg);
-      showError(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Delay the shimmer by 250ms so sub-threshold loads (fast networks,
+  // return-visits with warm cache) never flash a placeholder.
+  const showShimmer = useDelayedFlag(loading, 250);
 
+  // Fetch paged results when the user moves off page 1.
   useEffect(() => {
-    if (tabValue === 0) {
-      fetchUpcoming(upcomingPage);
-    } else {
-      fetchPast(pastPage);
-    }
+    const when = tabValue === 0 ? 'upcoming' : 'past';
+    const page = when === 'upcoming' ? upcomingPage : pastPage;
+    if (page === 1) return;
+    let cancelled = false;
+    (async () => {
+      setPageLoading(true);
+      setError(null);
+      try {
+        const offset = (page - 1) * ITEMS_PER_PAGE;
+        const response = when === 'upcoming'
+          ? await InterviewService.getUpcoming(ITEMS_PER_PAGE, offset)
+          : await InterviewService.getPast(ITEMS_PER_PAGE, offset);
+        if (cancelled) return;
+        if (response.success) {
+          const list = response.data || [];
+          if (when === 'upcoming') setPagedUpcoming(list);
+          else setPagedPast(list);
+        } else {
+          const msg = response.message || 'Failed to fetch interviews';
+          setError(msg);
+          showError(msg);
+        }
+      } catch (err: any) {
+        if (cancelled) return;
+        const msg = err.status === 401 ? 'Your session has expired. Please log in again.'
+          : err.message || 'Failed to fetch interviews.';
+        setError(msg);
+        showError(msg);
+      } finally {
+        if (!cancelled) setPageLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabValue, upcomingPage, pastPage, userRole]);
+  }, [tabValue, upcomingPage, pastPage]);
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
+    // Reset the paged result on the tab we're leaving so switching back
+    // shows the cache-backed page-1 view first, not stale paged data.
     if (newValue === 0) {
       setUpcomingPage(1);
-      setPastInterviews([]);
+      setPagedPast(null);
     } else {
       setPastPage(1);
-      setUpcomingInterviews([]);
+      setPagedUpcoming(null);
     }
   };
 
@@ -141,7 +157,7 @@ export default function AppInterviewList() {
       <Box sx={{ width: 120, height: 120, borderRadius: '50%', bgcolor: 'rgba(76, 217, 100, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
         {icon}
       </Box>
-      <Typography variant="h6" sx={{ color: '#1F2937', fontWeight: 600, mb: 1, fontSize: '1.25rem' }}>{title}</Typography>
+      <Typography variant="h2" sx={{ color: '#1F2937', mb: 1 }}>{title}</Typography>
       <Typography variant="body2" sx={{ color: '#6B7280', textAlign: 'center', maxWidth: 400, lineHeight: 1.6 }}>{message}</Typography>
     </Box>
   );
@@ -151,10 +167,11 @@ export default function AppInterviewList() {
       <Box sx={{ mb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h5" fontWeight={700} sx={{ fontSize: { xs: '1.2rem', md: '1.5rem' }, color: '#1F2937', letterSpacing: '-0.01em', mb: 0.5 }}>
+            <Typography variant="h1" sx={{ color: '#1F2937', mb: 0.5 }}>
+
               Interviews
             </Typography>
-            <Typography variant="body2" sx={{ color: '#6B7280', fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
+            <Typography variant="body2" sx={{ color: '#6B7280' }}>
               {userRole === USER_ROLES.CANDIDATE
                 ? 'Manage and join your scheduled interviews'
                 : 'Review and conduct interviews with candidates'}
@@ -167,12 +184,10 @@ export default function AppInterviewList() {
               onClick={() => navigate('/interviews/new')}
               size="small"
               sx={{
-                textTransform: 'none',
                 fontWeight: 600,
                 borderRadius: '8px',
                 px: 2,
                 py: 0.75,
-                fontSize: '0.8rem',
                 bgcolor: '#4CD964',
                 color: '#fff',
                 boxShadow: 'none',
@@ -195,7 +210,7 @@ export default function AppInterviewList() {
             onChange={handleTabChange}
             sx={{
               '& .MuiTab-root': {
-                color: '#6B7280', textTransform: 'none', fontWeight: 500, fontSize: '0.938rem', minHeight: 48, px: 3,
+                color: '#6B7280', textTransform: 'none', fontWeight: 500, minHeight: 48, px: 3,
                 '&.Mui-selected': { color: 'primary.main', fontWeight: 600 },
                 '&:hover': { color: 'primary.main', bgcolor: 'rgba(76, 217, 100, 0.05)' },
               },
@@ -225,9 +240,9 @@ export default function AppInterviewList() {
       </Box>
 
       <TabPanel value={tabValue} index={0}>
-        {loading && upcomingInterviews.length === 0 ? (
+        {showShimmer && upcomingInterviews.length === 0 ? (
           <Box sx={{ py: 2 }}><InterviewListShimmer count={3} /></Box>
-        ) : upcomingInterviews.length === 0 ? (
+        ) : upcomingInterviews.length === 0 && !loading ? (
           <EmptyState
             icon={<EventBusyIcon sx={{ fontSize: 60, color: 'primary.main' }} />}
             title="No Upcoming Interviews"
@@ -274,9 +289,9 @@ export default function AppInterviewList() {
       </TabPanel>
 
       <TabPanel value={tabValue} index={1}>
-        {loading && pastInterviews.length === 0 ? (
+        {showShimmer && pastInterviews.length === 0 ? (
           <Box sx={{ py: 2 }}><InterviewListShimmer count={3} /></Box>
-        ) : pastInterviews.length === 0 ? (
+        ) : pastInterviews.length === 0 && !loading ? (
           <EmptyState
             icon={<HistoryIcon sx={{ fontSize: 60, color: 'primary.main' }} />}
             title="No Past Interviews"

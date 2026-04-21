@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useInterviewList } from '../../contexts/InterviewCacheContext';
+import { useDelayedFlag } from '../../hooks/useDelayedFlag';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -16,7 +18,6 @@ import {
   Extension as ExtensionIcon,
 } from '@mui/icons-material';
 import { DashboardShimmer } from '../common/Shimmer';
-import { InterviewService } from '../../services/interview.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { USER_ROLES } from '../../config/constants';
@@ -69,10 +70,10 @@ function StatCard({ title, value, icon, bgColor, onClick }: StatCardProps) {
             {icon}
           </Box>
         </Box>
-        <Typography variant="h3" sx={{ fontSize: { xs: '1.8rem', md: '2.5rem' }, fontWeight: 700, color: '#1F2937', mb: 0.5, lineHeight: 1 }}>
+        <Typography variant="h1" sx={{ color: '#1F2937', mb: 0.5 }}>
           {value}
         </Typography>
-        <Typography variant="body2" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' }, color: '#6B7280', fontWeight: 500 }}>
+        <Typography variant="caption" sx={{ display: 'block', color: '#6B7280', fontWeight: 500 }}>
           {title}
         </Typography>
       </CardContent>
@@ -85,9 +86,16 @@ export default function AppDashboard() {
   const { showError, showSuccess } = useSnackbar();
   const theme = useTheme();
   const navigate = useNavigate();
-  const [upcomingCount, setUpcomingCount] = useState(0);
-  const [pastCount, setPastCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+
+  // Both counts come from the shared interview cache. First visit: fetches
+  // and caches; returns from other tabs: render instantly from memory.
+  const upcomingCache = useInterviewList('upcoming');
+  const pastCache = useInterviewList('past');
+  const upcomingCount = upcomingCache.data?.length ?? 0;
+  const pastCount     = pastCache.data?.length ?? 0;
+  const loading       = upcomingCache.loading || pastCache.loading;
+  const showShimmer   = useDelayedFlag(loading, 250);
+
   // `helperInstalled` is a historical name kept because the dashboard
   // template UI still renders chips around it. It now reflects whether
   // the Trueyy Helper daemon is reachable on localhost:48123.
@@ -121,38 +129,9 @@ export default function AppDashboard() {
     }
   };
 
-  useEffect(() => {
-    const fetchCounts = async () => {
-      setLoading(true);
-      try {
-        const upcomingResponse = await InterviewService.getUpcoming(100, 0);
-        const pastResponse = await InterviewService.getPast(100, 0);
-
-        if (upcomingResponse.success) {
-          setUpcomingCount(upcomingResponse.data?.length || 0);
-        } else {
-          showError(upcomingResponse.message || 'Failed to fetch upcoming interview count');
-        }
-        if (pastResponse.success) {
-          setPastCount(pastResponse.data?.length || 0);
-        } else {
-          showError(pastResponse.message || 'Failed to fetch past interview count');
-        }
-      } catch (error: any) {
-        let errorMsg = 'Failed to fetch interview statistics.';
-        if (error.status === 401) errorMsg = 'Your session has expired. Please log in again.';
-        else if (error.message) errorMsg = error.message;
-        showError(errorMsg);
-        console.error('Error fetching interview counts:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCounts();
-  }, [userRole]);
-
-  if (loading) return <DashboardShimmer />;
+  // Shimmer only when the cache has nothing AND we've waited 250ms —
+  // return-visits render instantly from cached counts.
+  if (showShimmer) return <DashboardShimmer />;
 
   const getWelcomeTitle = () => {
     const hour = new Date().getHours();
@@ -174,7 +153,7 @@ export default function AppDashboard() {
 
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
-      <Typography variant="h5" fontWeight={700} sx={{ fontSize: { xs: '1.2rem', md: '1.5rem' }, mb: 3, color: '#1F2937', letterSpacing: '-0.01em' }}>
+      <Typography variant="h1" sx={{ mb: 3, color: '#1F2937' }}>
         Dashboard
       </Typography>
 
@@ -205,10 +184,10 @@ export default function AppDashboard() {
             <TrendingUpIcon sx={{ fontSize: 28, color: theme.palette.primary.main }} />
           </Box>
           <Box sx={{ flex: 1 }}>
-            <Typography variant="h6" sx={{ fontSize: '1.25rem', fontWeight: 600, color: '#1F2937', mb: 1 }}>
+            <Typography variant="h2" sx={{ color: '#1F2937', mb: 1 }}>
               {getWelcomeTitle()}
             </Typography>
-            <Typography variant="body2" sx={{ fontSize: '0.938rem', color: '#6B7280', lineHeight: 1.7 }}>
+            <Typography variant="body1" sx={{ color: '#6B7280' }}>
               {getWelcomeMessage()}
             </Typography>
           </Box>
@@ -249,10 +228,10 @@ export default function AppDashboard() {
             />
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography sx={{ fontSize: '0.938rem', fontWeight: 600, color: '#1F2937' }}>
+            <Typography variant="h3" sx={{ color: '#1F2937' }}>
               Trueyy Chrome Extension
             </Typography>
-            <Typography sx={{ fontSize: '0.813rem', color: '#6B7280' }}>
+            <Typography variant="body2" sx={{ color: '#6B7280' }}>
               {helperInstalled === null
                 ? 'Click Reauthorize to verify the helper is installed and running.'
                 : helperInstalled

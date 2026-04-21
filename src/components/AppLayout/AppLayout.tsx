@@ -1,16 +1,16 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Box, IconButton, useMediaQuery, useTheme } from '@mui/material';
 import { Menu as MenuIcon } from '@mui/icons-material';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { TruoyyLogo } from '../layout/TruoyyLogo';
 import { TOKENS } from '../../theme';
 import { Sidebar } from '../layout/Sidebar';
-import type { LogoConfig, NavItem, SecondaryNavItem, ProfileConfig } from '../layout/sidebar.types';
+import type { LogoConfig, NavItem, ProfileConfig } from '../layout/sidebar.types';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserDisplayName } from '../../utils/user.utils';
+import { USER_ROLES } from '../../config/constants';
 
-const DRAWER_WIDTH = 260;
-const DRAWER_WIDTH_COLLAPSED = 64;
+const DRAWER_WIDTH = 280;
 
 export default function AppLayout() {
   const { user } = useAuth();
@@ -18,9 +18,13 @@ export default function AppLayout() {
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const [mobileOpen, setMobileOpen] = useState(false);
 
-  const sidebarCollapsed = false;
+  // Mobile-only state — on desktop the sidebar is always open, no toggle.
+  // On mobile, `mobileOpen` controls the temporary overlay drawer.
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const toggleMobile = useCallback(() => setMobileOpen((o) => !o), []);
+
+  const userRole = user?.role || USER_ROLES.CANDIDATE;
 
   const sidebarLogo: LogoConfig = {
     label: 'Trueyy',
@@ -28,12 +32,19 @@ export default function AppLayout() {
     iconName: 'Dashboard',
   };
 
-  const sidebarItems: NavItem[] = [
-    { id: 'dashboard', label: 'Dashboard', iconName: 'Dashboard', route: '/', badge: null },
-    { id: 'interviews', label: 'Interviews', iconName: 'Interviews', route: '/interviews', badge: null },
-  ];
-
-  const sidebarSecondary: SecondaryNavItem[] = [];
+  // Role-aware primary nav. Same shape for Candidate and Interviewer today,
+  // but centralised here so any future role-specific item is a one-line change.
+  const sidebarItems: NavItem[] = (() => {
+    const shared: NavItem[] = [
+      { id: 'dashboard', label: 'Dashboard', iconName: 'Dashboard', route: '/', badge: null },
+      { id: 'interviews', label: 'Interviews', iconName: 'Interviews', route: '/interviews', badge: null },
+    ];
+    if (userRole === USER_ROLES.INTERVIEWER) {
+      // Placeholder for interviewer-only items.
+      return shared;
+    }
+    return shared;
+  })();
 
   const sidebarProfile: ProfileConfig = {
     id: 'profile',
@@ -42,63 +53,34 @@ export default function AppLayout() {
     route: '/profile',
   };
 
-  // Derive active sidebar item from current URL
   const getActiveId = (): string => {
     if (location.pathname.startsWith('/interviews')) return 'interviews';
     if (location.pathname.startsWith('/profile')) return 'profile';
     return 'dashboard';
   };
 
-  const handleNavigate = (route: string) => {
-    navigate(route);
-    if (isMobile) setMobileOpen(false);
-  };
+  const handleNavigate = useCallback(
+    (route: string) => {
+      navigate(route);
+      if (isMobile) setMobileOpen(false);
+    },
+    [navigate, isMobile]
+  );
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
-      {/* Desktop: permanent sidebar */}
-      {!isMobile && (
-        <Sidebar
-          logo={sidebarLogo}
-          items={sidebarItems}
-          secondary={sidebarSecondary}
-          profile={sidebarProfile}
-          collapsed={sidebarCollapsed}
-          onToggle={() => {}}
-          onNavigate={handleNavigate}
-          activeId={getActiveId()}
-          width={DRAWER_WIDTH}
-          collapsedWidth={DRAWER_WIDTH_COLLAPSED}
-        />
-      )}
-
-      {/* Mobile: temporary drawer overlay */}
-      {isMobile && mobileOpen && (
-        <Box
-          onClick={() => setMobileOpen(false)}
-          sx={{
-            position: 'fixed',
-            inset: 0,
-            bgcolor: 'rgba(0,0,0,0.5)',
-            zIndex: 1200,
-          }}
-        >
-          <Box onClick={(e) => e.stopPropagation()} sx={{ width: DRAWER_WIDTH, height: '100%' }}>
-            <Sidebar
-              logo={sidebarLogo}
-              items={sidebarItems}
-              secondary={sidebarSecondary}
-              profile={sidebarProfile}
-              collapsed={false}
-              onToggle={() => setMobileOpen(false)}
-              onNavigate={handleNavigate}
-              activeId={getActiveId()}
-              width={DRAWER_WIDTH}
-              collapsedWidth={DRAWER_WIDTH_COLLAPSED}
-            />
-          </Box>
-        </Box>
-      )}
+      <Sidebar
+        logo={sidebarLogo}
+        items={sidebarItems}
+        profile={sidebarProfile}
+        // Desktop: Sidebar ignores these (always open). Mobile: `collapsed`
+        // means "overlay closed", and `onToggle` closes it.
+        collapsed={isMobile ? !mobileOpen : false}
+        onToggle={toggleMobile}
+        onNavigate={handleNavigate}
+        activeId={getActiveId()}
+        width={DRAWER_WIDTH}
+      />
 
       <Box
         component="main"
@@ -111,7 +93,7 @@ export default function AppLayout() {
           position: 'relative',
         }}
       >
-        {/* Mobile header — fixed at top, same dark color as sidebar */}
+        {/* Mobile header — hamburger opens the overlay sidebar */}
         {isMobile && (
           <Box
             sx={{
@@ -125,7 +107,12 @@ export default function AppLayout() {
               zIndex: 1100,
             }}
           >
-            <IconButton onClick={() => setMobileOpen(true)} size="small" sx={{ color: '#fff', mr: 'auto' }}>
+            <IconButton
+              onClick={toggleMobile}
+              size="small"
+              aria-label="Open navigation"
+              sx={{ color: '#fff', mr: 'auto' }}
+            >
               <MenuIcon sx={{ fontSize: 20 }} />
             </IconButton>
             <Box sx={{ transform: 'scale(0.7)', transformOrigin: 'right center' }}>

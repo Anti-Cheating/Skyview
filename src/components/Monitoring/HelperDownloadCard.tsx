@@ -2,18 +2,16 @@
  * HelperDownloadCard — shown when the Trueyy Helper daemon is not
  * reachable on 127.0.0.1:48123. The user hasn't installed it yet (or
  * it's not running). Gives them the single-button download.
- *
- * Replaces the "Extension not found" copy that used to appear when
- * the candidate/interviewer extension wasn't installed.
  */
 
-import { Box, Typography, Button, CircularProgress } from '@mui/material';
+import { Box, Button, CircularProgress } from '@mui/material';
 import {
   Download as DownloadIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { getHelperDownloadUrl, detectHelperPlatform } from '../../services/helperBridge';
 import { TOKENS } from '../../theme';
+import { CardTitle, Secondary, Caption } from '../layout/Typography';
 
 const BRAND = TOKENS.brand;
 const LIGHT_BG = TOKENS.bgCard;
@@ -72,20 +70,20 @@ export default function HelperDownloadCard({ checking, onRetry }: Props) {
           <DownloadIcon sx={{ fontSize: 22 }} />
         </Box>
 
-        <Typography sx={{ fontSize: '1.05rem', fontWeight: 700, color: '#1F2937', mb: 0.75 }}>
+        <CardTitle sx={{ mb: 0.75 }}>
           Install Trueyy Helper
-        </Typography>
-        <Typography sx={{ fontSize: '0.85rem', color: '#6B7280', lineHeight: 1.6, mb: 2 }}>
+        </CardTitle>
+        <Secondary sx={{ color: TOKENS.textSecondary, mb: 2 }}>
           Trueyy Helper is a small background app that captures your microphone and activity
           during the interview. Install it once — all future interviews work automatically.
-        </Typography>
+        </Secondary>
 
         {checking ? (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
             <CircularProgress size={14} sx={{ color: BRAND }} />
-            <Typography sx={{ fontSize: '0.8rem', color: '#6B7280' }}>
+            <Secondary sx={{ color: TOKENS.textSecondary }}>
               Checking if Trueyy Helper is already installed…
-            </Typography>
+            </Secondary>
           </Box>
         ) : null}
 
@@ -97,8 +95,6 @@ export default function HelperDownloadCard({ checking, onRetry }: Props) {
             sx={{
               bgcolor: BRAND,
               color: '#fff',
-              textTransform: 'none',
-              fontSize: '0.85rem',
               fontWeight: 600,
               py: 0.75,
               px: 2.5,
@@ -115,10 +111,8 @@ export default function HelperDownloadCard({ checking, onRetry }: Props) {
               startIcon={<RefreshIcon />}
               onClick={onRetry}
               sx={{
-                color: '#6B7280',
+                color: TOKENS.textSecondary,
                 borderColor: '#D1D5DB',
-                textTransform: 'none',
-                fontSize: '0.85rem',
                 fontWeight: 600,
                 py: 0.75,
                 px: 2,
@@ -131,11 +125,11 @@ export default function HelperDownloadCard({ checking, onRetry }: Props) {
           )}
         </Box>
 
-        <Typography sx={{ fontSize: '0.7rem', color: '#9CA3AF', mt: 1.5 }}>
+        <Caption sx={{ display: 'block', color: TOKENS.textMuted, mt: 1.5 }}>
           Already installed? The helper should be reachable at{' '}
-          <code style={{ fontSize: '0.72rem' }}>http://127.0.0.1:48123</code>. Open this URL in a new
+          <code>http://127.0.0.1:48123</code>. Open this URL in a new
           tab — if it returns JSON the helper is running. Otherwise install and refresh.
-        </Typography>
+        </Caption>
       </Box>
     </Box>
   );

@@ -97,6 +97,29 @@ export const theme = createTheme({
     mode: 'light',
     ...colors,
   },
+  // ── Typography scale ─────────────────────────────────────────────
+  // Tuned for a dense SaaS dashboard, not a marketing page. Defaults are
+  // intentionally smaller than MUI's out-of-the-box sizes because every
+  // component in Skyview was hardcoding values like 1.05rem / 0.875rem
+  // anyway — this scale just codifies what the app actually uses.
+  //
+  // Canonical roles (use the semantic wrappers in
+  // components/layout/Typography.tsx, or fall back to variant= on MUI's
+  // Typography):
+  //
+  //   Page title      → variant="h1"  (1.5rem / 700)
+  //   Section heading → variant="h2"  (1.25rem / 600)
+  //   Card title      → variant="h3"  (1rem / 600)
+  //   Subsection      → variant="h4"  (0.875rem / 600)
+  //   Microsection    → variant="h5"  (0.813rem / 600)
+  //   (unused)        → variant="h6"
+  //   Body            → variant="body1"   (0.875rem / 400)
+  //   Secondary text  → variant="body2"   (0.75rem / 400)
+  //   Caption / meta  → variant="caption" (0.688rem / 500)
+  //   Overline / tag  → variant="overline" (0.625rem / 600 tracked)
+  //
+  // Anything outside this list should be justified in a comment on the
+  // component — ad-hoc fontSize in sx is the thing we're trying to kill.
   typography: {
     fontFamily: [
       '-apple-system',
@@ -107,15 +130,17 @@ export const theme = createTheme({
       'Arial',
       'sans-serif',
     ].join(','),
-    h1: { fontWeight: 700, fontSize: '2.5rem', lineHeight: 1.2 },
-    h2: { fontWeight: 700, fontSize: '2rem', lineHeight: 1.3 },
-    h3: { fontWeight: 600, fontSize: '1.75rem', lineHeight: 1.4 },
-    h4: { fontWeight: 600, fontSize: '1.5rem', lineHeight: 1.4 },
-    h5: { fontWeight: 600, fontSize: '1.25rem', lineHeight: 1.5 },
-    h6: { fontWeight: 600, fontSize: '1rem', lineHeight: 1.5 },
-    body1: { fontSize: '0.875rem', lineHeight: 1.6 },
-    body2: { fontSize: '0.813rem', lineHeight: 1.6 },
-    button: { textTransform: 'none', fontWeight: 500 },
+    h1: { fontWeight: 700, fontSize: '1.5rem',  lineHeight: 1.25, letterSpacing: '-0.01em' },
+    h2: { fontWeight: 600, fontSize: '1.25rem', lineHeight: 1.3 },
+    h3: { fontWeight: 600, fontSize: '1rem',    lineHeight: 1.4 },
+    h4: { fontWeight: 600, fontSize: '0.875rem', lineHeight: 1.4 },
+    h5: { fontWeight: 600, fontSize: '0.813rem', lineHeight: 1.4 },
+    h6: { fontWeight: 600, fontSize: '0.75rem',  lineHeight: 1.4 },
+    body1:   { fontWeight: 400, fontSize: '0.875rem', lineHeight: 1.6 },
+    body2:   { fontWeight: 400, fontSize: '0.75rem',  lineHeight: 1.55 },
+    caption: { fontWeight: 500, fontSize: '0.688rem', lineHeight: 1.4 },
+    overline:{ fontWeight: 600, fontSize: '0.625rem', lineHeight: 1.4, letterSpacing: '0.05em', textTransform: 'uppercase' },
+    button:  { textTransform: 'none', fontWeight: 500, fontSize: '0.875rem' },
   },
   shape: {
     borderRadius: 12,
