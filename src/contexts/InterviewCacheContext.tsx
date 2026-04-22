@@ -58,6 +58,16 @@ export function InterviewCacheProvider({ children }: { children: ReactNode }) {
     past: null,
   });
 
+  // Timestamp of the last fetch ATTEMPT per list — success or failure.
+  // Prevents infinite retry loops when the server keeps returning errors
+  // (403 from a stale-role token, 500, offline, etc.): after any attempt
+  // the same STALE_MS debounce applies before we try again. Users can
+  // still trigger an immediate retry via the snapshot's `refresh()`.
+  const lastAttemptRef = useRef<Record<When, number>>({
+    upcoming: 0,
+    past: 0,
+  });
+
   // Per-list visible state. `data` is what consumers render; changes to
   // it cause the subscribed pages to re-render.
   const [data, setData] = useState<Record<When, InterviewSession[] | null>>({
@@ -76,6 +86,7 @@ export function InterviewCacheProvider({ children }: { children: ReactNode }) {
   // Drop everything when the user changes (login / logout / switch).
   useEffect(() => {
     cacheRef.current = { upcoming: null, past: null };
+    lastAttemptRef.current = { upcoming: 0, past: 0 };
     setData({ upcoming: null, past: null });
     setLoading({ upcoming: false, past: false });
     setRefetching({ upcoming: false, past: false });
@@ -84,6 +95,9 @@ export function InterviewCacheProvider({ children }: { children: ReactNode }) {
   const fetchList = useCallback(
     async (when: When, mode: 'cold' | 'refresh') => {
       if (!userId) return;
+      // Record the attempt up-front — even if the request fails we don't
+      // want to loop-retry on every render (the old bug: a 403 storm).
+      lastAttemptRef.current[when] = Date.now();
       if (mode === 'cold') {
         setLoading((p) => ({ ...p, [when]: true }));
       } else {
@@ -120,11 +134,15 @@ export function InterviewCacheProvider({ children }: { children: ReactNode }) {
       const cached = cacheRef.current[when];
       const cachedForThisUser = cached && cached.userId === userId;
       const stale = cachedForThisUser && Date.now() - cached!.fetchedAt > STALE_MS;
+      // An attempt (success OR failure) within STALE_MS counts as "recent"
+      // — we don't fire another request during that window. This is what
+      // breaks the retry loop on a 403/500.
+      const recentAttempt = Date.now() - lastAttemptRef.current[when] < STALE_MS;
 
       // Kick off initial or revalidation fetches lazily on first read —
       // we don't want the provider to fetch both lists upfront if the
       // user never visits them.
-      if (!cachedForThisUser && !loading[when] && userId) {
+      if (!cachedForThisUser && !loading[when] && !recentAttempt && userId) {
         // fire-and-forget; the state update inside fetchList triggers rerender
         void fetchList(when, 'cold');
       } else if (stale && !refetching[when] && userId) {

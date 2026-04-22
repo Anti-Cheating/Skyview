@@ -30,9 +30,8 @@ import {
 import {
   Add as AddIcon,
   MoreVert as MoreVertIcon,
-  ContentCopy as CopyIcon,
 } from '@mui/icons-material';
-import { PageTitle, Body, Caption, Secondary } from '../layout/Typography';
+import { PageTitle, Caption, Secondary } from '../layout/Typography';
 import { DataTable, type DataTableColumn } from '../common/DataTable';
 import { FormField } from '../common/FormField';
 import { ActionButton } from '../common/ActionButton';
@@ -159,8 +158,6 @@ export default function TeamPage() {
   const [dialogEmail, setDialogEmail] = useState('');
   const [dialogRole, setDialogRole] = useState<InviteRole>('Member');
   const [dialogBusy, setDialogBusy] = useState(false);
-  const [lastInviteUrl, setLastInviteUrl] = useState<string | null>(null);
-  const [lastEmailSent, setLastEmailSent] = useState<boolean | null>(null);
 
   // Row-level 3-dot menu state — one menu instance shared across rows, keyed
   // by the invite we anchored it on.
@@ -201,8 +198,6 @@ export default function TeamPage() {
   const handleOpenDialog = () => {
     setDialogEmail('');
     setDialogRole('Member');
-    setLastInviteUrl(null);
-    setLastEmailSent(null);
     setDialogOpen(true);
   };
 
@@ -215,13 +210,12 @@ export default function TeamPage() {
         role: dialogRole,
       });
       if (resp.success && resp.data) {
-        setLastInviteUrl(resp.data.invite_url);
-        setLastEmailSent(resp.data.email_sent);
         showSuccess(
           resp.data.email_sent
             ? `Invitation emailed to ${resp.data.email}`
-            : `Invitation created — email could not be sent, share the link manually`
+            : `Invitation created — email could not be sent, please try again`
         );
+        setDialogOpen(false);
         setTab('pending'); // jump to Pending tab so the user sees the new row
         refresh();
       } else {
@@ -258,16 +252,6 @@ export default function TeamPage() {
       }
     } catch (err: any) {
       showError(err?.message || 'Failed to resend');
-    }
-  };
-
-  const copyInviteUrl = async () => {
-    if (!lastInviteUrl) return;
-    try {
-      await navigator.clipboard.writeText(lastInviteUrl);
-      showSuccess('Invite link copied');
-    } catch {
-      showError('Could not copy to clipboard');
     }
   };
 
@@ -601,32 +585,6 @@ export default function TeamPage() {
               <MenuItem value="Member">Member</MenuItem>
             </FormField>
           </Box>
-
-          {lastInviteUrl && (
-            <Box sx={{ mt: 2, p: 1.5, bgcolor: TOKENS.bg, borderRadius: 1, border: `1px solid ${TOKENS.border}` }}>
-              <Caption sx={{ color: TOKENS.textSecondary, display: 'block', mb: 0.5 }}>
-                {lastEmailSent
-                  ? 'Email sent. You can also share this link directly:'
-                  : 'Email could not be sent. Share this link manually:'}
-              </Caption>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Body
-                  sx={{
-                    flex: 1,
-                    fontFamily: 'monospace',
-                    wordBreak: 'break-all',
-                    fontSize: '0.75rem',
-                    color: TOKENS.textPrimary,
-                  }}
-                >
-                  {lastInviteUrl}
-                </Body>
-                <IconButton size="small" onClick={copyInviteUrl}>
-                  <CopyIcon fontSize="small" />
-                </IconButton>
-              </Box>
-            </Box>
-          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <ActionButton

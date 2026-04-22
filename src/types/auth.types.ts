@@ -39,15 +39,3 @@ export interface AuthResponse {
   };
 }
 
-export interface DecodedToken {
-  sub: string;
-  email: string;
-  'https://hasura.io/jwt/claims'?: {
-    'x-hasura-role': string;
-    'x-hasura-user-id': string;
-    'x-hasura-default-role': string;
-    'x-hasura-allowed-roles': string[];
-  };
-  iat: number;
-  exp: number;
-}
