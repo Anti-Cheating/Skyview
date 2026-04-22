@@ -1,0 +1,650 @@
+/**
+ * TeamPage — Owner/Admin-only view at /team.
+ *
+ * Tabbed layout (Linear / Vercel / Notion pattern):
+ *   - Members       — everyone currently attached to the workspace
+ *   - Pending       — invites sent but not yet accepted
+ *
+ * Each tab renders through the shared <DataTable> so every list view in
+ * Skyview shares one set of table styles, empty states, and spacing.
+ * Row actions collapse into a single 3-dot menu — scales cleanly when we
+ * add more actions (Change role, Remove member, …) later.
+ */
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Box,
+  Alert,
+  Tabs,
+  Tab,
+  Avatar,
+  IconButton,
+  Menu,
+  MenuItem as MenuItemMui,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  MenuItem,
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  MoreVert as MoreVertIcon,
+  ContentCopy as CopyIcon,
+} from '@mui/icons-material';
+import { PageTitle, Body, Caption, Secondary } from '../layout/Typography';
+import { DataTable, type DataTableColumn } from '../common/DataTable';
+import { FormField } from '../common/FormField';
+import { ActionButton } from '../common/ActionButton';
+import { TOKENS } from '../../theme';
+import { useAuth } from '../../contexts/AuthContext';
+import { useSnackbar } from '../../contexts/SnackbarContext';
+import {
+  InvitesService,
+  type PendingInvite,
+  type InviteRole,
+  type TeamMember,
+} from '../../services/invites.service';
+
+type TabValue = 'members' | 'pending';
+
+// Soft-tinted role pill colours (8-12% opacity bg + full-strength text) —
+// the Stripe / Linear / Clerk pattern. `color` is the literal hex used by
+// both the text and the derived background so we stay on-theme.
+const ROLE_COLORS: Record<string, { bg: string; fg: string; dot: string }> = {
+  Owner:          { bg: 'rgba(76, 217, 100, 0.14)', fg: '#047857', dot: TOKENS.brand }, // brand green
+  Admin:          { bg: 'rgba(59, 130, 246, 0.12)', fg: '#2563EB', dot: '#3B82F6' },    // blue
+  Member:         { bg: '#F3F4F6',                  fg: '#4B5563', dot: '#9CA3AF' },    // neutral
+  'System Admin': { bg: 'rgba(168, 85, 247, 0.12)', fg: '#7C3AED', dot: '#8B5CF6' },    // purple
+};
+
+/**
+ * RolePill — Vercel-style chip with a 6px leading dot in the foreground
+ * hue. Soft-tinted bg, 6px radius, 20px height. Reads as a status
+ * indicator, not a loud tag.
+ */
+function RolePill({ role }: { role: string }) {
+  const c = ROLE_COLORS[role] ?? ROLE_COLORS.Member;
+  return (
+    <Box
+      component="span"
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 0.75,
+        px: 1,
+        height: 22,
+        borderRadius: '6px',
+        bgcolor: c.bg,
+        color: c.fg,
+        fontSize: '0.75rem',
+        fontWeight: 600,
+        lineHeight: 1,
+      }}
+    >
+      <Box
+        component="span"
+        sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: c.dot, flexShrink: 0 }}
+      />
+      {role}
+    </Box>
+  );
+}
+
+/** Count badge rendered inside each Tab label — rounded pill, muted. */
+function TabCountBadge({ count, active }: { count: number; active: boolean }) {
+  return (
+    <Box
+      component="span"
+      sx={{
+        ml: 0.75,
+        px: 0.75,
+        height: 18,
+        minWidth: 18,
+        borderRadius: '999px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '0.6875rem',
+        fontWeight: 600,
+        bgcolor: active ? TOKENS.brandBg : '#F3F4F6',
+        color: active ? TOKENS.brandHover : TOKENS.textSecondary,
+      }}
+    >
+      {count}
+    </Box>
+  );
+}
+
+/** Initials for avatar fallback — first chars of first + last name. */
+function initialsOf(first: string | null, last: string | null, email: string) {
+  const f = (first ?? '').trim();
+  const l = (last ?? '').trim();
+  if (f || l) return `${f[0] ?? ''}${l[0] ?? ''}`.toUpperCase() || '?';
+  return (email[0] ?? '?').toUpperCase();
+}
+
+/** Deterministic avatar tint from a string so the same user always gets
+ *  the same colour. Seven-slot palette keeps it from feeling random. */
+const AVATAR_PALETTE = [
+  { bg: '#DBEAFE', fg: '#1D4ED8' }, // blue
+  { bg: '#FCE7F3', fg: '#BE185D' }, // pink
+  { bg: '#FEF3C7', fg: '#B45309' }, // amber
+  { bg: '#DCFCE7', fg: '#047857' }, // green
+  { bg: '#EDE9FE', fg: '#6D28D9' }, // violet
+  { bg: '#FFE4E6', fg: '#BE123C' }, // rose
+  { bg: '#CFFAFE', fg: '#0E7490' }, // cyan
+];
+function avatarColor(seed: string) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i += 1) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
+}
+
+export default function TeamPage() {
+  const { user } = useAuth();
+  const { showError, showSuccess } = useSnackbar();
+
+  const companyId = user?.company_id ?? null;
+  const userRole = user?.role;
+  const canManage = userRole === 'Owner' || userRole === 'Admin' || userRole === 'System Admin';
+
+  const [tab, setTab] = useState<TabValue>('members');
+  const [pending, setPending] = useState<PendingInvite[]>([]);
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogEmail, setDialogEmail] = useState('');
+  const [dialogRole, setDialogRole] = useState<InviteRole>('Member');
+  const [dialogBusy, setDialogBusy] = useState(false);
+  const [lastInviteUrl, setLastInviteUrl] = useState<string | null>(null);
+  const [lastEmailSent, setLastEmailSent] = useState<boolean | null>(null);
+
+  // Row-level 3-dot menu state — one menu instance shared across rows, keyed
+  // by the invite we anchored it on.
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [menuInvite, setMenuInvite] = useState<PendingInvite | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!companyId || !canManage) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [invitesResp, membersResp] = await Promise.all([
+        InvitesService.list(companyId),
+        InvitesService.listMembers(companyId),
+      ]);
+
+      if (invitesResp.success && Array.isArray(invitesResp.data)) {
+        setPending(invitesResp.data);
+      } else {
+        setError(invitesResp.message || 'Failed to load invites');
+      }
+
+      if (membersResp.success && Array.isArray(membersResp.data)) {
+        setMembers(membersResp.data);
+      } else if (!error) {
+        setError(membersResp.message || 'Failed to load team members');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load team');
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, canManage]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const handleOpenDialog = () => {
+    setDialogEmail('');
+    setDialogRole('Member');
+    setLastInviteUrl(null);
+    setLastEmailSent(null);
+    setDialogOpen(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!companyId) return;
+    setDialogBusy(true);
+    try {
+      const resp = await InvitesService.create(companyId, {
+        email: dialogEmail.trim(),
+        role: dialogRole,
+      });
+      if (resp.success && resp.data) {
+        setLastInviteUrl(resp.data.invite_url);
+        setLastEmailSent(resp.data.email_sent);
+        showSuccess(
+          resp.data.email_sent
+            ? `Invitation emailed to ${resp.data.email}`
+            : `Invitation created — email could not be sent, share the link manually`
+        );
+        setTab('pending'); // jump to Pending tab so the user sees the new row
+        refresh();
+      } else {
+        showError(resp.message || 'Failed to send invitation');
+      }
+    } catch (err: any) {
+      showError(err?.data?.error || err?.message || 'Failed to send invitation');
+    } finally {
+      setDialogBusy(false);
+    }
+  };
+
+  const handleRevoke = async (invite: PendingInvite) => {
+    try {
+      const resp = await InvitesService.revoke(invite.id);
+      if (resp.success) {
+        showSuccess(`Invitation for ${invite.email} revoked`);
+        refresh();
+      } else {
+        showError(resp.message || 'Failed to revoke');
+      }
+    } catch (err: any) {
+      showError(err?.message || 'Failed to revoke');
+    }
+  };
+
+  const handleResend = async (invite: PendingInvite) => {
+    try {
+      const resp = await InvitesService.resend(invite.id);
+      if (resp.success) {
+        showSuccess(`Invitation re-sent to ${invite.email}`);
+      } else {
+        showError(resp.message || 'Failed to resend');
+      }
+    } catch (err: any) {
+      showError(err?.message || 'Failed to resend');
+    }
+  };
+
+  const copyInviteUrl = async () => {
+    if (!lastInviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(lastInviteUrl);
+      showSuccess('Invite link copied');
+    } catch {
+      showError('Could not copy to clipboard');
+    }
+  };
+
+  const openRowMenu = (e: React.MouseEvent<HTMLElement>, invite: PendingInvite) => {
+    setMenuAnchor(e.currentTarget);
+    setMenuInvite(invite);
+  };
+  const closeRowMenu = () => {
+    setMenuAnchor(null);
+    setMenuInvite(null);
+  };
+
+  const inviterLabel = (i: PendingInvite) => {
+    if (!i.inviter) return '—';
+    const name = `${i.inviter.first_name} ${i.inviter.last_name}`.trim();
+    return name || i.inviter.email;
+  };
+
+  // ── Column configs ──────────────────────────────────────────────────
+
+  const memberColumns = useMemo<DataTableColumn<TeamMember>[]>(() => [
+    {
+      key: 'person',
+      header: 'Member',
+      render: (m) => {
+        const full = `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim();
+        const c = avatarColor(m.id);
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+            <Avatar
+              sx={{
+                width: 28,
+                height: 28,
+                bgcolor: c.bg,
+                color: c.fg,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                boxShadow: '0 0 0 2px #FFFFFF',
+              }}
+            >
+              {initialsOf(m.first_name, m.last_name, m.email)}
+            </Avatar>
+            <Box sx={{ minWidth: 0 }}>
+              <Box
+                sx={{
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  color: TOKENS.textPrimary,
+                  lineHeight: 1.35,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {full || m.email}
+              </Box>
+              {full && (
+                <Box
+                  sx={{
+                    fontSize: '0.8125rem',
+                    fontWeight: 400,
+                    color: TOKENS.textSecondary,
+                    lineHeight: 1.35,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {m.email}
+                </Box>
+              )}
+            </Box>
+          </Box>
+        );
+      },
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      width: 140,
+      render: (m) => <RolePill role={m.role} />,
+    },
+    {
+      key: 'joined',
+      header: 'Joined',
+      hideOn: 'mobile',
+      width: 140,
+      render: (m) => (
+        <Caption sx={{ color: TOKENS.textSecondary, fontSize: '0.8125rem' }}>
+          {new Date(m.joined_at).toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          })}
+        </Caption>
+      ),
+    },
+  ], []);
+
+  const pendingColumns = useMemo<DataTableColumn<PendingInvite>[]>(() => [
+    {
+      key: 'invitee',
+      header: 'Invitee',
+      render: (i) => {
+        const c = avatarColor(i.id);
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+            <Avatar
+              sx={{
+                width: 28,
+                height: 28,
+                bgcolor: c.bg,
+                color: c.fg,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                boxShadow: '0 0 0 2px #FFFFFF',
+              }}
+            >
+              {(i.email[0] ?? '?').toUpperCase()}
+            </Avatar>
+            <Box
+              sx={{
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                color: TOKENS.textPrimary,
+                lineHeight: 1.35,
+              }}
+            >
+              {i.email}
+            </Box>
+          </Box>
+        );
+      },
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      width: 140,
+      render: (i) => <RolePill role={i.role} />,
+    },
+    {
+      key: 'inviter',
+      header: 'Invited by',
+      hideOn: 'mobile',
+      width: 180,
+      render: (i) => (
+        <Caption sx={{ color: TOKENS.textSecondary, fontSize: '0.8125rem' }}>
+          {inviterLabel(i)}
+        </Caption>
+      ),
+    },
+    {
+      key: 'expires',
+      header: 'Expires',
+      hideOn: 'mobile',
+      width: 140,
+      render: (i) => (
+        <Caption sx={{ color: TOKENS.textSecondary, fontSize: '0.8125rem' }}>
+          {new Date(i.expires_at).toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          })}
+        </Caption>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      width: 48,
+      showOnHover: true,
+      render: (i) => (
+        <IconButton
+          size="small"
+          onClick={(e) => openRowMenu(e, i)}
+          aria-label="Row actions"
+          sx={{ color: TOKENS.textSecondary }}
+        >
+          <MoreVertIcon fontSize="small" />
+        </IconButton>
+      ),
+    },
+  ], []);
+
+  // ── Render ──────────────────────────────────────────────────────────
+
+  if (!canManage) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="info">
+          Only Owners and Admins can manage the team. Contact your company admin if you need to
+          invite someone.
+        </Alert>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ p: { xs: 2, md: 3 } }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+        <Box>
+          <PageTitle sx={{ color: TOKENS.textPrimary, mb: 0.5 }}>Team</PageTitle>
+          <Secondary sx={{ color: TOKENS.textSecondary }}>
+            Invite colleagues and manage their access.
+          </Secondary>
+        </Box>
+        <ActionButton startIcon={<AddIcon sx={{ fontSize: 16 }} />} onClick={handleOpenDialog}>
+          Invite teammate
+        </ActionButton>
+      </Box>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      <Tabs
+        value={tab}
+        onChange={(_, v: TabValue) => setTab(v)}
+        sx={{
+          mb: 2.5,
+          minHeight: 36,
+          borderBottom: `1px solid ${TOKENS.border}`,
+          '& .MuiTabs-flexContainer': { gap: 2.5 },
+          '& .MuiTab-root': {
+            textTransform: 'none',
+            fontWeight: 500,
+            fontSize: '0.875rem',
+            minHeight: 36,
+            px: 0,
+            py: 1,
+            minWidth: 0,
+            color: TOKENS.textSecondary,
+            '&:hover': { color: TOKENS.textPrimary },
+          },
+          '& .Mui-selected': { color: `${TOKENS.textPrimary} !important`, fontWeight: 600 },
+          '& .MuiTabs-indicator': { backgroundColor: TOKENS.brand, height: 2 },
+        }}
+      >
+        <Tab
+          value="members"
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              Members
+              <TabCountBadge count={members.length} active={tab === 'members'} />
+            </Box>
+          }
+        />
+        <Tab
+          value="pending"
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              Pending invitations
+              <TabCountBadge count={pending.length} active={tab === 'pending'} />
+            </Box>
+          }
+        />
+      </Tabs>
+
+      {tab === 'members' && (
+        <DataTable<TeamMember>
+          columns={memberColumns}
+          rows={members}
+          rowKey={(m) => m.id}
+          loading={loading}
+          emptyText="No active members yet. Invite your teammates to get started."
+        />
+      )}
+
+      {tab === 'pending' && (
+        <DataTable<PendingInvite>
+          columns={pendingColumns}
+          rows={pending}
+          rowKey={(i) => i.id}
+          loading={loading}
+          emptyText="No pending invitations. Click Invite teammate to get started."
+        />
+      )}
+
+      {/* Row-level actions menu for pending invites */}
+      <Menu
+        anchorEl={menuAnchor}
+        open={!!menuAnchor}
+        onClose={closeRowMenu}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <MenuItemMui
+          onClick={() => {
+            if (menuInvite) handleResend(menuInvite);
+            closeRowMenu();
+          }}
+        >
+          Resend email
+        </MenuItemMui>
+        <MenuItemMui
+          onClick={() => {
+            if (menuInvite) handleRevoke(menuInvite);
+            closeRowMenu();
+          }}
+          sx={{ color: '#dc2626' }}
+        >
+          Revoke invitation
+        </MenuItemMui>
+      </Menu>
+
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 700, pb: 1 }}>Invite teammate</DialogTitle>
+        <DialogContent>
+          <Secondary sx={{ color: TOKENS.textSecondary, mb: 2.5 }}>
+            We'll email the invitee a link to join as the selected role. Admins can manage the
+            team; Members can run interviews.
+          </Secondary>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <FormField
+              autoFocus
+              label="Email"
+              required
+              type="email"
+              value={dialogEmail}
+              onChange={(e) => setDialogEmail(e.target.value)}
+              disabled={dialogBusy}
+            />
+            <FormField
+              label="Role"
+              required
+              select
+              value={dialogRole}
+              onChange={(e) => setDialogRole(e.target.value as InviteRole)}
+              disabled={dialogBusy}
+            >
+              <MenuItem value="Admin">Admin</MenuItem>
+              <MenuItem value="Member">Member</MenuItem>
+            </FormField>
+          </Box>
+
+          {lastInviteUrl && (
+            <Box sx={{ mt: 2, p: 1.5, bgcolor: TOKENS.bg, borderRadius: 1, border: `1px solid ${TOKENS.border}` }}>
+              <Caption sx={{ color: TOKENS.textSecondary, display: 'block', mb: 0.5 }}>
+                {lastEmailSent
+                  ? 'Email sent. You can also share this link directly:'
+                  : 'Email could not be sent. Share this link manually:'}
+              </Caption>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Body
+                  sx={{
+                    flex: 1,
+                    fontFamily: 'monospace',
+                    wordBreak: 'break-all',
+                    fontSize: '0.75rem',
+                    color: TOKENS.textPrimary,
+                  }}
+                >
+                  {lastInviteUrl}
+                </Body>
+                <IconButton size="small" onClick={copyInviteUrl}>
+                  <CopyIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <ActionButton
+            variant="secondary"
+            onClick={() => setDialogOpen(false)}
+            disabled={dialogBusy}
+          >
+            Close
+          </ActionButton>
+          <ActionButton
+            onClick={handleSubmit}
+            loading={dialogBusy}
+            disabled={!dialogEmail.trim()}
+          >
+            {dialogBusy ? 'Sending…' : 'Send invitation'}
+          </ActionButton>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}

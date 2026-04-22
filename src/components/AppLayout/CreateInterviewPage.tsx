@@ -1,11 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  TextField,
-  Button,
   Box,
   Typography,
-  CircularProgress,
   Alert,
   MenuItem,
   Breadcrumbs,
@@ -25,6 +22,10 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs, { Dayjs } from 'dayjs';
 import { InterviewService } from '../../services/interview.service';
 import { useAuth } from '../../contexts/AuthContext';
+import { FormField } from '../common/FormField';
+import { ActionButton } from '../common/ActionButton';
+import { INPUT_SX, LABEL_SX } from '../common/formTokens';
+import { TOKENS } from '../../theme';
 import type { InterviewType } from '../../types/interview.types';
 
 const PROVIDERS = [
@@ -44,29 +45,6 @@ const DURATIONS = [
   { value: 120, label: '2 hours' },
 ];
 
-const inputSx = {
-  '& .MuiOutlinedInput-root': {
-    borderRadius: '10px',
-    fontSize: '0.875rem',
-    '& fieldset': { borderColor: '#E5E7EB' },
-    '&:hover fieldset': { borderColor: '#D1D5DB' },
-    '&.Mui-focused fieldset': { borderColor: '#4CD964', borderWidth: 1.5 },
-  },
-};
-
-function Label({ children, optional }: { children: string; optional?: boolean }) {
-  return (
-    <Typography sx={{ fontSize: '0.813rem', fontWeight: 600, color: '#374151', mb: 0.75 }}>
-      {children}
-      {optional && (
-        <Typography component="span" sx={{ fontSize: '0.75rem', color: '#9CA3AF', fontWeight: 400, ml: 0.5 }}>
-          (optional)
-        </Typography>
-      )}
-    </Typography>
-  );
-}
-
 export default function CreateInterviewPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -85,6 +63,26 @@ export default function CreateInterviewPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Auto-clear the error banner the moment the user edits any field —
+  // no need for a manual dismiss button (the Alert's `onClose` X was
+  // dropped for the same reason). The effect re-runs only when one of
+  // the form values changes, not on unrelated state updates.
+  useEffect(() => {
+    if (error) setError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    title,
+    description,
+    candidateFirstName,
+    candidateLastName,
+    candidateEmail,
+    startDateTime,
+    duration,
+    interviewType,
+    provider,
+    meetingLink,
+  ]);
 
   const handleSubmit = async () => {
     if (!title.trim()) { setError('Interview title is required'); return; }
@@ -217,83 +215,66 @@ export default function CreateInterviewPage() {
               </Alert>
             )}
             {error && (
-              <Alert severity="error" sx={{ borderRadius: '10px' }} onClose={() => setError(null)}>
+              <Alert severity="error" sx={{ borderRadius: '10px' }}>
                 {error}
               </Alert>
             )}
 
             {/* Row 1: Title + Description */}
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
-              <Box>
-                <Label>Interview Title</Label>
-                <TextField
-                  placeholder="e.g. Frontend Developer - Round 1"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  fullWidth
-                  disabled={loading || success}
-                  size="small"
-                  sx={inputSx}
-                />
-              </Box>
-              <Box>
-                <Label optional>Description</Label>
-                <TextField
-                  placeholder="Brief notes about the interview..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  fullWidth
-                  disabled={loading || success}
-                  size="small"
-                  sx={inputSx}
-                />
-              </Box>
+              <FormField
+                label="Interview Title"
+                required
+                placeholder="e.g. Frontend Developer - Round 1"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                disabled={loading || success}
+              />
+              <FormField
+                label="Description"
+                optional
+                placeholder="Brief notes about the interview..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                disabled={loading || success}
+              />
             </Box>
 
             {/* Row 2: Candidate name + email */}
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
-              <Box>
-                <Label>Candidate First Name</Label>
-                <TextField
-                  placeholder="John"
-                  value={candidateFirstName}
-                  onChange={(e) => setCandidateFirstName(e.target.value)}
-                  fullWidth
-                  disabled={loading || success}
-                  size="small"
-                  sx={inputSx}
-                />
-              </Box>
-              <Box>
-                <Label>Candidate Last Name</Label>
-                <TextField
-                  placeholder="Smith"
-                  value={candidateLastName}
-                  onChange={(e) => setCandidateLastName(e.target.value)}
-                  fullWidth
-                  disabled={loading || success}
-                  size="small"
-                  sx={inputSx}
-                />
-              </Box>
-              <Box>
-                <Label>Candidate Email</Label>
-                <TextField
-                  placeholder="candidate@example.com"
-                  type="email"
-                  value={candidateEmail}
-                  onChange={(e) => setCandidateEmail(e.target.value)}
-                  fullWidth
-                  disabled={loading || success}
-                  size="small"
-                  sx={inputSx}
-                />
-              </Box>
+              <FormField
+                label="Candidate First Name"
+                required
+                placeholder="John"
+                value={candidateFirstName}
+                onChange={(e) => setCandidateFirstName(e.target.value)}
+                disabled={loading || success}
+              />
+              <FormField
+                label="Candidate Last Name"
+                required
+                placeholder="Smith"
+                value={candidateLastName}
+                onChange={(e) => setCandidateLastName(e.target.value)}
+                disabled={loading || success}
+              />
+              <FormField
+                label="Candidate Email"
+                required
+                placeholder="candidate@example.com"
+                type="email"
+                value={candidateEmail}
+                onChange={(e) => setCandidateEmail(e.target.value)}
+                disabled={loading || success}
+              />
             </Box>
 
             {/* Interview Type Selector */}
             <Box>
-              <Label>Interview Type</Label>
+              <Box sx={LABEL_SX}>
+                <span>Interview Type</span>
+                <Box component="span" sx={{ color: TOKENS.errorLight, fontWeight: 700 }}>*</Box>
+              </Box>
               <RadioGroup
                 value={interviewType}
                 onChange={(e) => setInterviewType(e.target.value as InterviewType)}
@@ -369,45 +350,40 @@ export default function CreateInterviewPage() {
             {/* Row 3: Provider/Link + Schedule + Duration */}
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
               {interviewType === 'application' ? (
-                <Box>
-                  <Label>Meeting Provider</Label>
-                  <TextField
-                    select
-                    value={provider}
-                    onChange={(e) => setProvider(e.target.value)}
-                    fullWidth
-                    disabled={loading || success}
-                    size="small"
-                    sx={inputSx}
-                  >
-                    {PROVIDERS.map((p) => (
-                      <MenuItem key={p.value} value={p.value} disabled={p.disabled}>
-                        {p.label}
-                        {p.disabled && (
-                          <Typography component="span" sx={{ fontSize: '0.688rem', color: '#9CA3AF', ml: 1 }}>
-                            Coming soon
-                          </Typography>
-                        )}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                </Box>
+                <FormField
+                  label="Meeting Provider"
+                  required
+                  select
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                  disabled={loading || success}
+                >
+                  {PROVIDERS.map((p) => (
+                    <MenuItem key={p.value} value={p.value} disabled={p.disabled}>
+                      {p.label}
+                      {p.disabled && (
+                        <Typography component="span" sx={{ fontSize: '0.688rem', color: '#9CA3AF', ml: 1 }}>
+                          Coming soon
+                        </Typography>
+                      )}
+                    </MenuItem>
+                  ))}
+                </FormField>
               ) : (
-                <Box>
-                  <Label>Meeting Link</Label>
-                  <TextField
-                    placeholder="https://meet.google.com/abc-defg-hij"
-                    value={meetingLink}
-                    onChange={(e) => setMeetingLink(e.target.value)}
-                    fullWidth
-                    disabled={loading || success}
-                    size="small"
-                    sx={inputSx}
-                  />
-                </Box>
+                <FormField
+                  label="Meeting Link"
+                  required
+                  placeholder="https://meet.google.com/abc-defg-hij"
+                  value={meetingLink}
+                  onChange={(e) => setMeetingLink(e.target.value)}
+                  disabled={loading || success}
+                />
               )}
               <Box>
-                <Label>Schedule</Label>
+                <Box sx={LABEL_SX}>
+                  <span>Schedule</span>
+                  <Box component="span" sx={{ color: TOKENS.errorLight, fontWeight: 700 }}>*</Box>
+                </Box>
                 <LocalizationProvider dateAdapter={AdapterDayjs}>
                   <DateTimePicker
                     value={startDateTime}
@@ -415,28 +391,24 @@ export default function CreateInterviewPage() {
                     disabled={loading || success}
                     disablePast
                     minutesStep={15}
-                    slotProps={{ textField: { fullWidth: true, size: 'small', sx: inputSx } }}
+                    slotProps={{ textField: { fullWidth: true, size: 'small', sx: INPUT_SX } }}
                   />
                 </LocalizationProvider>
               </Box>
-              <Box>
-                <Label>Duration</Label>
-                <TextField
-                  select
-                  value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
-                  fullWidth
-                  disabled={loading || success}
-                  size="small"
-                  sx={inputSx}
-                >
-                  {DURATIONS.map((d) => (
-                    <MenuItem key={d.value} value={d.value}>
-                      {d.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Box>
+              <FormField
+                label="Duration"
+                required
+                select
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+                disabled={loading || success}
+              >
+                {DURATIONS.map((d) => (
+                  <MenuItem key={d.value} value={d.value}>
+                    {d.label}
+                  </MenuItem>
+                ))}
+              </FormField>
             </Box>
           </Box>
 
@@ -451,36 +423,20 @@ export default function CreateInterviewPage() {
               bgcolor: '#FAFAFA',
             }}
           >
-            <Button
+            <ActionButton
+              variant="secondary"
               onClick={() => navigate('/interviews')}
               disabled={loading}
-              size="small"
-              sx={{
-                textTransform: 'none', color: '#6B7280', fontWeight: 600,
-                borderRadius: '8px', px: 2, py: 0.75, fontSize: '0.8rem',
-                border: '1px solid #E5E7EB',
-                '&:hover': { bgcolor: '#F3F4F6' },
-              }}
             >
               Cancel
-            </Button>
-            <Button
+            </ActionButton>
+            <ActionButton
               onClick={handleSubmit}
-              variant="contained"
-              disabled={loading || success}
-              size="small"
-              startIcon={loading ? <CircularProgress size={14} color="inherit" /> : null}
-              sx={{
-                textTransform: 'none', fontWeight: 600, borderRadius: '8px',
-                px: 2.5, py: 0.75, fontSize: '0.8rem',
-                bgcolor: '#4CD964', color: '#fff', boxShadow: 'none',
-                whiteSpace: 'nowrap',
-                '&:hover': { bgcolor: '#3CB853', boxShadow: '0 4px 12px rgba(76, 217, 100, 0.3)' },
-                '&.Mui-disabled': { bgcolor: '#E5E7EB', color: '#9CA3AF' },
-              }}
+              loading={loading}
+              disabled={success}
             >
               {loading ? 'Creating...' : 'Create Interview'}
-            </Button>
+            </ActionButton>
           </Box>
         </Box>
       </Box>

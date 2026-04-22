@@ -13,6 +13,8 @@ import AppInterviewList from './components/AppLayout/AppInterviewList';
 import CreateInterviewPage from './components/AppLayout/CreateInterviewPage';
 import MonitoringView from './components/Monitoring/MonitoringView';
 import CandidateJoinPage from './components/AppLayout/CandidateJoinPage';
+import TeamPage from './components/Team/TeamPage';
+import InviteAcceptPage from './components/Team/InviteAcceptPage';
 
 /**
  * Detects if Skyview was opened from Falcon (via ?src=falcon param)
@@ -86,6 +88,8 @@ function AppRoutes() {
       <Routes>
         <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
         <Route path="/signup" element={<AuthRoute><Signup /></AuthRoute>} />
+        {/* Public invite acceptance — invitee may not have an account yet */}
+        <Route path="/invite/:token" element={<InviteAcceptPage />} />
         {/* Falcon deep-link return page — simple "open desktop app" view */}
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         {/* Full web app with sidebar — nested routes render in AppLayout's <Outlet /> */}
@@ -95,6 +99,7 @@ function AppRoutes() {
           <Route path="interviews/new" element={<CreateInterviewPage />} />
           <Route path="interviews/:id/join" element={<CandidateJoinPage />} />
           <Route path="interviews/:id/monitor" element={<MonitoringView />} />
+          <Route path="team" element={<TeamPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

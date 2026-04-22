@@ -10,12 +10,12 @@ import {
   Card,
   CardContent,
   Typography,
-  Button,
   Chip,
   Divider,
   Tooltip,
   IconButton,
 } from '@mui/material';
+import { ActionButton } from '../common/ActionButton';
 import {
   VideoCall as VideoCallIcon,
   Schedule as ScheduleIcon,
@@ -27,7 +27,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import type { InterviewSession } from '../../types/interview.types';
-import { USER_ROLES } from '../../config/constants';
+import { USER_ROLES, isStaffRole } from '../../config/constants';
 
 interface AppInterviewCardProps {
   interview: InterviewSession;
@@ -63,7 +63,7 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
   //   - Completed                → "View Details"
   //   - Otherwise (candidate + application) → "Join in Falcon App"
   const isCompleted = interview.status === 'completed';
-  const isInterviewer = userRole === USER_ROLES.INTERVIEWER;
+  const isInterviewer = isStaffRole(userRole);
   const isCandidate = userRole === USER_ROLES.CANDIDATE;
   const canMonitor = isInterviewer && !isCompleted;
   const canCandidateJoin = isCandidate && !isCompleted;
@@ -428,8 +428,8 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
           }}
         >
           <span>
-            <Button
-              variant="contained"
+            <ActionButton
+              variant={canJoin ? 'primary' : 'secondary'}
               fullWidth
               startIcon={
                 canJoin ? (
@@ -439,33 +439,11 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
                 )
               }
               onClick={handleAction}
-              size="small"
-              sx={{
-                fontSize: '0.75rem',
-                py: 0.625,
-                textTransform: 'none',
-                fontWeight: 600,
-                mt: 'auto',
-                borderRadius: 1.5,
-                bgcolor: canJoin ? 'primary.main' : '#E0E0E0',
-                color: canJoin ? '#FFFFFF' : '#9E9E9E',
-                boxShadow: 'none',
-                '&:hover': canJoin
-                  ? {
-                      bgcolor: 'primary.dark',
-                      boxShadow: '0 4px 12px rgba(76, 217, 100, 0.4)',
-                    }
-                  : {
-                      bgcolor: '#E0E0E0',
-                    },
-                '&.Mui-disabled': {
-                  bgcolor: '#E0E0E0',
-                  color: '#9E9E9E',
-                },
-              }}
+              disabled={!canJoin}
+              sx={{ mt: 'auto' }}
             >
               {actionLabel}
-            </Button>
+            </ActionButton>
           </span>
         </Tooltip>
       </CardContent>

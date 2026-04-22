@@ -32,16 +32,20 @@ export default function AppLayout() {
     iconName: 'Dashboard',
   };
 
-  // Role-aware primary nav. Same shape for Candidate and Interviewer today,
-  // but centralised here so any future role-specific item is a one-line change.
+  // Role-aware primary nav. Candidates get a minimal nav (their dashboard
+  // + scheduled interviews). Staff users (Owner / Admin / Member, plus
+  // legacy Interviewer during migration windows) additionally see Team.
+  // The Team page itself is further gated inside TeamPage.tsx so only
+  // Owner / Admin actually see management controls; Members hitting /team
+  // are bounced with an info message.
   const sidebarItems: NavItem[] = (() => {
     const shared: NavItem[] = [
-      { id: 'dashboard', label: 'Dashboard', iconName: 'Dashboard', route: '/', badge: null },
+      { id: 'dashboard',  label: 'Dashboard',  iconName: 'Dashboard',  route: '/',           badge: null },
       { id: 'interviews', label: 'Interviews', iconName: 'Interviews', route: '/interviews', badge: null },
     ];
-    if (userRole === USER_ROLES.INTERVIEWER) {
-      // Placeholder for interviewer-only items.
-      return shared;
+    const isCandidate = userRole === USER_ROLES.CANDIDATE;
+    if (!isCandidate) {
+      shared.push({ id: 'team', label: 'Team', iconName: 'Person', route: '/team', badge: null });
     }
     return shared;
   })();
@@ -55,6 +59,7 @@ export default function AppLayout() {
 
   const getActiveId = (): string => {
     if (location.pathname.startsWith('/interviews')) return 'interviews';
+    if (location.pathname.startsWith('/team')) return 'team';
     if (location.pathname.startsWith('/profile')) return 'profile';
     return 'dashboard';
   };

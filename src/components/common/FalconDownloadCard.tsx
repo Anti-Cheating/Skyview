@@ -3,9 +3,10 @@
  * Used by both CandidateJoinPage and MonitoringView.
  */
 
-import { Box, Typography, Button } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { GetApp as DownloadIcon } from '@mui/icons-material';
 import { TOKENS } from '../../theme';
+import { ActionButton } from './ActionButton';
 
 export default function FalconDownloadCard() {
   return (
@@ -47,25 +48,9 @@ export default function FalconDownloadCard() {
             <Typography sx={{ fontSize: '0.75rem', color: TOKENS.textSecondary, mb: 1.5 }}>
               Download and install the Trueyy desktop app to join your monitored interview.
             </Typography>
-            <Button
-              variant="contained"
-              size="small"
-              onClick={() => window.open('https://www.trueyy.com/', '_blank', 'noopener')}
-              sx={{
-                bgcolor: TOKENS.brand,
-                color: '#fff',
-                textTransform: 'none',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                py: 0.5,
-                px: 2,
-                borderRadius: '6px',
-                '&:hover': { bgcolor: TOKENS.brandHover },
-                boxShadow: 'none',
-              }}
-            >
+            <ActionButton onClick={() => window.open('https://www.trueyy.com/', '_blank', 'noopener')}>
               Download App
-            </Button>
+            </ActionButton>
           </Box>
         </Box>
       </Box>

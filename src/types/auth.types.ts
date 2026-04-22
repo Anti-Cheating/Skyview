@@ -5,6 +5,13 @@ export interface User {
   first_name?: string;
   last_name?: string;
   middle_name?: string;
+  /**
+   * Null for candidates (global identity). Populated for staff users
+   * (Owner / Admin / Member / System Admin) — points at the company
+   * they belong to. Used by the Team page to know which company's
+   * invites to manage.
+   */
+  company_id?: string | null;
   created_at: string;
 }
 

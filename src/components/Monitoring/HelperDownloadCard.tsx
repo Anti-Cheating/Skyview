@@ -4,7 +4,7 @@
  * it's not running). Gives them the single-button download.
  */
 
-import { Box, Button, CircularProgress } from '@mui/material';
+import { Box, CircularProgress } from '@mui/material';
 import {
   Download as DownloadIcon,
   Refresh as RefreshIcon,
@@ -12,6 +12,7 @@ import {
 import { getHelperDownloadUrl, detectHelperPlatform } from '../../services/helperBridge';
 import { TOKENS } from '../../theme';
 import { CardTitle, Secondary, Caption } from '../layout/Typography';
+import { ActionButton } from '../common/ActionButton';
 
 const BRAND = TOKENS.brand;
 const LIGHT_BG = TOKENS.bgCard;
@@ -88,40 +89,20 @@ export default function HelperDownloadCard({ checking, onRetry }: Props) {
         ) : null}
 
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Button
-            variant="contained"
-            startIcon={<DownloadIcon />}
+          <ActionButton
+            startIcon={<DownloadIcon sx={{ fontSize: 16 }} />}
             href={url}
-            sx={{
-              bgcolor: BRAND,
-              color: '#fff',
-              fontWeight: 600,
-              py: 0.75,
-              px: 2.5,
-              borderRadius: '8px',
-              '&:hover': { bgcolor: '#3CB853' },
-              boxShadow: 'none',
-            }}
           >
             {downloadLabel}
-          </Button>
+          </ActionButton>
           {onRetry && (
-            <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
+            <ActionButton
+              variant="secondary"
+              startIcon={<RefreshIcon sx={{ fontSize: 16 }} />}
               onClick={onRetry}
-              sx={{
-                color: TOKENS.textSecondary,
-                borderColor: '#D1D5DB',
-                fontWeight: 600,
-                py: 0.75,
-                px: 2,
-                borderRadius: '8px',
-                '&:hover': { bgcolor: '#F9FAFB', borderColor: '#9CA3AF' },
-              }}
             >
               Retry detection
-            </Button>
+            </ActionButton>
           )}
         </Box>
 

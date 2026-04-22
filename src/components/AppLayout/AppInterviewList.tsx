@@ -10,7 +10,6 @@ import {
   Pagination,
   Stack,
   Chip,
-  Button,
   useTheme,
 } from '@mui/material';
 import {
@@ -24,7 +23,8 @@ import { InterviewService } from '../../services/interview.service';
 import type { InterviewSession } from '../../types/interview.types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
-import { USER_ROLES } from '../../config/constants';
+import { USER_ROLES, isStaffRole } from '../../config/constants';
+import { ActionButton } from '../common/ActionButton';
 import { useInterviewList } from '../../contexts/InterviewCacheContext';
 import { useDelayedFlag } from '../../hooks/useDelayedFlag';
 
@@ -66,7 +66,7 @@ export default function AppInterviewList() {
   const [error, setError] = useState<string | null>(null);
 
   const userRole = user?.role || USER_ROLES.CANDIDATE;
-  const isInterviewer = userRole === USER_ROLES.INTERVIEWER;
+  const isInterviewer = isStaffRole(userRole);
 
   // Resolved list shown for the active tab — prefer the explicit paged
   // result when the user has navigated past page 1, otherwise fall back
@@ -178,29 +178,12 @@ export default function AppInterviewList() {
             </Typography>
           </Box>
           {isInterviewer && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
+            <ActionButton
+              startIcon={<AddIcon sx={{ fontSize: 16 }} />}
               onClick={() => navigate('/interviews/new')}
-              size="small"
-              sx={{
-                fontWeight: 600,
-                borderRadius: '8px',
-                px: 2,
-                py: 0.75,
-                bgcolor: '#4CD964',
-                color: '#fff',
-                boxShadow: 'none',
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-                '&:hover': {
-                  bgcolor: '#3CB853',
-                  boxShadow: '0 4px 12px rgba(76, 217, 100, 0.3)',
-                },
-              }}
             >
               New Interview
-            </Button>
+            </ActionButton>
           )}
         </Box>
 

@@ -20,11 +20,11 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
-  Button,
   CircularProgress,
   Alert,
   IconButton,
 } from '@mui/material';
+import { ActionButton } from '../common/ActionButton';
 import { CardTitle, Secondary, Caption } from '../layout/Typography';
 import {
   CheckCircle as CheckIcon,
@@ -37,7 +37,7 @@ import { InterviewService } from '../../services/interview.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { useHelper } from '../../hooks/useHelper';
 import { openSettingsPane, detectHelperPlatform } from '../../services/helperBridge';
-import { USER_ROLES, STORAGE_KEYS } from '../../config/constants';
+import { USER_ROLES, STORAGE_KEYS, isStaffRole } from '../../config/constants';
 import { ENV } from '../../config/env';
 import type { InterviewSession } from '../../types/interview.types';
 import { TOKENS } from '../../theme';
@@ -62,10 +62,15 @@ export default function CandidateJoinPage() {
   const [meetingOpened, setMeetingOpened] = useState(false);
 
   const helper = useHelper(2000);
+  // Deliberately NO teardown on the candidate side — the candidate
+  // usually clicks "Open meeting" and leaves the Skyview tab while the
+  // interview continues in Zoom. Session lifetime ends when the
+  // interviewer leaves their MonitoringView (handled server-side via
+  // socket-disconnect → remote-end-session).
 
   // ── Role gate: only candidates can access this page ─────────────────
   useEffect(() => {
-    if (userRole === USER_ROLES.INTERVIEWER) {
+    if (isStaffRole(userRole)) {
       navigate('/', { replace: true });
     }
   }, [userRole, navigate]);
@@ -250,16 +255,12 @@ export default function CandidateJoinPage() {
               done={meetingState === 'done'}
               active={monitoringState === 'done' && meetingState !== 'done'} last>
               {monitoringState === 'done' && meetingState === 'pending' && (
-                <Button variant="contained" size="small" onClick={handleOpenMeeting}
+                <ActionButton
+                  onClick={handleOpenMeeting}
                   disabled={!interview.provider_metadata?.join_url}
-                  sx={{
-                    bgcolor: BRAND, color: '#fff',
-                    fontWeight: 600, py: 0.5, px: 2,
-                    borderRadius: '6px', '&:hover': { bgcolor: '#3CB853' },
-                    boxShadow: 'none',
-                  }}>
+                >
                   Open Meeting
-                </Button>
+                </ActionButton>
               )}
               {meetingState === 'done' && <Status ok text="Meeting opened — keep this tab open" />}
             </StepRow>
@@ -310,15 +311,9 @@ function PermissionRow({ title, desc, done, onEnable }: {
         </Caption>
       </Box>
       {!done && (
-        <Button size="small" variant="contained" onClick={onEnable}
-          sx={{
-            bgcolor: BRAND, color: '#fff', textTransform: 'none',
-            fontSize: '0.688rem', py: 0.25, px: 1.25, borderRadius: '6px',
-            minWidth: 0, flexShrink: 0,
-            '&:hover': { bgcolor: '#3CB853' }, boxShadow: 'none',
-          }}>
+        <ActionButton onClick={onEnable} sx={{ px: 1.25, py: 0.25, fontSize: '0.688rem', flexShrink: 0 }}>
           Enable
-        </Button>
+        </ActionButton>
       )}
     </Box>
   );

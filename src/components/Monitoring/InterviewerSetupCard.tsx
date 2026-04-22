@@ -10,6 +10,7 @@
 
 import { useState } from 'react';
 import { Box, Button, CircularProgress } from '@mui/material';
+import { ActionButton } from '../common/ActionButton';
 import {
   Extension as ExtensionIcon,
   Mic as MicIcon,
@@ -135,26 +136,14 @@ export default function InterviewerSetupCard({
               <Secondary sx={{ color: TOKENS.textSecondary, mb: 1 }}>
                 Grants microphone access to Trueyy Helper for live transcription
               </Secondary>
-              <Button
-                variant="contained"
-                size="small"
+              <ActionButton
                 onClick={() => {
                   setMicClicked(true);
                   onEnableMic?.();
                 }}
-                sx={{
-                  bgcolor: BRAND,
-                  color: '#fff',
-                  fontWeight: 600,
-                  py: 0.5,
-                  px: 2,
-                  borderRadius: '6px',
-                  '&:hover': { bgcolor: '#3CB853' },
-                  boxShadow: 'none',
-                }}
               >
                 Enable Microphone
-              </Button>
+              </ActionButton>
             </>
           )}
           {micState === 'done' && (
@@ -168,37 +157,12 @@ export default function InterviewerSetupCard({
                 Enable <strong>Trueyy Helper</strong> in {SETTINGS_APP_NAME} → {MIC_PATH}, then Try Again.
               </Secondary>
               <Box sx={{ display: 'flex', gap: 0.75, mt: 0.5 }}>
-                <Button
-                  size="small"
-                  variant="contained"
-                  onClick={onEnableMic}
-                  sx={{
-                    bgcolor: BRAND,
-                    color: '#fff',
-                    py: 0.25,
-                    px: 1.5,
-                    borderRadius: '6px',
-                    '&:hover': { bgcolor: '#3CB853' },
-                    boxShadow: 'none',
-                  }}
-                >
+                <ActionButton onClick={onEnableMic}>
                   Open Settings
-                </Button>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={onRetryMic}
-                  sx={{
-                    py: 0.25,
-                    px: 1.5,
-                    borderRadius: '6px',
-                    borderColor: LIGHT_BORDER,
-                    color: TOKENS.textSecondary,
-                    '&:hover': { borderColor: '#9CA3AF', bgcolor: '#F9FAFB' },
-                  }}
-                >
+                </ActionButton>
+                <ActionButton variant="secondary" onClick={onRetryMic}>
                   Try Again
-                </Button>
+                </ActionButton>
               </Box>
             </>
           )}

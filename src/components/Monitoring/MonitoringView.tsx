@@ -24,13 +24,14 @@ import {
 } from '@mui/icons-material';
 import { useRiskSocket } from '../../hooks/useRiskSocket';
 import { useHelper } from '../../hooks/useHelper';
+import { useHelperSessionTeardown } from '../../hooks/useHelperSessionTeardown';
 import { openSettingsPane } from '../../services/helperBridge';
 import { InterviewService } from '../../services/interview.service';
 import { ENV } from '../../config/env';
 import { STORAGE_KEYS } from '../../config/constants';
 import HelperDownloadCard from './HelperDownloadCard';
 import type { InterviewSession } from '../../types/interview.types';
-import { USER_ROLES } from '../../config/constants';
+import { USER_ROLES, isStaffRole } from '../../config/constants';
 import { useAuth } from '../../contexts/AuthContext';
 import AnalyticsPanel from './AnalyticsPanel';
 import CandidateSetupCard from './CandidateSetupCard';
@@ -55,6 +56,11 @@ export default function MonitoringView() {
 
   const riskData = useRiskSocket(interviewId ?? null);
   const helper = useHelper(2000);
+
+  // When the interviewer leaves this page (nav away, tab close, reload),
+  // call POST /session/leave so the daemon kills the pulse + window
+  // aggregator instead of looping at Cortex for hours.
+  useHelperSessionTeardown(!!helper.status?.session_id);
 
   // Fetch interview details
   useEffect(() => {
@@ -141,9 +147,9 @@ export default function MonitoringView() {
     navigate('/interviews');
   };
 
-  // Permission check: only interviewers should reach this view
+  // Permission check: only staff (Owner / Admin / Member) should reach this view
   useEffect(() => {
-    if (userRole !== USER_ROLES.INTERVIEWER) {
+    if (!isStaffRole(userRole)) {
       navigate('/', { replace: true });
     }
   }, [userRole, navigate]);

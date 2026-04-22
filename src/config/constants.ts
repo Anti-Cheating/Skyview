@@ -1,9 +1,30 @@
-// User Roles
+// User Roles — mirrors Cortex `src/rbac/roles.ts`. Since the Hasura-era
+// refactor there is no `Interviewer` role anymore; staff are split into
+// Owner / Admin / Member, candidates stay global. Most UI gates care about
+// "is this user staff or candidate", so use `isStaffRole()` below rather
+// than comparing to a specific role string.
 export const USER_ROLES = {
-  INTERVIEWER: 'Interviewer',
+  OWNER: 'Owner',
   ADMIN: 'Admin',
+  MEMBER: 'Member',
   CANDIDATE: 'Candidate',
+  SYSTEM_ADMIN: 'System Admin',
 } as const;
+
+export type UserRole = typeof USER_ROLES[keyof typeof USER_ROLES];
+
+/** Everyone except the Candidate — can create/manage interviews, etc. */
+export const STAFF_ROLES: readonly string[] = [
+  USER_ROLES.OWNER,
+  USER_ROLES.ADMIN,
+  USER_ROLES.MEMBER,
+  USER_ROLES.SYSTEM_ADMIN,
+];
+
+/** True for Owner/Admin/Member/System Admin. */
+export function isStaffRole(role?: string | null): boolean {
+  return !!role && STAFF_ROLES.includes(role);
+}
 
 // Storage Keys
 export const STORAGE_KEYS = {
