@@ -165,6 +165,30 @@ export default function InviteAcceptPage() {
 
   return (
     <AuthCard maxWidth={420}>
+      <Box sx={{ textAlign: { xs: 'center', md: 'left' }, mb: 2.5 }}>
+        <Box
+          sx={{
+            fontSize: '1.375rem',
+            fontWeight: 700,
+            color: TOKENS.textPrimary,
+            letterSpacing: '-0.01em',
+            lineHeight: 1.25,
+            mb: 0.5,
+          }}
+        >
+          Welcome aboard.
+        </Box>
+        <Box
+          sx={{
+            fontSize: '0.875rem',
+            color: TOKENS.textSecondary,
+            lineHeight: 1.5,
+          }}
+        >
+          Set up your account to complete your invitation.
+        </Box>
+      </Box>
+
       {error && (
         <Alert severity="error" sx={{ mb: 1.75, borderRadius: '10px', py: 0.5 }}>
           {error}
@@ -250,18 +274,6 @@ export default function InviteAcceptPage() {
         >
           {submitting ? 'Joining…' : 'Accept invitation'}
         </ActionButton>
-      </Box>
-
-      <Box
-        sx={{
-          textAlign: 'center',
-          mt: 2,
-          fontSize: '0.75rem',
-          color: TOKENS.textMuted,
-          lineHeight: 1.5,
-        }}
-      >
-        By accepting, you agree to Trueyy's Terms of Service and Privacy Policy.
       </Box>
     </AuthCard>
   );

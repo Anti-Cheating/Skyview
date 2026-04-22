@@ -22,10 +22,18 @@
  * The form card visual is unchanged.
  */
 
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Box, Paper } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { TruoyyLogo } from '../layout/TruoyyLogo';
 import { TOKENS } from '../../theme';
+
+// Module-scoped — survives component unmounts. Lets us tell "this is the
+// very first AuthCard mount in this session" apart from "user clicked
+// Sign in / Sign up so we navigated between two AuthCard routes". The
+// flip should only play in the second case.
+let lastAuthPathname: string | null = null;
 
 export interface AuthCardProps {
   children: React.ReactNode;
@@ -51,6 +59,33 @@ export function AuthCard({
   hideLogo = false,
   cardSx,
 }: AuthCardProps) {
+  const { pathname } = useLocation();
+
+  // Only flip when the user is moving BETWEEN auth routes (e.g. sign-in
+  // → sign-up). First mount (hard reload, deep link) has no prior
+  // pathname in module scope, so we skip the animation.
+  const [shouldFlip] = useState(
+    () => lastAuthPathname !== null && lastAuthPathname !== pathname
+  );
+
+  useEffect(() => {
+    lastAuthPathname = pathname;
+  }, [pathname]);
+
+  const flipAnimationSx = shouldFlip
+    ? {
+        transformOrigin: 'center center',
+        transformStyle: 'preserve-3d' as const,
+        backfaceVisibility: 'hidden' as const,
+        animation: 'authCardFlip 520ms cubic-bezier(0.2, 0.8, 0.25, 1) both',
+        '@keyframes authCardFlip': {
+          '0%':   { opacity: 0, transform: 'rotateY(-90deg)' },
+          '55%':  { opacity: 0.75 },
+          '100%': { opacity: 1, transform: 'rotateY(0deg)' },
+        },
+      }
+    : null;
+
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', bgcolor: TOKENS.bg }}>
       <BrandSidebar />
@@ -63,9 +98,9 @@ export function AuthCard({
           justifyContent: 'center',
           p: 2,
           py: 5,
-          // 3D context so the Paper's rotateY reads as a flip, not just a
-          // horizontal squish.
-          perspective: '1400px',
+          // 3D context needed only when the flip is active — harmless to
+          // leave on always, but it documents the intent.
+          perspective: shouldFlip ? '1400px' : undefined,
         }}
       >
         <Paper
@@ -79,26 +114,7 @@ export function AuthCard({
               borderColor: TOKENS.border,
               bgcolor: TOKENS.bgCard,
               boxShadow: '0 1px 2px rgba(16, 24, 40, 0.04)',
-              // Flip-in animation — runs whenever the card mounts, which
-              // is every route change between /login ↔ /signup because
-              // React Router swaps those components. No framer needed.
-              transformOrigin: 'center center',
-              transformStyle: 'preserve-3d',
-              backfaceVisibility: 'hidden',
-              animation: 'authCardFlip 520ms cubic-bezier(0.2, 0.8, 0.25, 1) both',
-              '@keyframes authCardFlip': {
-                '0%': {
-                  opacity: 0,
-                  transform: 'rotateY(-90deg)',
-                },
-                '55%': {
-                  opacity: 0.75,
-                },
-                '100%': {
-                  opacity: 1,
-                  transform: 'rotateY(0deg)',
-                },
-              },
+              ...flipAnimationSx,
             },
             ...(Array.isArray(cardSx) ? cardSx : cardSx ? [cardSx] : []),
           ]}
