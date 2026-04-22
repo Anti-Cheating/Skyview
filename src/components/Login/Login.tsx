@@ -90,17 +90,28 @@ export default function Login() {
 
   return (
     <AuthCard maxWidth={420}>
-      <Box
-        sx={{
-          textAlign: 'center',
-          mb: 2.5,
-          fontSize: '1.125rem',
-          fontWeight: 700,
-          color: TOKENS.textPrimary,
-          letterSpacing: '-0.01em',
-        }}
-      >
-        Sign in
+      <Box sx={{ textAlign: { xs: 'center', md: 'left' }, mb: 2.5 }}>
+        <Box
+          sx={{
+            fontSize: '1.375rem',
+            fontWeight: 700,
+            color: TOKENS.textPrimary,
+            letterSpacing: '-0.01em',
+            lineHeight: 1.25,
+            mb: 0.5,
+          }}
+        >
+          Welcome back.
+        </Box>
+        <Box
+          sx={{
+            fontSize: '0.875rem',
+            color: TOKENS.textSecondary,
+            lineHeight: 1.5,
+          }}
+        >
+          Sign in and get back to your interviews.
+        </Box>
       </Box>
 
       {(error || emailError) && (
