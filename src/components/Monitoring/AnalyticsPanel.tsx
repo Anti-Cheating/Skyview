@@ -928,30 +928,67 @@ function TranscriptFeed({
     );
   }
 
+  // Clean white pane. Interviewer bubbles use the primary brand fill
+  // (with white text for contrast); candidate bubbles stay a light
+  // neutral so they clearly sit against the white background.
+  const CHAT_BG = '#FFFFFF';
+  const ME_BG = BRAND;
+  const OTHER_BG = '#F3F4F6';
+  const ME_TEXT = '#FFFFFF';
+  const OTHER_TEXT = '#111B21';
+  const ME_TIME = 'rgba(255,255,255,0.75)';
+  const OTHER_TIME = '#667781';
+  const INTERVIEWER_LABEL = BRAND;
+  const CANDIDATE_LABEL = '#3B82F6';
+
   return (
     <Box
       ref={scrollRef}
       sx={{
         flex: 1,
         overflow: 'auto',
-        px: { xs: 1.5, md: 2 },
-        py: 1.5,
+        px: { xs: 1.5, md: 3 },
+        py: 2,
         minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
-        gap: 0.3,
-        bgcolor: '#FAFAFA',
+        gap: 0.25,
+        bgcolor: CHAT_BG,
         '&::-webkit-scrollbar': { width: '4px' },
-        '&::-webkit-scrollbar-thumb': { background: 'rgba(0,0,0,0.15)', borderRadius: '4px' },
+        '&::-webkit-scrollbar-thumb': { background: 'rgba(0,0,0,0.12)', borderRadius: '4px' },
+        '@keyframes bubbleIn': {
+          from: { opacity: 0, transform: 'translateY(4px)' },
+          to: { opacity: 1, transform: 'translateY(0)' },
+        },
+        '@keyframes caretBlink': {
+          from: { opacity: 0.3 },
+          to: { opacity: 0.9 },
+        },
       }}
     >
+      {/* Preview banner */}
       {fragments.map((f, i) => {
         const isInterviewer = f.speaker_role === 'interviewer';
         const prev = fragments[i - 1];
+        const next = fragments[i + 1];
         const isNewSpeaker = !prev || prev.speaker_role !== f.speaker_role;
-        const bubbleColor = isInterviewer ? BRAND : '#FFFFFF';
-        const textColor = isInterviewer ? '#FFFFFF' : DARK_TEXT;
-        const border = isInterviewer ? 'none' : '1px solid #E5E7EB';
+        const isLastOfRun = !next || next.speaker_role !== f.speaker_role;
+        const bubbleBg = isInterviewer ? ME_BG : OTHER_BG;
+        const bubbleText = isInterviewer ? ME_TEXT : OTHER_TEXT;
+        const bubbleTime = isInterviewer ? ME_TIME : OTHER_TIME;
+        const labelColor = isInterviewer ? INTERVIEWER_LABEL : CANDIDATE_LABEL;
+
+        // WhatsApp tail — only on the first bubble of a run. Continuation
+        // bubbles keep all corners uniformly rounded so the run reads as
+        // one grouped thread.
+        const r = '10px';
+        const tight = '4px';
+        let radius: string;
+        if (isInterviewer) {
+          radius = isNewSpeaker ? `${r} ${tight} ${r} ${r}` : `${r} ${r} ${r} ${r}`;
+        } else {
+          radius = isNewSpeaker ? `${tight} ${r} ${r} ${r}` : `${r} ${r} ${r} ${r}`;
+        }
 
         return (
           <Box
@@ -959,27 +996,28 @@ function TranscriptFeed({
             sx={{
               display: 'flex',
               justifyContent: isInterviewer ? 'flex-end' : 'flex-start',
-              mt: isNewSpeaker ? 1 : 0.1,
+              mt: isNewSpeaker ? 1 : 0.2,
+              animation: 'bubbleIn 160ms ease-out',
             }}
           >
             <Box
               sx={{
-                maxWidth: '75%',
+                maxWidth: { xs: '82%', md: '65%' },
+                minWidth: 0,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: isInterviewer ? 'flex-end' : 'flex-start',
               }}
             >
-              {/* Speaker label — only when speaker changes */}
+              {/* Sender label — WhatsApp group-chat style, shown only on
+                  the first bubble of each run. */}
               {isNewSpeaker && (
                 <Typography
                   sx={{
-                    fontSize: '0.6rem',
+                    fontSize: '0.65rem',
                     fontWeight: 700,
-                    color: isInterviewer ? BRAND : DARK_TEXT_SECONDARY,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    mb: 0.4,
+                    color: labelColor,
+                    mb: 0.25,
                     px: 0.4,
                   }}
                 >
@@ -987,56 +1025,77 @@ function TranscriptFeed({
                 </Typography>
               )}
 
-              {/* Bubble */}
+              {/* Bubble. Message text and time co-float so time tucks
+                  into the last line's trailing edge (classic WhatsApp
+                  layout). */}
               <Box
                 sx={{
-                  bgcolor: bubbleColor,
-                  color: textColor,
-                  border,
-                  px: 1.2,
-                  py: 0.7,
-                  borderRadius: isInterviewer
-                    ? '14px 14px 4px 14px'
-                    : '14px 14px 14px 4px',
-                  boxShadow: isInterviewer ? 'none' : '0 1px 2px rgba(0,0,0,0.04)',
-                  opacity: f.is_final ? 1 : 0.75,
-                  fontStyle: f.is_final ? 'normal' : 'italic',
+                  bgcolor: bubbleBg,
+                  color: bubbleText,
+                  px: 1,
+                  py: 0.55,
+                  borderRadius: radius,
+                  boxShadow: isInterviewer
+                    ? '0 2px 6px rgba(76, 217, 100, 0.25)'
+                    : '0 1px 0.5px rgba(11, 20, 26, 0.13)',
+                  opacity: f.is_final ? 1 : 0.85,
                   wordBreak: 'break-word',
+                  position: 'relative',
+                  // Reserve space on the last line for the inline time
+                  // block so long messages still have room for it.
+                  pr: f.is_final ? 5.5 : 2.5,
+                  pb: 1.4,
+                  minWidth: 52,
                 }}
               >
-                <Typography sx={{ fontSize: '0.8rem', lineHeight: 1.4, color: 'inherit' }}>
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: '0.825rem',
+                    lineHeight: 1.45,
+                    color: 'inherit',
+                    fontStyle: f.is_final ? 'normal' : 'italic',
+                    whiteSpace: 'pre-wrap',
+                  }}
+                >
                   {f.text}
                   {!f.is_final && (
                     <Box
                       component="span"
                       sx={{
-                        ml: 0.4,
-                        opacity: 0.6,
-                        fontSize: '0.7rem',
-                        fontStyle: 'italic',
+                        display: 'inline-block',
+                        width: '6px',
+                        ml: 0.3,
+                        color: bubbleTime,
+                        animation: 'caretBlink 900ms ease-in-out infinite alternate',
                       }}
                     >
-                      …
+                      ▌
                     </Box>
                   )}
                 </Typography>
+
+                {/* Time — absolute bottom-right inside the bubble */}
+                {f.is_final && (
+                  <Typography
+                    sx={{
+                      position: 'absolute',
+                      right: 8,
+                      bottom: 4,
+                      fontSize: '0.6rem',
+                      color: bubbleTime,
+                      fontVariantNumeric: 'tabular-nums',
+                      whiteSpace: 'nowrap',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {formatOffset(f.timestamp)}
+                  </Typography>
+                )}
               </Box>
 
-              {/* Offset from session start (only on final so we don't
-                  churn it on interim updates). */}
-              {f.is_final && (
-                <Typography
-                  sx={{
-                    fontSize: '0.55rem',
-                    color: DARK_TEXT_MUTED,
-                    mt: 0.2,
-                    px: 0.4,
-                    fontVariantNumeric: 'tabular-nums',
-                  }}
-                >
-                  {formatOffset(f.timestamp)}
-                </Typography>
-              )}
+              {/* Subtle gap hint between runs (handled by mt above) */}
+              {isLastOfRun && <Box sx={{ height: 0 }} />}
             </Box>
           </Box>
         );
