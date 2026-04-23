@@ -121,7 +121,7 @@ export default function CreateInterviewPage() {
         description: description.trim() || null,
         scheduled_start_at: startAt.toISOString(),
         scheduled_end_at: endAt.toISOString(),
-        status: 'scheduled',
+        status: 'SCHEDULED',
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         interview_type: interviewType,
         provider: interviewType === 'application' ? provider : null,

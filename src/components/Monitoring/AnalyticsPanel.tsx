@@ -12,11 +12,11 @@ import {
   Tabs,
   Tab,
   Badge,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import {
   // Circle as CircleIcon,
-  PlayArrow as PlayIcon,
-  Stop as StopIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   Monitor as ScreenIcon,
@@ -42,9 +42,13 @@ import { ResponsiveContainer, LineChart, Line, Tooltip as RechartsTooltip, Refer
 interface AnalyticsPanelProps {
   interview?: any;
   riskData: UseRiskSocketReturn;
+  // Derived ( transcriptionOn || analysisOn ) — only drives the header
+  // "monitoring active" dot/label. Individual toggle state lives below.
   isMonitoring?: boolean;
-  onStartMonitoring?: () => void;
-  onStopMonitoring?: () => void;
+  transcriptionOn?: boolean;
+  analysisOn?: boolean;
+  onToggleTranscription?: (next: boolean) => void;
+  onToggleAnalysis?: (next: boolean) => void;
   onClose: () => void;
   participantId?: string;
 }
@@ -404,8 +408,10 @@ function WindowGroupHeader({ group, isExpanded, onToggle }: { group: WindowGroup
 export default function AnalyticsPanel({
   riskData,
   isMonitoring = false,
-  onStartMonitoring,
-  onStopMonitoring,
+  transcriptionOn = false,
+  analysisOn = false,
+  onToggleTranscription,
+  onToggleAnalysis,
   onClose: _onClose,
   participantId: _participantId,
   interview,
@@ -448,8 +454,8 @@ export default function AnalyticsPanel({
             </Typography>
           </Box>
         </Box>
-        {(onStartMonitoring || onStopMonitoring) && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0, flexWrap: 'wrap' }}>
+        {(onToggleTranscription || onToggleAnalysis) && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
             {interview?.provider_metadata?.join_url && (
               <Button
                 variant="outlined"
@@ -478,8 +484,8 @@ export default function AnalyticsPanel({
             )}
             <Tooltip
               title={
-                !isMonitoring
-                  ? 'Start monitoring to capture screenshots'
+                !analysisOn
+                  ? 'Turn on Analysis to capture screenshots'
                   : riskData.candidateStatus && !riskData.candidateStatus.screen_recording
                   ? 'Screen Recording disabled — captures paused'
                   : riskData.isImageAnalysisProcessing
@@ -498,33 +504,47 @@ export default function AnalyticsPanel({
                     riskData.incrementPendingImageAnalysis(1);
                     riskData.emitCaptureScreenshots();
                   }}
-                  disabled={!isMonitoring || riskData.isImageAnalysisProcessing || (riskData.candidateStatus != null && !riskData.candidateStatus.screen_recording)}
+                  disabled={!analysisOn || riskData.isImageAnalysisProcessing || (riskData.candidateStatus != null && !riskData.candidateStatus.screen_recording)}
                   sx={{ fontSize: '0.7rem', textTransform: 'none', py: 0.5, px: 1.5, borderRadius: '8px', borderColor: `${BRAND}40`, color: BRAND, '&:hover': { borderColor: BRAND, bgcolor: `${BRAND}12` }, '&.Mui-disabled': { borderColor: DARK_BORDER, color: DARK_TEXT_MUTED } }}
                 >
                   Capture
                 </Button>
               </span>
             </Tooltip>
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<PlayIcon sx={{ fontSize: '14px !important' }} />}
-              onClick={onStartMonitoring}
-              disabled={isMonitoring}
-              sx={{ fontSize: '0.7rem', textTransform: 'none', py: 0.5, px: 1.5, borderRadius: '8px', bgcolor: BRAND, color: '#FFFFFF', '&:hover': { bgcolor: '#3CB853' }, boxShadow: 'none', '&.Mui-disabled': { bgcolor: '#F3F4F6', color: DARK_TEXT_MUTED } }}
-            >
-              Start
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<StopIcon sx={{ fontSize: '14px !important' }} />}
-              onClick={onStopMonitoring}
-              disabled={!isMonitoring}
-              sx={{ fontSize: '0.7rem', textTransform: 'none', py: 0.5, px: 1.5, borderRadius: '8px', borderColor: '#ef444440', color: '#ef4444', '&:hover': { bgcolor: '#ef444412', borderColor: '#ef4444' }, '&.Mui-disabled': { borderColor: DARK_BORDER, color: DARK_TEXT_MUTED } }}
-            >
-              Stop
-            </Button>
+            <Tooltip title="Stream candidate + interviewer voice to Deepgram. Runs continuously while on." arrow placement="top">
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={transcriptionOn}
+                    onChange={(_, checked) => onToggleTranscription?.(checked)}
+                    sx={{
+                      '& .MuiSwitch-switchBase.Mui-checked': { color: BRAND },
+                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: BRAND },
+                    }}
+                  />
+                }
+                label={<Typography sx={{ fontSize: '0.7rem', color: DARK_TEXT }}>Transcription</Typography>}
+                sx={{ m: 0 }}
+              />
+            </Tooltip>
+            <Tooltip title="Cortex drives 5s pulse + 30s window analysis while on. Toggle off to pause LLM spend." arrow placement="top">
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={analysisOn}
+                    onChange={(_, checked) => onToggleAnalysis?.(checked)}
+                    sx={{
+                      '& .MuiSwitch-switchBase.Mui-checked': { color: BRAND },
+                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: BRAND },
+                    }}
+                  />
+                }
+                label={<Typography sx={{ fontSize: '0.7rem', color: DARK_TEXT }}>Analysis</Typography>}
+                sx={{ m: 0 }}
+              />
+            </Tooltip>
           </Box>
         )}
       </Box>

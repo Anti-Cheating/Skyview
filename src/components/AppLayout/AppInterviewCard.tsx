@@ -62,7 +62,7 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
   //   - Candidate   + extension  → "Join Interview" (→ message Jarvis extension)
   //   - Completed                → "View Details"
   //   - Otherwise (candidate + application) → "Join in Falcon App"
-  const isCompleted = interview.status === 'completed';
+  const isCompleted = interview.status === 'ENDED';
   const isInterviewer = isStaffRole(userRole);
   const isCandidate = userRole === USER_ROLES.CANDIDATE;
   const canMonitor = isInterviewer && !isCompleted;
@@ -367,11 +367,11 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
             sx={{
               fontSize: '0.688rem',
               height: 20,
-              bgcolor: interview.status === 'completed' ? '#E8F5E9' : '#F5F5F5',
-              color: interview.status === 'completed' ? '#2E7D32' : '#757575',
+              bgcolor: interview.status === 'ENDED' ? '#E8F5E9' : '#F5F5F5',
+              color: interview.status === 'ENDED' ? '#2E7D32' : '#757575',
               fontWeight: 500,
               border: '1px solid',
-              borderColor: interview.status === 'completed' ? '#C8E6C9' : '#E0E0E0',
+              borderColor: interview.status === 'ENDED' ? '#C8E6C9' : '#E0E0E0',
               borderRadius: 1,
               '& .MuiChip-label': {
                 px: 0.75,

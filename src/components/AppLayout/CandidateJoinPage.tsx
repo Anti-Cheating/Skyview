@@ -75,7 +75,14 @@ export default function CandidateJoinPage() {
     }
   }, [userRole, navigate]);
 
-  // ── Load interview + validate candidate is a participant ───────────
+  // ── Load interview ────────────────────────────────────────────────
+  // Participant membership is enforced server-side: getByIdController
+  // returns 404 to any candidate who isn't on this session. So if the
+  // GET succeeds, we already know this candidate belongs here — no
+  // client-side re-check needed. We still need interview_session_participants
+  // in the payload to grab the candidate's own participant_id for
+  // helper.join() (see effect below); that field is preserved by
+  // projectForCandidate with evaluation internals stripped.
   useEffect(() => {
     if (!interviewId || !user?.id) return;
     let cancelled = false;
@@ -84,13 +91,6 @@ export default function CandidateJoinPage() {
         const resp = await InterviewService.getById(interviewId);
         if (cancelled) return;
         if (resp.success && resp.data) {
-          const isParticipant = resp.data.interview_session_participants?.some(
-            (p) => p.candidate_id === user.id
-          );
-          if (!isParticipant) {
-            navigate('/', { replace: true });
-            return;
-          }
           setInterview(resp.data);
         } else {
           setError(resp.message || 'Interview not found');

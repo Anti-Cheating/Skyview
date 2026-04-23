@@ -88,7 +88,9 @@ export class InterviewService {
       description: input.description ?? null,
       scheduled_start_at: input.scheduled_start_at,
       scheduled_end_at: input.scheduled_end_at,
-      status: input.status ?? 'scheduled',
+      // Canonical uppercase vocabulary — matches Cortex's sessionGuard
+      // and the session_lifecycle migration (SCHEDULED → ACTIVE → ENDED).
+      status: input.status ?? 'SCHEDULED',
       timezone: input.timezone,
       interview_type: input.interview_type,
       interview_session_participants: input.interview_session_participants,
@@ -103,6 +105,42 @@ export class InterviewService {
     const response = await ApiService.post<InterviewSession>(
       '/interview-sessions',
       payload,
+      undefined,
+      'auth'
+    );
+    return { success: response.success, data: response.data, message: response.message };
+  }
+
+  // Lifecycle transitions — the server is the single authority on session
+  // state. SCHEDULED → ACTIVE on /activate, ACTIVE → ENDED on /deactivate,
+  // and /heartbeat refreshes a Redis TTL so stale tabs get auto-ended if
+  // the user closes without calling deactivate.
+  static async activate(sessionId: string): Promise<ApiResponse<InterviewSession>> {
+    const response = await ApiService.post<InterviewSession>(
+      `/interview-sessions/${sessionId}/activate`,
+      {},
+      undefined,
+      'auth'
+    );
+    return { success: response.success, data: response.data, message: response.message };
+  }
+
+  static async deactivate(sessionId: string): Promise<ApiResponse<InterviewSession>> {
+    const response = await ApiService.post<InterviewSession>(
+      `/interview-sessions/${sessionId}/deactivate`,
+      {},
+      undefined,
+      'auth'
+    );
+    return { success: response.success, data: response.data, message: response.message };
+  }
+
+  static async heartbeat(
+    sessionId: string
+  ): Promise<ApiResponse<{ status?: string }>> {
+    const response = await ApiService.post<{ status?: string }>(
+      `/interview-sessions/${sessionId}/heartbeat`,
+      {},
       undefined,
       'auth'
     );

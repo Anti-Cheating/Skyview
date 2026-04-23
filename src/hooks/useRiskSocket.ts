@@ -88,6 +88,18 @@ export interface InterviewerStatus {
   updated_at: string | null;
 }
 
+/**
+ * Canonical modality state for the current session, as reported by
+ * Cortex. Broadcast to every socket in the session room on every
+ * start-/stop- change AND on join-session — which is how multi-tab /
+ * reconnect scenarios stay in sync without each tab holding its own
+ * divergent view of the toggle state.
+ */
+export interface ModalityState {
+  transcription: boolean;
+  analysis: boolean;
+}
+
 export interface UseRiskSocketReturn {
   results: WindowResult[];
   latestResult: WindowResult | null;
@@ -102,16 +114,19 @@ export interface UseRiskSocketReturn {
   isImageAnalysisProcessing: boolean;
   pendingImageAnalysisCount: number;
   incrementPendingImageAnalysis: (count: number) => void;
-  // Remote monitoring control via Socket
-  remoteStartRequested: boolean;
-  remoteStopRequested: boolean;
-  remoteCaptureRequested: boolean;
-  resetRemoteStart: () => void;
-  resetRemoteStop: () => void;
-  resetRemoteCapture: () => void;
-  emitStartMonitoring: () => void;
-  emitStopMonitoring: () => void;
+  // Capture remains one-shot — interviewer clicks "Capture" to grab
+  // screenshots on demand. Unlike pulse/window, it doesn't have a
+  // continuous lifecycle.
   emitCaptureScreenshots: () => void;
+  // Lifecycle toggles: voice transcription is continuous while enabled;
+  // analysis drives Cortex's 5s pulse + 30s window timers.
+  emitStartTranscription: () => void;
+  emitStopTranscription: () => void;
+  emitStartAnalysis: () => void;
+  emitStopAnalysis: () => void;
+  // Server-authoritative toggle state. Null until the first
+  // modality-state event lands (join-session catch-up).
+  modalityState: ModalityState | null;
   // Pre-join setup state pushed by the candidate's Jarvis extension. Null
   // means we haven't received any status yet (e.g. extension never connected
   // for this session, or it's an application-type interview).
@@ -138,11 +153,9 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
   const [isConnected, setIsConnected] = useState(false);
   const [imageAnalysisResults, setImageAnalysisResults] = useState<ImageAnalysisResult[]>([]);
   const [pendingImageAnalysisCount, setPendingImageAnalysisCount] = useState(0);
-  const [remoteStartRequested, setRemoteStartRequested] = useState(false);
-  const [remoteStopRequested, setRemoteStopRequested] = useState(false);
-  const [remoteCaptureRequested, setRemoteCaptureRequested] = useState(false);
   const [candidateStatus, setCandidateStatus] = useState<CandidateStatus | null>(null);
   const [interviewerStatus, setInterviewerStatus] = useState<InterviewerStatus | null>(null);
+  const [modalityState, setModalityState] = useState<ModalityState | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   const setInitialCandidateStatus = useCallback((status: CandidateStatus | null) => {
@@ -159,17 +172,20 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     setPendingImageAnalysisCount(prev => prev + count);
   }, []);
 
-  const resetRemoteStart = useCallback(() => setRemoteStartRequested(false), []);
-  const resetRemoteStop = useCallback(() => setRemoteStopRequested(false), []);
-  const resetRemoteCapture = useCallback(() => setRemoteCaptureRequested(false), []);
-  const emitStartMonitoring = useCallback(() => {
-    socketRef.current?.emit('start-monitoring', sessionId);
-  }, [sessionId]);
-  const emitStopMonitoring = useCallback(() => {
-    socketRef.current?.emit('stop-monitoring', sessionId);
-  }, [sessionId]);
   const emitCaptureScreenshots = useCallback(() => {
     socketRef.current?.emit('capture-screenshots', sessionId);
+  }, [sessionId]);
+  const emitStartTranscription = useCallback(() => {
+    socketRef.current?.emit('start-transcription', sessionId);
+  }, [sessionId]);
+  const emitStopTranscription = useCallback(() => {
+    socketRef.current?.emit('stop-transcription', sessionId);
+  }, [sessionId]);
+  const emitStartAnalysis = useCallback(() => {
+    socketRef.current?.emit('start-analysis', sessionId);
+  }, [sessionId]);
+  const emitStopAnalysis = useCallback(() => {
+    socketRef.current?.emit('stop-analysis', sessionId);
   }, [sessionId]);
 
   const latestResult = results.length > 0 ? results[results.length - 1] : null;
@@ -219,9 +235,12 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     // identify the user. In dev Cortex lets anonymous through; in
     // production it rejects, so this is the auth path for both.
     const token = localStorage.getItem('auth_access_token') || '';
+    // client: "skyview" lets Cortex distinguish us from daemon sockets
+    // (Trueyy Helper, Sentinel) — only Skyview disconnects trigger session
+    // teardown, and only when the last Skyview tab leaves.
     const socket = io(ENV.AUTH_API_URL, {
       transports: ['websocket', 'polling'],
-      auth: token ? { token } : undefined,
+      auth: { client: 'skyview', ...(token ? { token } : {}) },
     });
 
     socketRef.current = socket;
@@ -246,21 +265,6 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
       setPulseAlerts(prev => [...prev, data]);
     });
 
-    socket.on('remote-start-monitoring', () => {
-      console.log('[RiskSocket] Remote start-monitoring received');
-      setRemoteStartRequested(true);
-    });
-
-    socket.on('remote-stop-monitoring', () => {
-      console.log('[RiskSocket] Remote stop-monitoring received');
-      setRemoteStopRequested(true);
-    });
-
-    socket.on('remote-capture-screenshots', () => {
-      console.log('[RiskSocket] Remote capture-screenshots received');
-      setRemoteCaptureRequested(true);
-    });
-
     // Pre-join setup state from candidate's extension. Cortex broadcasts
     // the merged state on every update so we can just overwrite — no
     // partial-merge logic needed here.
@@ -283,6 +287,17 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
         updated_at: data.updated_at ?? new Date().toISOString(),
       });
     });
+
+    socket.on(
+      'modality-state',
+      (data: { sessionId: string } & ModalityState) => {
+        console.log('[RiskSocket] modality-state received:', data);
+        setModalityState({
+          transcription: !!data.transcription,
+          analysis: !!data.analysis,
+        });
+      }
+    );
 
     socket.on('live-transcript', (data: TranscriptFragment) => {
       // Normalize missing speaker_role to "candidate" to keep the pre-Phase-2
@@ -331,15 +346,12 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     isImageAnalysisProcessing,
     pendingImageAnalysisCount,
     incrementPendingImageAnalysis,
-    remoteStartRequested,
-    remoteStopRequested,
-    remoteCaptureRequested,
-    resetRemoteStart,
-    resetRemoteStop,
-    resetRemoteCapture,
-    emitStartMonitoring,
-    emitStopMonitoring,
     emitCaptureScreenshots,
+    emitStartTranscription,
+    emitStopTranscription,
+    emitStartAnalysis,
+    emitStopAnalysis,
+    modalityState,
     candidateStatus,
     setInitialCandidateStatus,
     interviewerStatus,
