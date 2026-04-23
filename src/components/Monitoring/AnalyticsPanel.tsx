@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import {
   Box,
   Typography,
@@ -34,7 +34,7 @@ import {
   TrendingFlat as TrendFlatIcon,
   UnfoldMore as UnfoldMoreIcon,
 } from '@mui/icons-material';
-import type { WindowResult, ModalityRisk, Correlation, UseRiskSocketReturn } from '../../hooks/useRiskSocket';
+import type { WindowResult, ModalityRisk, Correlation, UseRiskSocketReturn, TranscriptFragment } from '../../hooks/useRiskSocket';
 // CortexService import removed — capture button disabled (interviewer has no local Sentinel)
 import PulseAlertBanner from './PulseAlertBanner';
 import { ResponsiveContainer, LineChart, Line, Tooltip as RechartsTooltip, ReferenceArea, YAxis } from 'recharts';
@@ -820,68 +820,18 @@ export default function AnalyticsPanel({
         </Box>
       )}
 
-      {/* ─── Tab 3: Transcript ─── */}
+      {/* ─── Tab 3: Transcript (chat-bubble UI) ─── */}
       {activeTab === 3 && (
-        <Box
-          sx={{
-            flex: 1, overflow: 'auto', px: 1.5, py: 1, minHeight: 0,
-            '&::-webkit-scrollbar': { width: '4px' },
-            '&::-webkit-scrollbar-thumb': { background: 'rgba(0,0,0,0.15)', borderRadius: '4px' },
-          }}
-        >
-          {transcriptFragments.length > 0 ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              {transcriptFragments.map((f, i) => {
-                const isInterviewer = f.speaker_role === 'interviewer';
-                const accent = isInterviewer ? '#3B82F6' : BRAND;
-                return (
-                  <Box
-                    key={`${f.timestamp}-${i}`}
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      bgcolor: f.is_final ? `${accent}08` : 'transparent',
-                      borderLeft: `2px solid ${accent}${f.is_final ? '' : '60'}`,
-                      borderRadius: '4px',
-                      px: 1,
-                      py: 0.5,
-                      opacity: f.is_final ? 1 : 0.7,
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.7, mb: 0.2 }}>
-                      <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: accent, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        {isInterviewer ? 'Interviewer' : 'Candidate'}
-                      </Typography>
-                      <Typography sx={{ fontSize: '0.55rem', color: DARK_TEXT_MUTED }}>
-                        {formatTime(f.timestamp)}
-                      </Typography>
-                      {!f.is_final && (
-                        <Typography sx={{ fontSize: '0.55rem', color: DARK_TEXT_MUTED, fontStyle: 'italic' }}>
-                          (typing...)
-                        </Typography>
-                      )}
-                    </Box>
-                    <Typography sx={{ fontSize: '0.75rem', color: DARK_TEXT, lineHeight: 1.4 }}>
-                      {f.text}
-                    </Typography>
-                  </Box>
-                );
-              })}
-            </Box>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 1.5 }}>
-              <Box sx={{ width: 40, height: 40, borderRadius: '12px', bgcolor: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <VoiceIcon sx={{ fontSize: 18, color: DARK_TEXT_MUTED }} />
-              </Box>
-              <Box sx={{ textAlign: 'center' }}>
-                <Typography sx={{ fontSize: '0.8rem', fontWeight: 500, color: DARK_TEXT, mb: 0.3 }}>No transcript yet</Typography>
-                <Typography sx={{ fontSize: '0.7rem', color: DARK_TEXT_SECONDARY }}>
-                  {transcriptionOn ? 'Listening — speak to see transcription' : 'Turn on Transcription to begin capturing voice'}
-                </Typography>
-              </Box>
-            </Box>
-          )}
-        </Box>
+        <TranscriptFeed
+          fragments={transcriptFragments}
+          isActive={activeTab === 3}
+          transcriptionOn={transcriptionOn}
+          sessionAnchorIso={
+            interview?.actual_start_at ??
+            interview?.scheduled_start_at ??
+            null
+          }
+        />
       )}
 
       {/* ─── Lightbox modal ─── */}
@@ -894,6 +844,203 @@ export default function AnalyticsPanel({
         />
       )}
 
+    </Box>
+  );
+}
+
+// ── Transcript chat feed ─────────────────────────────────────────────
+// Two-sided conversation view. Interviewer (the logged-in viewer) on the
+// right in brand green; candidate on the left in neutral grey. Speaker
+// label only shown when the speaker changes (iMessage / WhatsApp-style
+// message grouping). Auto-scrolls to the newest bubble on every update.
+
+function TranscriptFeed({
+  fragments,
+  isActive,
+  transcriptionOn,
+  sessionAnchorIso,
+}: {
+  fragments: TranscriptFragment[];
+  isActive: boolean;
+  transcriptionOn: boolean;
+  sessionAnchorIso: string | null;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Anchor = when the session began. Used to format each bubble's
+  // timestamp as "[mm:ss] elapsed since session start" instead of wall-
+  // clock — matches the transcript download format and lets the reviewer
+  // scrub back to specific moments in the interview.
+  const anchorMs = useMemo(() => {
+    if (sessionAnchorIso) return new Date(sessionAnchorIso).getTime();
+    if (fragments[0]?.timestamp)
+      return new Date(fragments[0].timestamp).getTime();
+    return Date.now();
+  }, [sessionAnchorIso, fragments]);
+
+  const formatOffset = useCallback(
+    (iso: string): string => {
+      const delta = Math.max(
+        0,
+        Math.round((new Date(iso).getTime() - anchorMs) / 1000)
+      );
+      const h = Math.floor(delta / 3600);
+      const m = Math.floor((delta % 3600) / 60);
+      const s = delta % 60;
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+    },
+    [anchorMs]
+  );
+
+  // Stick to the bottom whenever fragments update OR the tab becomes
+  // active (so switching in mid-session lands on the latest message).
+  useLayoutEffect(() => {
+    if (!isActive) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [fragments.length, isActive, fragments[fragments.length - 1]?.text]);
+
+  if (fragments.length === 0) {
+    return (
+      <Box
+        sx={{
+          flex: 1, overflow: 'auto', px: 1.5, py: 1, minHeight: 0,
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 1.5,
+        }}
+      >
+        <Box sx={{ width: 40, height: 40, borderRadius: '12px', bgcolor: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <VoiceIcon sx={{ fontSize: 18, color: DARK_TEXT_MUTED }} />
+        </Box>
+        <Box sx={{ textAlign: 'center' }}>
+          <Typography sx={{ fontSize: '0.8rem', fontWeight: 500, color: DARK_TEXT, mb: 0.3 }}>
+            No transcript yet
+          </Typography>
+          <Typography sx={{ fontSize: '0.7rem', color: DARK_TEXT_SECONDARY }}>
+            {transcriptionOn
+              ? 'Listening — speak to see transcription'
+              : 'Turn on Transcription to begin capturing voice'}
+          </Typography>
+        </Box>
+      </Box>
+    );
+  }
+
+  return (
+    <Box
+      ref={scrollRef}
+      sx={{
+        flex: 1,
+        overflow: 'auto',
+        px: { xs: 1.5, md: 2 },
+        py: 1.5,
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0.3,
+        bgcolor: '#FAFAFA',
+        '&::-webkit-scrollbar': { width: '4px' },
+        '&::-webkit-scrollbar-thumb': { background: 'rgba(0,0,0,0.15)', borderRadius: '4px' },
+      }}
+    >
+      {fragments.map((f, i) => {
+        const isInterviewer = f.speaker_role === 'interviewer';
+        const prev = fragments[i - 1];
+        const isNewSpeaker = !prev || prev.speaker_role !== f.speaker_role;
+        const bubbleColor = isInterviewer ? BRAND : '#FFFFFF';
+        const textColor = isInterviewer ? '#FFFFFF' : DARK_TEXT;
+        const border = isInterviewer ? 'none' : '1px solid #E5E7EB';
+
+        return (
+          <Box
+            key={`${f.timestamp}-${i}`}
+            sx={{
+              display: 'flex',
+              justifyContent: isInterviewer ? 'flex-end' : 'flex-start',
+              mt: isNewSpeaker ? 1 : 0.1,
+            }}
+          >
+            <Box
+              sx={{
+                maxWidth: '75%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: isInterviewer ? 'flex-end' : 'flex-start',
+              }}
+            >
+              {/* Speaker label — only when speaker changes */}
+              {isNewSpeaker && (
+                <Typography
+                  sx={{
+                    fontSize: '0.6rem',
+                    fontWeight: 700,
+                    color: isInterviewer ? BRAND : DARK_TEXT_SECONDARY,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    mb: 0.4,
+                    px: 0.4,
+                  }}
+                >
+                  {isInterviewer ? 'Interviewer' : 'Candidate'}
+                </Typography>
+              )}
+
+              {/* Bubble */}
+              <Box
+                sx={{
+                  bgcolor: bubbleColor,
+                  color: textColor,
+                  border,
+                  px: 1.2,
+                  py: 0.7,
+                  borderRadius: isInterviewer
+                    ? '14px 14px 4px 14px'
+                    : '14px 14px 14px 4px',
+                  boxShadow: isInterviewer ? 'none' : '0 1px 2px rgba(0,0,0,0.04)',
+                  opacity: f.is_final ? 1 : 0.75,
+                  fontStyle: f.is_final ? 'normal' : 'italic',
+                  wordBreak: 'break-word',
+                }}
+              >
+                <Typography sx={{ fontSize: '0.8rem', lineHeight: 1.4, color: 'inherit' }}>
+                  {f.text}
+                  {!f.is_final && (
+                    <Box
+                      component="span"
+                      sx={{
+                        ml: 0.4,
+                        opacity: 0.6,
+                        fontSize: '0.7rem',
+                        fontStyle: 'italic',
+                      }}
+                    >
+                      …
+                    </Box>
+                  )}
+                </Typography>
+              </Box>
+
+              {/* Offset from session start (only on final so we don't
+                  churn it on interim updates). */}
+              {f.is_final && (
+                <Typography
+                  sx={{
+                    fontSize: '0.55rem',
+                    color: DARK_TEXT_MUTED,
+                    mt: 0.2,
+                    px: 0.4,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {formatOffset(f.timestamp)}
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        );
+      })}
     </Box>
   );
 }
