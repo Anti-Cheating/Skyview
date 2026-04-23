@@ -416,7 +416,7 @@ export default function AnalyticsPanel({
   participantId: _participantId,
   interview,
 }: AnalyticsPanelProps) {
-  const { results, latestResult, averageScore, recentScore, highestRisk, isConnected, pulseAlerts, imageAnalysisResults } = riskData;
+  const { results, latestResult, averageScore, recentScore, highestRisk, isConnected, pulseAlerts, imageAnalysisResults, transcriptFragments } = riskData;
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
 
   // Lightbox state
@@ -646,6 +646,18 @@ export default function AnalyticsPanel({
             )}
           </Box>
         } />
+        <Tab label={
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <span>Transcript</span>
+            {transcriptFragments.filter((f) => f.is_final).length > 0 && (
+              <Chip
+                label={transcriptFragments.filter((f) => f.is_final).length}
+                size="small"
+                sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${BRAND}20`, color: BRAND, '& .MuiChip-label': { px: 0.4 } }}
+              />
+            )}
+          </Box>
+        } />
       </Tabs>
 
       {/* ─── Tab 0: Pulse ─── */}
@@ -802,6 +814,70 @@ export default function AnalyticsPanel({
               <Box sx={{ textAlign: 'center' }}>
                 <Typography sx={{ fontSize: '0.8rem', fontWeight: 500, color: DARK_TEXT, mb: 0.3 }}>No screenshots yet</Typography>
                 <Typography sx={{ fontSize: '0.7rem', color: DARK_TEXT_SECONDARY }}>Screenshot analysis results will appear here</Typography>
+              </Box>
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* ─── Tab 3: Transcript ─── */}
+      {activeTab === 3 && (
+        <Box
+          sx={{
+            flex: 1, overflow: 'auto', px: 1.5, py: 1, minHeight: 0,
+            '&::-webkit-scrollbar': { width: '4px' },
+            '&::-webkit-scrollbar-thumb': { background: 'rgba(0,0,0,0.15)', borderRadius: '4px' },
+          }}
+        >
+          {transcriptFragments.length > 0 ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {transcriptFragments.map((f, i) => {
+                const isInterviewer = f.speaker_role === 'interviewer';
+                const accent = isInterviewer ? '#3B82F6' : BRAND;
+                return (
+                  <Box
+                    key={`${f.timestamp}-${i}`}
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      bgcolor: f.is_final ? `${accent}08` : 'transparent',
+                      borderLeft: `2px solid ${accent}${f.is_final ? '' : '60'}`,
+                      borderRadius: '4px',
+                      px: 1,
+                      py: 0.5,
+                      opacity: f.is_final ? 1 : 0.7,
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.7, mb: 0.2 }}>
+                      <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: accent, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {isInterviewer ? 'Interviewer' : 'Candidate'}
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.55rem', color: DARK_TEXT_MUTED }}>
+                        {formatTime(f.timestamp)}
+                      </Typography>
+                      {!f.is_final && (
+                        <Typography sx={{ fontSize: '0.55rem', color: DARK_TEXT_MUTED, fontStyle: 'italic' }}>
+                          (typing...)
+                        </Typography>
+                      )}
+                    </Box>
+                    <Typography sx={{ fontSize: '0.75rem', color: DARK_TEXT, lineHeight: 1.4 }}>
+                      {f.text}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 1.5 }}>
+              <Box sx={{ width: 40, height: 40, borderRadius: '12px', bgcolor: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <VoiceIcon sx={{ fontSize: 18, color: DARK_TEXT_MUTED }} />
+              </Box>
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography sx={{ fontSize: '0.8rem', fontWeight: 500, color: DARK_TEXT, mb: 0.3 }}>No transcript yet</Typography>
+                <Typography sx={{ fontSize: '0.7rem', color: DARK_TEXT_SECONDARY }}>
+                  {transcriptionOn ? 'Listening — speak to see transcription' : 'Turn on Transcription to begin capturing voice'}
+                </Typography>
               </Box>
             </Box>
           )}
