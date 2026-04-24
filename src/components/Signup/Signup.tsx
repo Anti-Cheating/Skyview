@@ -281,7 +281,7 @@ export default function Signup() {
             color: TOKENS.brand,
             textDecoration: 'none',
             fontWeight: 600,
-            '&:hover': { textDecoration: 'underline' },
+            '&:hover': { opacity: 0.75 },
           }}
         >
           Sign in

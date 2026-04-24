@@ -56,6 +56,38 @@ export class AuthService {
     throw new Error(response.message || 'Failed to generate desktop code');
   }
 
+  /**
+   * Kick off the forgot-password flow. Server always returns 200 with
+   * a generic message regardless of whether the email is on file —
+   * we don't leak account existence. The frontend just shows "check
+   * your inbox" no matter what.
+   */
+  static async requestPasswordReset(email: string): Promise<string> {
+    const response = await ApiService.post<{ message?: string }>(
+      '/auth/forgot-password',
+      { email },
+    );
+    return (
+      response.message ||
+      'If an account exists for that email, a reset link has been sent.'
+    );
+  }
+
+  /**
+   * Consume a reset token and set a new password. Server invalidates
+   * every refresh token for the user on success, so active sessions
+   * are logged out.
+   */
+  static async resetPassword(token: string, password: string): Promise<void> {
+    const response = await ApiService.post<{ message?: string }>(
+      '/auth/reset-password',
+      { token, password },
+    );
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to reset password');
+    }
+  }
+
   static getAccessToken(): string | null {
     return localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
   }

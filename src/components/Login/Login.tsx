@@ -179,12 +179,32 @@ export default function Login() {
           }}
         />
 
+        {/* Right-aligned "Forgot password?" tucked directly under the
+            password field. Styled identically to the "Sign up" link in
+            the footer — brand green, fontWeight 600, underline on
+            hover — so all inline auth links on this page read the same. */}
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -0.5 }}>
+          <Link
+            component={RouterLink}
+            to="/forgot-password"
+            sx={{
+              fontSize: '0.813rem',
+              color: TOKENS.brand,
+              textDecoration: 'none',
+              fontWeight: 600,
+              '&:hover': { opacity: 0.75 },
+            }}
+          >
+            Forgot password?
+          </Link>
+        </Box>
+
         <ActionButton
           type="submit"
           loading={loading}
           disabled={disableSubmit}
           fullWidth
-          sx={{ mt: 0.5 }}
+          sx={{ mt: 1 }}
         >
           {loading ? 'Signing in…' : 'Sign in'}
         </ActionButton>
@@ -199,7 +219,7 @@ export default function Login() {
             color: TOKENS.brand,
             textDecoration: 'none',
             fontWeight: 600,
-            '&:hover': { textDecoration: 'underline' },
+            '&:hover': { opacity: 0.75 },
           }}
         >
           Sign up

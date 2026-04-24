@@ -6,6 +6,8 @@ import { SnackbarProvider } from './contexts/SnackbarContext';
 import { InterviewCacheProvider } from './contexts/InterviewCacheContext';
 import Login from './components/Login/Login';
 import Signup from './components/Signup/Signup';
+import ForgotPassword from './components/Auth/ForgotPassword';
+import ResetPassword from './components/Auth/ResetPassword';
 import Dashboard from './components/Dashboard/Dashboard';
 import AppLayout from './components/AppLayout/AppLayout';
 import AppDashboard from './components/AppLayout/AppDashboard';
@@ -105,6 +107,12 @@ function AppRoutes() {
       <Routes>
         <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
         <Route path="/signup" element={<AuthRoute><Signup /></AuthRoute>} />
+        {/* Password reset — both are usable by signed-out users. The
+            reset-password page still works when the user is signed in
+            (e.g. someone clicks the link on a still-authenticated tab)
+            — the server will log them out on success anyway. */}
+        <Route path="/forgot-password" element={<AuthRoute><ForgotPassword /></AuthRoute>} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         {/* Public invite acceptance — invitee may not have an account yet */}
         <Route path="/invite/:token" element={<InviteAcceptPage />} />
         {/* Falcon deep-link return page — simple "open desktop app" view */}
