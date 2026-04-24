@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -22,6 +22,7 @@ import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs, { Dayjs } from 'dayjs';
 import { InterviewService } from '../../services/interview.service';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSnackbar } from '../../contexts/SnackbarContext';
 import { FormField } from '../common/FormField';
 import { ActionButton } from '../common/ActionButton';
 import { INPUT_SX, LABEL_SX } from '../common/formTokens';
@@ -48,6 +49,12 @@ const DURATIONS = [
 export default function CreateInterviewPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { showSuccess, showError } = useSnackbar();
+  // If the URL carries an :id param (route `/interviews/:id/edit`) this
+  // page is in edit mode — the form prefills from the existing session
+  // and Save calls PATCH instead of POST.
+  const { id: editingId } = useParams<{ id: string }>();
+  const isEditMode = !!editingId;
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [candidateFirstName, setCandidateFirstName] = useState('');
@@ -63,6 +70,52 @@ export default function CreateInterviewPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Prefill the form from an existing session when the URL says edit.
+  // We deliberately don't let the candidate's email be changed here —
+  // changing participant identity after the fact is a separate concern
+  // (re-invite flow) — so the email field just renders disabled below.
+  useEffect(() => {
+    if (!editingId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await InterviewService.getById(editingId);
+        if (cancelled) return;
+        if (!resp.success || !resp.data) {
+          setError(resp.message || 'Failed to load interview');
+          return;
+        }
+        const s = resp.data;
+        setTitle(s.title || '');
+        setDescription(s.description || '');
+        const start = dayjs(s.scheduled_start_at);
+        const end = dayjs(s.scheduled_end_at);
+        setStartDateTime(start.isValid() ? start : null);
+        if (start.isValid() && end.isValid()) {
+          setDuration(Math.max(15, end.diff(start, 'minute')));
+        }
+        setInterviewType((s.interview_type as InterviewType) || 'application');
+        if (s.provider) setProvider(s.provider);
+        if (s.provider_metadata?.join_url) {
+          setMeetingLink(String(s.provider_metadata.join_url));
+        } else if ((s as any).meeting_link) {
+          setMeetingLink(String((s as any).meeting_link));
+        }
+        const candidateParticipant = s.interview_session_participants?.find(
+          (p) => p.candidate_id && p.candidate
+        );
+        if (candidateParticipant?.candidate) {
+          setCandidateFirstName(candidateParticipant.candidate.first_name || '');
+          setCandidateLastName(candidateParticipant.candidate.last_name || '');
+          setCandidateEmail(candidateParticipant.candidate.email || '');
+        }
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message || 'Failed to load interview');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [editingId]);
 
   // Auto-clear the error banner the moment the user edits any field —
   // no need for a manual dismiss button (the Alert's `onClose` X was
@@ -87,10 +140,14 @@ export default function CreateInterviewPage() {
   const handleSubmit = async () => {
     if (!title.trim()) { setError('Interview title is required'); return; }
     if (title.trim().length > 255) { setError('Title must be 255 characters or less'); return; }
-    if (!candidateFirstName.trim()) { setError('Candidate first name is required'); return; }
-    if (!candidateLastName.trim()) { setError('Candidate last name is required'); return; }
-    if (!candidateEmail.trim() || !candidateEmail.includes('@')) {
-      setError('Valid candidate email is required'); return;
+    // Candidate identity checks only apply to create — in edit mode
+    // these fields are disabled and the participant row is untouched.
+    if (!isEditMode) {
+      if (!candidateFirstName.trim()) { setError('Candidate first name is required'); return; }
+      if (!candidateLastName.trim()) { setError('Candidate last name is required'); return; }
+      if (!candidateEmail.trim() || !candidateEmail.includes('@')) {
+        setError('Valid candidate email is required'); return;
+      }
     }
     if (!startDateTime || !startDateTime.isValid()) {
       setError('Valid start date and time are required'); return;
@@ -116,34 +173,54 @@ export default function CreateInterviewPage() {
       const startAt = startDateTime.toDate();
       const endAt = new Date(startAt.getTime() + duration * 60 * 1000);
 
-      const response = await InterviewService.createInterview({
+      // Edit vs create. In edit mode we skip participant rewrites — those
+      // are out of scope here, and the server superRefine would reject
+      // a PATCH that tries to change identity fields on meeting_link for
+      // an application-type session.
+      const basePayload = {
         title: title.trim(),
         description: description.trim() || null,
         scheduled_start_at: startAt.toISOString(),
         scheduled_end_at: endAt.toISOString(),
-        status: 'SCHEDULED',
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         interview_type: interviewType,
         provider: interviewType === 'application' ? provider : null,
         meeting_link: interviewType === 'extension' ? meetingLink.trim() : null,
-        interview_session_participants: [
-          {
-            candidate_email: candidateEmail.trim().toLowerCase(),
-            candidate_first_name: candidateFirstName.trim(),
-            candidate_last_name: candidateLastName.trim(),
-          },
-          ...(user?.email ? [{ interviewer_email: user.email }] : []),
-        ],
-      });
+      } as const;
+
+      const response = isEditMode && editingId
+        ? await InterviewService.update(editingId, basePayload)
+        : await InterviewService.createInterview({
+            ...basePayload,
+            status: 'SCHEDULED',
+            interview_session_participants: [
+              {
+                candidate_email: candidateEmail.trim().toLowerCase(),
+                candidate_first_name: candidateFirstName.trim(),
+                candidate_last_name: candidateLastName.trim(),
+              },
+              ...(user?.email ? [{ interviewer_email: user.email }] : []),
+            ],
+          });
 
       if (response.success) {
         setSuccess(true);
+        const savedTitle = (response.data?.title || title.trim()).trim();
+        if (isEditMode) {
+          showSuccess(`Interview "${savedTitle}" updated`);
+        } else {
+          showSuccess(`Interview "${savedTitle}" scheduled`);
+        }
         setTimeout(() => navigate('/interviews'), 1500);
       } else {
-        setError(response.message || 'Failed to create interview');
+        const msg = response.message || (isEditMode ? 'Failed to update interview' : 'Failed to create interview');
+        setError(msg);
+        showError(msg);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to create interview. Please try again.');
+      const msg = err.message || (isEditMode ? 'Failed to update interview. Please try again.' : 'Failed to create interview. Please try again.');
+      setError(msg);
+      showError(msg);
     } finally {
       setLoading(false);
     }
@@ -165,10 +242,10 @@ export default function CreateInterviewPage() {
                 mb: 0.5,
               }}
             >
-              New Interview
+              {isEditMode ? 'Edit Interview' : 'New Interview'}
             </Typography>
             <Typography variant="body2" sx={{ color: '#6B7280', fontSize: { xs: '0.75rem', md: '0.875rem' } }}>
-              Schedule a meeting and invite a candidate
+              {isEditMode ? 'Update the interview details' : 'Schedule a meeting and invite a candidate'}
             </Typography>
           </Box>
         </Box>
@@ -209,11 +286,10 @@ export default function CreateInterviewPage() {
           }}
         >
           <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {success && (
-              <Alert severity="success" sx={{ borderRadius: '10px' }}>
-                Interview created successfully! Redirecting...
-              </Alert>
-            )}
+            {/* Success goes only to the top-right toast — no inline
+                duplicate. Error stays inline too so a user filling a
+                long form can scroll back to see why submit failed
+                instead of relying on the auto-hiding toast alone. */}
             {error && (
               <Alert severity="error" sx={{ borderRadius: '10px' }}>
                 {error}
@@ -248,7 +324,7 @@ export default function CreateInterviewPage() {
                 placeholder="John"
                 value={candidateFirstName}
                 onChange={(e) => setCandidateFirstName(e.target.value)}
-                disabled={loading || success}
+                disabled={loading || success || isEditMode}
               />
               <FormField
                 label="Candidate Last Name"
@@ -256,7 +332,7 @@ export default function CreateInterviewPage() {
                 placeholder="Smith"
                 value={candidateLastName}
                 onChange={(e) => setCandidateLastName(e.target.value)}
-                disabled={loading || success}
+                disabled={loading || success || isEditMode}
               />
               <FormField
                 label="Candidate Email"
@@ -265,7 +341,8 @@ export default function CreateInterviewPage() {
                 type="email"
                 value={candidateEmail}
                 onChange={(e) => setCandidateEmail(e.target.value)}
-                disabled={loading || success}
+                disabled={loading || success || isEditMode}
+                helperText={isEditMode ? 'Candidate identity is fixed after creation.' : undefined}
               />
             </Box>
 
@@ -435,7 +512,9 @@ export default function CreateInterviewPage() {
               loading={loading}
               disabled={success}
             >
-              {loading ? 'Creating...' : 'Create Interview'}
+              {loading
+                ? (isEditMode ? 'Saving...' : 'Creating...')
+                : (isEditMode ? 'Save Changes' : 'Create Interview')}
             </ActionButton>
           </Box>
         </Box>

@@ -52,7 +52,7 @@ export const ActionButton = forwardRef<HTMLButtonElement, ActionButtonProps>(
         startIcon={
           loading ? (
             <CircularProgress
-              size={14}
+              size={16}
               thickness={5}
               sx={{ color: variant === 'primary' ? '#FFFFFF' : 'inherit' }}
             />

@@ -15,6 +15,7 @@ import MonitoringView from './components/Monitoring/MonitoringView';
 import CandidateJoinPage from './components/AppLayout/CandidateJoinPage';
 import TeamPage from './components/Team/TeamPage';
 import InviteAcceptPage from './components/Team/InviteAcceptPage';
+import { isCompanyManagerRole } from './config/constants';
 
 /**
  * Detects if Skyview was opened from Falcon (via ?src=falcon param)
@@ -68,6 +69,22 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Role guard — redirects non-manager users away from pages that
+ * require Owner / Admin / System Admin privileges (e.g. /team).
+ * Belt-and-suspenders with the server's `requireRole` middleware: the
+ * server is authoritative, but we don't want to let a Member even reach
+ * the page URL by typing it manually.
+ */
+function CompanyManagerRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <LoadingSpinner fullScreen message="Loading..." />;
+  if (!isCompanyManagerRole(user?.role)) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+}
+
+/**
  * Auth route — redirects away from login/signup if already authenticated.
  * Honors ?returnTo= so PrivateRoute → /login → original destination works.
  */
@@ -97,9 +114,10 @@ function AppRoutes() {
           <Route index element={<AppDashboard />} />
           <Route path="interviews" element={<AppInterviewList />} />
           <Route path="interviews/new" element={<CreateInterviewPage />} />
+          <Route path="interviews/:id/edit" element={<CreateInterviewPage />} />
           <Route path="interviews/:id/join" element={<CandidateJoinPage />} />
           <Route path="interviews/:id/monitor" element={<MonitoringView />} />
-          <Route path="team" element={<TeamPage />} />
+          <Route path="team" element={<CompanyManagerRoute><TeamPage /></CompanyManagerRoute>} />
         </Route>
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

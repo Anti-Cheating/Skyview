@@ -24,19 +24,31 @@ import {
   Work as WorkIcon,
   Info as InfoIcon,
   AccessTime as AccessTimeIcon,
+  Edit as EditIcon,
+  DeleteOutline as DeleteIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import type { InterviewSession } from '../../types/interview.types';
-import { USER_ROLES, isStaffRole } from '../../config/constants';
+import { USER_ROLES, isStaffRole, isCompanyManagerRole } from '../../config/constants';
 
 interface AppInterviewCardProps {
   interview: InterviewSession;
   userRole: string;
   onJoin?: (interview: InterviewSession) => void;
+  onEdit?: (interview: InterviewSession) => void;
+  onDelete?: (interview: InterviewSession) => void;
 }
 
-export default function AppInterviewCard({ interview, userRole, onJoin }: AppInterviewCardProps) {
+export default function AppInterviewCard({ interview, userRole, onJoin, onEdit, onDelete }: AppInterviewCardProps) {
   const navigate = useNavigate();
+  // Role gates for the card's row actions. Edit is allowed for any staff
+  // (Owner/Admin/Member); Delete is reserved for Owner/Admin/SysAdmin
+  // — mirrors Cortex's `ROLE_GROUPS.Staff` and `CompanyManager` guards.
+  // We also hide both once the session is ENDED — there's nothing useful
+  // to edit on a finished interview, and deleting completed sessions is
+  // destructive audit-trail loss we prefer to avoid from this surface.
+  const canEdit = isStaffRole(userRole) && interview.status !== 'ENDED' && !!onEdit;
+  const canDelete = isCompanyManagerRole(userRole) && !!onDelete;
   // Format date and time
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -256,6 +268,48 @@ export default function AppInterviewCard({ interview, userRole, onJoin }: AppInt
                     onClick={(e) => e.stopPropagation()}
                   >
                     <InfoIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {canEdit && (
+                <Tooltip title="Edit interview" arrow placement="top">
+                  <IconButton
+                    size="small"
+                    sx={{
+                      padding: '4px',
+                      color: '#6B7280',
+                      '&:hover': {
+                        bgcolor: 'rgba(59, 130, 246, 0.08)',
+                        color: '#3B82F6',
+                      },
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit?.(interview);
+                    }}
+                  >
+                    <EditIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {canDelete && (
+                <Tooltip title="Delete interview" arrow placement="top">
+                  <IconButton
+                    size="small"
+                    sx={{
+                      padding: '4px',
+                      color: '#6B7280',
+                      '&:hover': {
+                        bgcolor: 'rgba(239, 68, 68, 0.08)',
+                        color: '#EF4444',
+                      },
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete?.(interview);
+                    }}
+                  >
+                    <DeleteIcon sx={{ fontSize: 18 }} />
                   </IconButton>
                 </Tooltip>
               )}

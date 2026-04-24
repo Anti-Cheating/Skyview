@@ -8,7 +8,7 @@ import { Sidebar } from '../layout/Sidebar';
 import type { LogoConfig, NavItem, ProfileConfig } from '../layout/sidebar.types';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserDisplayName } from '../../utils/user.utils';
-import { USER_ROLES } from '../../config/constants';
+import { USER_ROLES, isCompanyManagerRole } from '../../config/constants';
 
 const DRAWER_WIDTH = 280;
 
@@ -33,18 +33,16 @@ export default function AppLayout() {
   };
 
   // Role-aware primary nav. Candidates get a minimal nav (their dashboard
-  // + scheduled interviews). Staff users (Owner / Admin / Member, plus
-  // legacy Interviewer during migration windows) additionally see Team.
-  // The Team page itself is further gated inside TeamPage.tsx so only
-  // Owner / Admin actually see management controls; Members hitting /team
-  // are bounced with an info message.
+  // + scheduled interviews). Only Owners / Admins / System Admins see the
+  // Team tab — Members can't manage the team, so showing the tab to them
+  // just leads to an info-only page. The route itself is also guarded in
+  // App.tsx so a Member manually typing /team gets redirected.
   const sidebarItems: NavItem[] = (() => {
     const shared: NavItem[] = [
       { id: 'dashboard',  label: 'Dashboard',  iconName: 'Dashboard',  route: '/',           badge: null },
       { id: 'interviews', label: 'Interviews', iconName: 'Interviews', route: '/interviews', badge: null },
     ];
-    const isCandidate = userRole === USER_ROLES.CANDIDATE;
-    if (!isCandidate) {
+    if (isCompanyManagerRole(userRole)) {
       shared.push({ id: 'team', label: 'Team', iconName: 'Person', route: '/team', badge: null });
     }
     return shared;

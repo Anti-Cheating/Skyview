@@ -21,9 +21,27 @@ export const STAFF_ROLES: readonly string[] = [
   USER_ROLES.SYSTEM_ADMIN,
 ];
 
+/**
+ * Staff who can manage other staff or destructive ops — Owners + Admins
+ * (+ Trueyy System Admin). Members are staff but cannot invite people,
+ * change roles, delete the company, or delete interviews. Mirrors
+ * Cortex's `ROLE_GROUPS.CompanyManager`.
+ */
+export const COMPANY_MANAGER_ROLES: readonly string[] = [
+  USER_ROLES.OWNER,
+  USER_ROLES.ADMIN,
+  USER_ROLES.SYSTEM_ADMIN,
+];
+
 /** True for Owner/Admin/Member/System Admin. */
 export function isStaffRole(role?: string | null): boolean {
   return !!role && STAFF_ROLES.includes(role);
+}
+
+/** True only for Owner / Admin / System Admin — used to gate destructive
+ *  actions (delete interview, invite team, change roles). */
+export function isCompanyManagerRole(role?: string | null): boolean {
+  return !!role && COMPANY_MANAGER_ROLES.includes(role);
 }
 
 // Storage Keys

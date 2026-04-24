@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 import { Snackbar, Alert, AlertColor } from '@mui/material';
+import { TOKENS } from '../theme';
 
 interface SnackbarContextType {
   showSnackbar: (message: string, severity?: AlertColor) => void;
@@ -36,21 +37,32 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
         open={open}
         autoHideDuration={6000}
         onClose={handleClose}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
+        {/* Sourced from TOKENS so every success/error surface in the app
+            shares the same palette. Text is always white regardless of
+            severity — keeps the snackbar visually uniform across success,
+            error, warning, info. */}
         <Alert
           onClose={handleClose}
           severity={severity}
           variant="filled"
           sx={{
             width: '100%',
-            '& .MuiAlert-icon': { color: '#FFFFFF' },
-            '& .MuiAlert-message': { color: '#FFFFFF', fontWeight: 500 },
             bgcolor:
-              severity === 'error' ? '#D32F2F'
-              : severity === 'success' ? '#2E7D32'
-              : severity === 'warning' ? '#ED6C02'
-              : '#1976D2',
+              severity === 'error' ? TOKENS.error
+              : severity === 'success' ? TOKENS.brand
+              : severity === 'warning' ? TOKENS.warning
+              : '#3B82F6',
+            color: '#FFFFFF',
+            '& .MuiAlert-icon': { color: '#FFFFFF' },
+            '& .MuiAlert-message': {
+              color: '#FFFFFF',
+              fontWeight: 600,
+            },
+            '& .MuiAlert-action .MuiIconButton-root': {
+              color: '#FFFFFF',
+            },
           }}
         >
           {message}

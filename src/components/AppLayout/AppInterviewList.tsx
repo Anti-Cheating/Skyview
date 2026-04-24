@@ -11,6 +11,13 @@ import {
   Stack,
   Chip,
   useTheme,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
+  CircularProgress,
 } from '@mui/material';
 import {
   EventBusy as EventBusyIcon,
@@ -46,7 +53,7 @@ const ITEMS_PER_PAGE = 10;
 
 export default function AppInterviewList() {
   const { user } = useAuth();
-  const { showError } = useSnackbar();
+  const { showError, showSuccess } = useSnackbar();
   const theme = useTheme();
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
@@ -67,6 +74,40 @@ export default function AppInterviewList() {
 
   const userRole = user?.role || USER_ROLES.CANDIDATE;
   const isInterviewer = isStaffRole(userRole);
+
+  // Delete-confirmation dialog state. We block clicks until the user
+  // says yes (destructive action + visible to the whole company).
+  const [pendingDelete, setPendingDelete] = useState<InterviewSession | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleEditInterview = (interview: InterviewSession) => {
+    navigate(`/interviews/${interview.id}/edit`);
+  };
+
+  const handleDeleteInterview = (interview: InterviewSession) => {
+    setPendingDelete(interview);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      const resp = await InterviewService.remove(pendingDelete.id);
+      if (resp.success) {
+        showSuccess(`"${pendingDelete.title}" deleted`);
+        setPendingDelete(null);
+        // Force the cached list to refetch so the card disappears.
+        upcomingCache.refresh();
+        pastCache.refresh();
+      } else {
+        showError(resp.message || 'Failed to delete interview');
+      }
+    } catch (err: any) {
+      showError(err?.data?.error || err?.message || 'Failed to delete interview');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // Resolved list shown for the active tab — prefer the explicit paged
   // result when the user has navigated past page 1, otherwise fall back
@@ -235,7 +276,13 @@ export default function AppInterviewList() {
           <>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2.5, mb: 3 }}>
               {upcomingInterviews.map((interview) => (
-                <AppInterviewCard key={interview.id} interview={interview} userRole={userRole} />
+                <AppInterviewCard
+                  key={interview.id}
+                  interview={interview}
+                  userRole={userRole}
+                  onEdit={handleEditInterview}
+                  onDelete={handleDeleteInterview}
+                />
               ))}
             </Box>
             {(upcomingHasMore || upcomingPage > 1) && (
@@ -284,7 +331,13 @@ export default function AppInterviewList() {
           <>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2.5, mb: 3 }}>
               {pastInterviews.map((interview) => (
-                <AppInterviewCard key={interview.id} interview={interview} userRole={userRole} />
+                <AppInterviewCard
+                  key={interview.id}
+                  interview={interview}
+                  userRole={userRole}
+                  onEdit={handleEditInterview}
+                  onDelete={handleDeleteInterview}
+                />
               ))}
             </Box>
             {(pastHasMore || pastPage > 1) && (
@@ -319,6 +372,50 @@ export default function AppInterviewList() {
           </>
         )}
       </TabPanel>
+
+      {/* Delete confirmation — only reachable when the card's Delete
+          icon is visible (already role-gated), but we still ask to
+          prevent accidental destructive clicks. */}
+      <Dialog
+        open={!!pendingDelete}
+        onClose={() => !deleting && setPendingDelete(null)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ fontSize: '1rem', fontWeight: 700 }}>
+          Delete interview?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ fontSize: '0.875rem', color: '#4B5563' }}>
+            This will permanently delete <strong>{pendingDelete?.title}</strong> and
+            any monitoring data associated with it. This action can't be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setPendingDelete(null)}
+            disabled={deleting}
+            sx={{ textTransform: 'none', color: '#6B7280' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmDelete}
+            disabled={deleting}
+            variant="contained"
+            color="error"
+            startIcon={
+              deleting ? (
+                <CircularProgress size={16} thickness={5} sx={{ color: '#FFFFFF' }} />
+              ) : undefined
+            }
+            sx={{ textTransform: 'none', boxShadow: 'none' }}
+          >
+            {deleting ? 'Deleting…' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -42,7 +42,10 @@ export const TOKENS = {
 
   // Status
   success: '#059669',
-  error: '#DC2626',
+  // Softer red than red-600 (#DC2626) — reads clearly as "error" without
+  // feeling like a critical alarm. Used by the snackbar, filled Alerts,
+  // error buttons, and any TOKENS.error consumer.
+  error: '#EF4444',
   errorLight: '#F87171',
   warning: '#FACC15',
 } as const;
@@ -71,9 +74,12 @@ const colors = {
     dark: '#D9BC05',
   },
   error: {
-    main: TOKENS.errorLight,
-    light: '#F89191',
-    dark: '#D85151',
+    // `main` matches TOKENS.error so every MUI error surface (filled
+    // Alerts, Buttons color="error", IconButtons, chips) shares the
+    // same canonical red used by the snackbar.
+    main: TOKENS.error,
+    light: TOKENS.errorLight,
+    dark: '#B91C1C',
   },
   info: {
     main: '#3b82f6',

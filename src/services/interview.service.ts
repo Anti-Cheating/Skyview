@@ -135,6 +135,30 @@ export class InterviewService {
     return { success: response.success, data: response.data, message: response.message };
   }
 
+  /** Update an existing interview (Staff only — server enforces). */
+  static async update(
+    sessionId: string,
+    input: Partial<CreateInterviewInput>
+  ): Promise<ApiResponse<InterviewSession>> {
+    const response = await ApiService.patch<InterviewSession>(
+      `/interview-sessions/${sessionId}`,
+      input,
+      undefined,
+      'auth'
+    );
+    return { success: response.success, data: response.data, message: response.message };
+  }
+
+  /** Delete an interview (Owner / Admin / System Admin only — server enforces). */
+  static async remove(sessionId: string): Promise<ApiResponse<{ ok?: true }>> {
+    const response = await ApiService.delete<{ ok?: true }>(
+      `/interview-sessions/${sessionId}`,
+      undefined,
+      'auth'
+    );
+    return { success: response.success, data: response.data, message: response.message };
+  }
+
   static async heartbeat(
     sessionId: string
   ): Promise<ApiResponse<{ status?: string }>> {
