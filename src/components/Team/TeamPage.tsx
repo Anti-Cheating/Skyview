@@ -31,6 +31,7 @@ import {
   Add as AddIcon,
   MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
+import { CircularProgress } from '@mui/material';
 import { PageTitle, Caption, Secondary } from '../layout/Typography';
 import { DataTable, type DataTableColumn } from '../common/DataTable';
 import { FormField } from '../common/FormField';
@@ -164,34 +165,54 @@ export default function TeamPage() {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [menuInvite, setMenuInvite] = useState<PendingInvite | null>(null);
 
+  // Per-row busy state — the id of the invite whose revoke/resend call is
+  // currently in flight. Lets us swap the 3-dot icon for a spinner and
+  // disable the menu items until it resolves.
+  const [busyInviteId, setBusyInviteId] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<'revoke' | 'resend' | null>(null);
+
+  // Single-list refreshers so tab switches only fetch the list being
+  // shown. `refresh()` (both) is still used on initial mount and after
+  // mutations that can change either list (invite created → pending
+  // grows; accept happens elsewhere → pending shrinks + members grows).
+  const refreshInvites = useCallback(async () => {
+    if (!companyId || !canManage) return;
+    try {
+      const resp = await InvitesService.list(companyId);
+      if (resp.success && Array.isArray(resp.data)) {
+        setPending(resp.data);
+      } else if (resp.message) {
+        setError(resp.message);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load invites');
+    }
+  }, [companyId, canManage]);
+
+  const refreshMembers = useCallback(async () => {
+    if (!companyId || !canManage) return;
+    try {
+      const resp = await InvitesService.listMembers(companyId);
+      if (resp.success && Array.isArray(resp.data)) {
+        setMembers(resp.data);
+      } else if (resp.message) {
+        setError(resp.message);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load team members');
+    }
+  }, [companyId, canManage]);
+
   const refresh = useCallback(async () => {
     if (!companyId || !canManage) return;
     setLoading(true);
     setError(null);
     try {
-      const [invitesResp, membersResp] = await Promise.all([
-        InvitesService.list(companyId),
-        InvitesService.listMembers(companyId),
-      ]);
-
-      if (invitesResp.success && Array.isArray(invitesResp.data)) {
-        setPending(invitesResp.data);
-      } else {
-        setError(invitesResp.message || 'Failed to load invites');
-      }
-
-      if (membersResp.success && Array.isArray(membersResp.data)) {
-        setMembers(membersResp.data);
-      } else if (!error) {
-        setError(membersResp.message || 'Failed to load team members');
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load team');
+      await Promise.all([refreshInvites(), refreshMembers()]);
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, canManage]);
+  }, [companyId, canManage, refreshInvites, refreshMembers]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -229,6 +250,8 @@ export default function TeamPage() {
   };
 
   const handleRevoke = async (invite: PendingInvite) => {
+    setBusyInviteId(invite.id);
+    setBusyAction('revoke');
     try {
       const resp = await InvitesService.revoke(invite.id);
       if (resp.success) {
@@ -239,10 +262,15 @@ export default function TeamPage() {
       }
     } catch (err: any) {
       showError(err?.message || 'Failed to revoke');
+    } finally {
+      setBusyInviteId(null);
+      setBusyAction(null);
     }
   };
 
   const handleResend = async (invite: PendingInvite) => {
+    setBusyInviteId(invite.id);
+    setBusyAction('resend');
     try {
       const resp = await InvitesService.resend(invite.id);
       if (resp.success) {
@@ -252,6 +280,9 @@ export default function TeamPage() {
       }
     } catch (err: any) {
       showError(err?.message || 'Failed to resend');
+    } finally {
+      setBusyInviteId(null);
+      setBusyAction(null);
     }
   };
 
@@ -423,19 +454,35 @@ export default function TeamPage() {
       header: '',
       align: 'right',
       width: 48,
+      // When a revoke/resend is in flight for this row we swap in a
+      // spinner so the row doesn't look idle while the network request
+      // is running. showOnHover is intentionally dropped for busy rows
+      // so the spinner stays visible even if the user's cursor drifts
+      // off the row.
       showOnHover: true,
-      render: (i) => (
-        <IconButton
-          size="small"
-          onClick={(e) => openRowMenu(e, i)}
-          aria-label="Row actions"
-          sx={{ color: TOKENS.textSecondary }}
-        >
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
-      ),
+      render: (i) => {
+        const isBusy = busyInviteId === i.id;
+        return (
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              if (isBusy) return;
+              openRowMenu(e, i);
+            }}
+            aria-label="Row actions"
+            disabled={isBusy}
+            sx={{ color: TOKENS.textSecondary }}
+          >
+            {isBusy ? (
+              <CircularProgress size={14} thickness={5} sx={{ color: TOKENS.brand }} />
+            ) : (
+              <MoreVertIcon fontSize="small" />
+            )}
+          </IconButton>
+        );
+      },
     },
-  ], []);
+  ], [busyInviteId]);
 
   // ── Render ──────────────────────────────────────────────────────────
 
@@ -468,7 +515,14 @@ export default function TeamPage() {
 
       <Tabs
         value={tab}
-        onChange={(_, v: TabValue) => setTab(v)}
+        onChange={(_, v: TabValue) => {
+          setTab(v);
+          // Refetch the list the user is switching INTO so tab clicks
+          // always show fresh data. The other tab's data is left alone
+          // until the user navigates back or a mutation touches it.
+          if (v === 'members') refreshMembers();
+          else refreshInvites();
+        }}
         sx={{
           mb: 2.5,
           minHeight: 36,
@@ -542,17 +596,30 @@ export default function TeamPage() {
             if (menuInvite) handleResend(menuInvite);
             closeRowMenu();
           }}
+          disabled={!!busyInviteId}
+          sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
         >
-          Resend email
+          {busyInviteId === menuInvite?.id && busyAction === 'resend' && (
+            <CircularProgress size={14} thickness={5} sx={{ color: TOKENS.brand }} />
+          )}
+          {busyInviteId === menuInvite?.id && busyAction === 'resend'
+            ? 'Resending…'
+            : 'Resend email'}
         </MenuItemMui>
         <MenuItemMui
           onClick={() => {
             if (menuInvite) handleRevoke(menuInvite);
             closeRowMenu();
           }}
-          sx={{ color: '#dc2626' }}
+          disabled={!!busyInviteId}
+          sx={{ color: TOKENS.error, display: 'flex', alignItems: 'center', gap: 1 }}
         >
-          Revoke invitation
+          {busyInviteId === menuInvite?.id && busyAction === 'revoke' && (
+            <CircularProgress size={14} thickness={5} sx={{ color: TOKENS.error }} />
+          )}
+          {busyInviteId === menuInvite?.id && busyAction === 'revoke'
+            ? 'Revoking…'
+            : 'Revoke invitation'}
         </MenuItemMui>
       </Menu>
 

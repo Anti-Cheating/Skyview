@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useInterviewList } from '../../contexts/InterviewCacheContext';
+import { useEffect, useState } from 'react';
+import { InterviewService } from '../../services/interview.service';
 import { useDelayedFlag } from '../../hooks/useDelayedFlag';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -87,14 +87,33 @@ export default function AppDashboard() {
   const theme = useTheme();
   const navigate = useNavigate();
 
-  // Both counts come from the shared interview cache. First visit: fetches
-  // and caches; returns from other tabs: render instantly from memory.
-  const upcomingCache = useInterviewList('upcoming');
-  const pastCache = useInterviewList('past');
-  const upcomingCount = upcomingCache.data?.length ?? 0;
-  const pastCount     = pastCache.data?.length ?? 0;
-  const loading       = upcomingCache.loading || pastCache.loading;
-  const showShimmer   = useDelayedFlag(loading, 250);
+  // Dedicated counts endpoint — one cheap query that returns
+  // `{ upcoming, past }` instead of shipping two 100-row lists just
+  // to read `.length`. Refetches on every dashboard mount so the
+  // numbers match whatever the user just did on /interviews.
+  const [upcomingCount, setUpcomingCount] = useState(0);
+  const [pastCount, setPastCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const resp = await InterviewService.getCounts();
+        if (cancelled) return;
+        if (resp.success && resp.data) {
+          setUpcomingCount(resp.data.upcoming ?? 0);
+          setPastCount(resp.data.past ?? 0);
+        }
+      } catch {/* snackbar handles failures elsewhere */}
+      finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+  const showShimmer = useDelayedFlag(loading, 250);
 
   // `helperInstalled` is a historical name kept because the dashboard
   // template UI still renders chips around it. It now reflects whether

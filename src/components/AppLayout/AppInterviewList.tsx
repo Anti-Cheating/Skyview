@@ -176,6 +176,11 @@ export default function AppInterviewList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabValue, upcomingPage, pastPage]);
 
+  // Note: no explicit mount-refresh useEffect here. `useInterviewList`
+  // already fetches on mount internally, so adding our own refresh()
+  // here would double-fire every open (2× per endpoint; 4× under
+  // React StrictMode in dev). Tab switch still triggers a refresh in
+  // handleTabChange below because the component doesn't unmount.
   const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
     // Reset the paged result on the tab we're leaving so switching back
@@ -183,9 +188,13 @@ export default function AppInterviewList() {
     if (newValue === 0) {
       setUpcomingPage(1);
       setPagedPast(null);
+      // Refetch the tab we're entering so switching tabs always feels
+      // live instead of relying on whatever was cached at mount.
+      upcomingCache.refresh();
     } else {
       setPastPage(1);
       setPagedUpcoming(null);
+      pastCache.refresh();
     }
   };
 

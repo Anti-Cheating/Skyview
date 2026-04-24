@@ -69,6 +69,19 @@ export class InterviewService {
     return { success: response.success, data: interviews, message: response.message };
   }
 
+  /**
+   * Lightweight counts for the dashboard. Avoids fetching full session
+   * objects just to read `.length`.
+   */
+  static async getCounts(): Promise<ApiResponse<{ upcoming: number; past: number }>> {
+    const response = await ApiService.get<{ upcoming: number; past: number }>(
+      '/interview-sessions/counts',
+      undefined,
+      'auth'
+    );
+    return { success: response.success, data: response.data, message: response.message };
+  }
+
   static async getById(sessionId: string): Promise<ApiResponse<InterviewSession>> {
     const response = await ApiService.get<InterviewSession>(
       `/interview-sessions/${sessionId}`,

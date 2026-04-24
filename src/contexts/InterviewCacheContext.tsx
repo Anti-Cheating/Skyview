@@ -1,21 +1,17 @@
 /**
- * InterviewCacheContext — in-memory cache for /upcoming and /past
- * interview lists, keyed per user id.
+ * useInterviewList — thin fetch hook for /interview-sessions/upcoming
+ * and /past.
  *
- * Behaviour:
- *   - First visit to a list page: fetches, caches, resolves normally.
- *   - Return visit: renders cached data immediately, then refetches in
- *     the background (stale-while-revalidate). The caller sees "loading
- *     = false" because there's data; the shimmer never flashes.
- *   - Cache TTL: 60s. After that, next read returns cache immediately
- *     but marks it stale so the refetch happens.
- *   - Logout / user change: cache is cleared (keyed on userId).
+ * Previously this module held an app-wide cache with a 60s TTL +
+ * stale-while-revalidate. That was removed — the product wants live
+ * data on every mount and every tab switch. The hook now fetches
+ * directly on mount and exposes `refresh()` for explicit re-fetches.
  *
- * Not a React Query replacement — just the minimum to make the two
- * list pages feel instant on repeated navigations.
+ * The `Provider` is kept as a no-op wrapper so App.tsx doesn't need
+ * to be touched; it can be dropped later if you like.
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { InterviewService } from '../services/interview.service';
 import { useAuth } from './AuthContext';
@@ -23,155 +19,70 @@ import type { InterviewSession } from '../types/interview.types';
 
 type When = 'upcoming' | 'past';
 
-interface CacheEntry {
-  data: InterviewSession[];
-  fetchedAt: number;
-  userId: string;
-}
-
 interface Snapshot {
-  /** Cached list; `null` when nothing has been fetched yet. */
+  /** Current list; `null` until the first fetch resolves. */
   data: InterviewSession[] | null;
-  /** True on the very first load when no cache exists. */
+  /** True while the first (cold) fetch is in flight. */
   loading: boolean;
-  /** True when a background refetch is running alongside stale data. */
+  /** True when a manual refresh is running alongside existing data. */
   refetching: boolean;
-  /** Force a refetch. */
+  /** Force a re-fetch. */
   refresh: () => Promise<void>;
 }
 
-interface ContextValue {
-  get: (when: When) => Snapshot;
+/** No-op wrapper — kept for backward compatibility with existing
+ *  imports in App.tsx. Holds no state of its own. */
+export function InterviewCacheProvider({ children }: { children: ReactNode }) {
+  return <>{children}</>;
 }
 
-const STALE_MS = 60_000;
-const InterviewCacheContext = createContext<ContextValue | null>(null);
-
-export function InterviewCacheProvider({ children }: { children: ReactNode }) {
+export function useInterviewList(when: When): Snapshot {
   const { user } = useAuth();
   const userId = user?.id ?? null;
 
-  // One ref per list — used to store the cached response across renders
-  // without triggering extra renders on cache writes.
-  const cacheRef = useRef<Record<When, CacheEntry | null>>({
-    upcoming: null,
-    past: null,
-  });
-
-  // Timestamp of the last fetch ATTEMPT per list — success or failure.
-  // Prevents infinite retry loops when the server keeps returning errors
-  // (403 from a stale-role token, 500, offline, etc.): after any attempt
-  // the same STALE_MS debounce applies before we try again. Users can
-  // still trigger an immediate retry via the snapshot's `refresh()`.
-  const lastAttemptRef = useRef<Record<When, number>>({
-    upcoming: 0,
-    past: 0,
-  });
-
-  // Per-list visible state. `data` is what consumers render; changes to
-  // it cause the subscribed pages to re-render.
-  const [data, setData] = useState<Record<When, InterviewSession[] | null>>({
-    upcoming: null,
-    past: null,
-  });
-  const [loading, setLoading] = useState<Record<When, boolean>>({
-    upcoming: false,
-    past: false,
-  });
-  const [refetching, setRefetching] = useState<Record<When, boolean>>({
-    upcoming: false,
-    past: false,
-  });
-
-  // Drop everything when the user changes (login / logout / switch).
-  useEffect(() => {
-    cacheRef.current = { upcoming: null, past: null };
-    lastAttemptRef.current = { upcoming: 0, past: 0 };
-    setData({ upcoming: null, past: null });
-    setLoading({ upcoming: false, past: false });
-    setRefetching({ upcoming: false, past: false });
-  }, [userId]);
+  const [data, setData] = useState<InterviewSession[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [refetching, setRefetching] = useState(false);
+  // Track whether this hook instance has ever done a fetch — used so
+  // `refresh()` doesn't accidentally show the "first load" shimmer on
+  // later invocations.
+  const hasFetchedRef = useRef(false);
 
   const fetchList = useCallback(
-    async (when: When, mode: 'cold' | 'refresh') => {
+    async (mode: 'cold' | 'refresh') => {
       if (!userId) return;
-      // Record the attempt up-front — even if the request fails we don't
-      // want to loop-retry on every render (the old bug: a 403 storm).
-      lastAttemptRef.current[when] = Date.now();
-      if (mode === 'cold') {
-        setLoading((p) => ({ ...p, [when]: true }));
-      } else {
-        setRefetching((p) => ({ ...p, [when]: true }));
-      }
+      if (mode === 'cold') setLoading(true);
+      else setRefetching(true);
       try {
         const resp =
           when === 'upcoming'
             ? await InterviewService.getUpcoming(100, 0)
             : await InterviewService.getPast(100, 0);
-        const list = resp.data ?? [];
-        cacheRef.current[when] = {
-          data: list,
-          fetchedAt: Date.now(),
-          userId,
-        };
-        setData((p) => ({ ...p, [when]: list }));
+        setData(resp.data ?? []);
       } catch {
-        // Swallow — pages keep whatever they had. Surface errors via
-        // the Snackbar provider higher up if needed.
+        // Swallow — UI surfaces failures via snackbar / inline alert
+        // higher up. We deliberately don't clobber `data` on error so
+        // a transient failure keeps the last-known list visible.
       } finally {
-        if (mode === 'cold') {
-          setLoading((p) => ({ ...p, [when]: false }));
-        } else {
-          setRefetching((p) => ({ ...p, [when]: false }));
-        }
+        hasFetchedRef.current = true;
+        if (mode === 'cold') setLoading(false);
+        else setRefetching(false);
       }
     },
-    [userId]
+    [userId, when]
   );
 
-  const get = useCallback(
-    (when: When): Snapshot => {
-      const cached = cacheRef.current[when];
-      const cachedForThisUser = cached && cached.userId === userId;
-      const stale = cachedForThisUser && Date.now() - cached!.fetchedAt > STALE_MS;
-      // An attempt (success OR failure) within STALE_MS counts as "recent"
-      // — we don't fire another request during that window. This is what
-      // breaks the retry loop on a 403/500.
-      const recentAttempt = Date.now() - lastAttemptRef.current[when] < STALE_MS;
+  // Fetch on mount / when the user changes.
+  useEffect(() => {
+    if (!userId) {
+      setData(null);
+      hasFetchedRef.current = false;
+      return;
+    }
+    void fetchList(hasFetchedRef.current ? 'refresh' : 'cold');
+  }, [userId, fetchList]);
 
-      // Kick off initial or revalidation fetches lazily on first read —
-      // we don't want the provider to fetch both lists upfront if the
-      // user never visits them.
-      if (!cachedForThisUser && !loading[when] && !recentAttempt && userId) {
-        // fire-and-forget; the state update inside fetchList triggers rerender
-        void fetchList(when, 'cold');
-      } else if (stale && !refetching[when] && userId) {
-        void fetchList(when, 'refresh');
-      }
+  const refresh = useCallback(() => fetchList('refresh'), [fetchList]);
 
-      return {
-        data: data[when],
-        loading: loading[when] && data[when] === null,
-        refetching: refetching[when],
-        refresh: () => fetchList(when, 'refresh'),
-      };
-    },
-    [data, loading, refetching, fetchList, userId]
-  );
-
-  const value = useMemo(() => ({ get }), [get]);
-
-  return (
-    <InterviewCacheContext.Provider value={value}>
-      {children}
-    </InterviewCacheContext.Provider>
-  );
-}
-
-export function useInterviewList(when: When): Snapshot {
-  const ctx = useContext(InterviewCacheContext);
-  if (!ctx) {
-    throw new Error('useInterviewList must be used inside <InterviewCacheProvider>');
-  }
-  return ctx.get(when);
+  return { data, loading, refetching, refresh };
 }
