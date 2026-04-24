@@ -868,14 +868,21 @@ function TranscriptFeed({
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Anchor = when the session began. Used to format each bubble's
-  // timestamp as "[mm:ss] elapsed since session start" instead of wall-
-  // clock — matches the transcript download format and lets the reviewer
-  // scrub back to specific moments in the interview.
+  // timestamp as "[mm:ss] elapsed since session start". Falls back when
+  // the provided anchor is in the future — e.g., interviewer joined
+  // before the scheduled_start_at they told us to use — otherwise every
+  // offset would clamp to 00:00.
   const anchorMs = useMemo(() => {
-    if (sessionAnchorIso) return new Date(sessionAnchorIso).getTime();
-    if (fragments[0]?.timestamp)
-      return new Date(fragments[0].timestamp).getTime();
-    return Date.now();
+    const now = Date.now();
+    if (sessionAnchorIso) {
+      const t = new Date(sessionAnchorIso).getTime();
+      if (Number.isFinite(t) && t <= now) return t;
+    }
+    if (fragments[0]?.timestamp) {
+      const t = new Date(fragments[0].timestamp).getTime();
+      if (Number.isFinite(t)) return t;
+    }
+    return now;
   }, [sessionAnchorIso, fragments]);
 
   const formatOffset = useCallback(
@@ -960,9 +967,9 @@ function TranscriptFeed({
           from: { opacity: 0, transform: 'translateY(4px)' },
           to: { opacity: 1, transform: 'translateY(0)' },
         },
-        '@keyframes caretBlink': {
-          from: { opacity: 0.3 },
-          to: { opacity: 0.9 },
+        '@keyframes typingBounce': {
+          '0%, 60%, 100%': { transform: 'translateY(0)', opacity: 0.4 },
+          '30%': { transform: 'translateY(-3px)', opacity: 1 },
         },
       }}
     >
@@ -996,7 +1003,9 @@ function TranscriptFeed({
             sx={{
               display: 'flex',
               justifyContent: isInterviewer ? 'flex-end' : 'flex-start',
-              mt: isNewSpeaker ? 1 : 0.2,
+              // Generous space between different speakers, a comfortable
+              // line-gap between consecutive bubbles of the same speaker.
+              mt: isNewSpeaker ? 1.5 : 0.6,
               animation: 'bubbleIn 160ms ease-out',
             }}
           >
@@ -1062,15 +1071,29 @@ function TranscriptFeed({
                   {!f.is_final && (
                     <Box
                       component="span"
+                      aria-label="typing"
                       sx={{
-                        display: 'inline-block',
-                        width: '6px',
-                        ml: 0.3,
-                        color: bubbleTime,
-                        animation: 'caretBlink 900ms ease-in-out infinite alternate',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        ml: 0.6,
+                        verticalAlign: 'middle',
                       }}
                     >
-                      ▌
+                      {[0, 1, 2].map((idx) => (
+                        <Box
+                          key={idx}
+                          component="span"
+                          sx={{
+                            width: 4,
+                            height: 4,
+                            borderRadius: '50%',
+                            bgcolor: bubbleTime,
+                            animation: 'typingBounce 1.2s ease-in-out infinite',
+                            animationDelay: `${idx * 150}ms`,
+                          }}
+                        />
+                      ))}
                     </Box>
                   )}
                 </Typography>
