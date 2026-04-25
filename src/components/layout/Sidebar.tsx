@@ -22,6 +22,7 @@ import {
   ExitToApp as ExitIcon,
   VideoCall as VideoCallIcon,
 } from '@mui/icons-material';
+import { motion } from 'framer-motion';
 import { SidebarProps } from './sidebar.types';
 import { TruoyyLogo } from './TruoyyLogo';
 import { TOKENS } from '../../theme';
@@ -119,20 +120,24 @@ export function Sidebar({
   const itemPadding = density === 'compact' ? 0.75 : 1.25;
   const itemMinHeight = density === 'compact' ? 40 : 48;
 
-  // Single source of truth for row styling — active / hover / focus all
-  // share one visual language, tuned in one place.
+  // Single source of truth for row styling. The active *background* is
+  // intentionally left transparent here — a framer-motion `layoutId`
+  // pill renders behind the active item below and morphs between rows
+  // when activeId changes. Active text + icon colour stay; only the
+  // fill is owned by the pill.
   const rowSx = (isActive: boolean) => ({
+    position: 'relative' as const,
     borderRadius: 1.5,
     minHeight: itemMinHeight,
     px: itemPadding,
     py: 0.75,
     mb: 0.5,
-    bgcolor: isActive ? 'rgba(255,255,255,0.08)' : 'transparent',
+    bgcolor: 'transparent',
     color: isActive ? theme.palette.primary.main : '#FFFFFF',
     fontWeight: isActive ? 600 : 400,
-    transition: 'background-color 0.15s ease, color 0.15s ease',
+    transition: 'color 0.15s ease',
     '&:hover': {
-      bgcolor: isActive ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.05)',
+      bgcolor: isActive ? 'transparent' : 'rgba(255,255,255,0.05)',
     },
     '&:focus-visible': {
       outline: `2px solid ${theme.palette.primary.main}`,
@@ -142,9 +147,15 @@ export function Sidebar({
       color: isActive ? theme.palette.primary.main : '#FFFFFF',
       minWidth: 40,
       justifyContent: 'center',
+      position: 'relative',
+      zIndex: 1,
     },
     // Body-sized nav label — matches theme.typography.body1 (0.875rem).
     // `inherit` so fontWeight/color track the row's active state.
+    '& .MuiListItemText-root': {
+      position: 'relative',
+      zIndex: 1,
+    },
     '& .MuiListItemText-primary': {
       fontSize: (t: any) => t.typography.body1.fontSize,
       fontWeight: 'inherit',
@@ -171,12 +182,30 @@ export function Sidebar({
         aria-current={isActive ? 'page' : undefined}
         sx={rowSx(isActive)}
       >
+        {/* Sliding active pill — same `layoutId` across every active
+            instance, so framer-motion morphs the rectangle from the
+            previous active row to this one when activeId changes.
+            Sits at z-index 0 behind the icon + label (which are pushed
+            to z-index 1 in rowSx). */}
+        {isActive && (
+          <motion.div
+            layoutId="sidebar-active-pill"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: 12,
+              background: 'rgba(255, 255, 255, 0.10)',
+              zIndex: 0,
+            }}
+            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+          />
+        )}
         <ListItemIcon>
           <ItemIcon />
         </ListItemIcon>
         <ListItemText primary={item.label} />
         {hasBadge && (
-          <Badge badgeContent={item.badge} color="primary" max={99} sx={{ ml: 'auto', mr: 1 }} />
+          <Badge badgeContent={item.badge} color="primary" max={99} sx={{ ml: 'auto', mr: 1, position: 'relative', zIndex: 1 }} />
         )}
       </ListItemButton>
     );

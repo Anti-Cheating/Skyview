@@ -37,9 +37,18 @@ import {
   ChevronLeft,
   ChevronRight,
 } from '@mui/icons-material';
+import { AnimatePresence, motion } from 'framer-motion';
 import { type ReactNode } from 'react';
 import { Body, Caption } from '../layout/Typography';
 import { TOKENS } from '../../theme';
+
+// Motion-enhanced TableRow used for animating rows in/out when the
+// caller's filter / search / page changes. We deliberately don't apply
+// `layout` here — `<tr>` doesn't honour CSS transforms reliably across
+// browsers (`display: table-row` is the gotcha), so reorder animations
+// on tables get janky. The card-grid path in AppInterviewList uses
+// full layout animation since `<div>` transforms work fine.
+const MotionTableRow = motion.create(TableRow);
 
 export type ColumnAlign = 'left' | 'right' | 'center';
 
@@ -431,25 +440,36 @@ export function DataTable<TRow>({
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((row, index) => (
-                <TableRow key={rowKey(row, index)} sx={rowSx}>
-                  {columns.map((col, cIdx) => (
-                    <TableCell
-                      key={col.key}
-                      align={col.align ?? 'left'}
-                      sx={bodyCellSx(col, cIdx, index === rows.length - 1)}
-                    >
-                      {col.showOnHover ? (
-                        <Box component="span" className="row-action">
-                          {col.render(row, index)}
-                        </Box>
-                      ) : (
-                        col.render(row, index)
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              <AnimatePresence initial={false}>
+                {rows.map((row, index) => (
+                  <MotionTableRow
+                    key={rowKey(row, index)}
+                    sx={rowSx}
+                    // Fade-only enter/exit. Skipping layout transforms
+                    // on table rows on purpose (see import comment).
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                  >
+                    {columns.map((col, cIdx) => (
+                      <TableCell
+                        key={col.key}
+                        align={col.align ?? 'left'}
+                        sx={bodyCellSx(col, cIdx, index === rows.length - 1)}
+                      >
+                        {col.showOnHover ? (
+                          <Box component="span" className="row-action">
+                            {col.render(row, index)}
+                          </Box>
+                        ) : (
+                          col.render(row, index)
+                        )}
+                      </TableCell>
+                    ))}
+                  </MotionTableRow>
+                ))}
+              </AnimatePresence>
             )}
           </TableBody>
         </Table>

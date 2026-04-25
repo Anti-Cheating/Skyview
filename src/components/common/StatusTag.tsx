@@ -78,6 +78,11 @@ export function StatusTag({ status }: { status: SessionStatus }) {
         lineHeight: 1,
         letterSpacing: '0.01em',
         whiteSpace: 'nowrap',
+        // Smooth real-time transitions when a session flips state
+        // (SCHEDULED → ACTIVE, ACTIVE → COMPLETED). 200ms is short
+        // enough not to feel slow but long enough to read as a state
+        // change rather than a flash.
+        transition: 'background-color 200ms ease, border-color 200ms ease, color 200ms ease',
       }}
     >
       {prettyLabel(status)}

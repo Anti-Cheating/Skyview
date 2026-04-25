@@ -38,6 +38,7 @@ import {
   Add as AddIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
+import { AnimatePresence, motion } from 'framer-motion';
 import AppInterviewCard from './AppInterviewCard';
 import InterviewTable from './InterviewTable';
 import { InterviewService, type InterviewListPill } from '../../services/interview.service';
@@ -309,6 +310,18 @@ export default function AppInterviewList() {
       ) : (
         <>
           {renderToolbar()}
+          {/* Pill change = wholesale slide-up + fade on the content
+              region below. Keyed only by `pill` (not `search`) so
+              typing in the search box doesn't trigger a full unmount —
+              search updates flow through the per-card / per-row
+              animations inside, which give richer "what just changed"
+              feedback. */}
+          <motion.div
+            key={pill}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+          >
           {items.length === 0 ? (
             <EmptyState />
           ) : useTableView ? (
@@ -331,16 +344,35 @@ export default function AppInterviewList() {
             />
           ) : (
             <>
+              {/* Card grid with framer-motion layout animations. When the
+                  status pill or search changes, items animate to their
+                  new positions instead of snapping. `popLayout` mode
+                  removes the exiting card from layout calculations
+                  immediately so remaining cards reflow smoothly. */}
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2.5, mb: 3 }}>
-                {items.map((interview) => (
-                  <AppInterviewCard
-                    key={interview.id}
-                    interview={interview}
-                    userRole={userRole}
-                    onEdit={handleEditInterview}
-                    onDelete={handleDeleteInterview}
-                  />
-                ))}
+                <AnimatePresence mode="popLayout" initial={false}>
+                  {items.map((interview) => (
+                    <motion.div
+                      key={interview.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.96 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.96 }}
+                      transition={{
+                        layout: { duration: 0.25, ease: 'easeOut' },
+                        opacity: { duration: 0.2 },
+                        scale: { duration: 0.2 },
+                      }}
+                    >
+                      <AppInterviewCard
+                        interview={interview}
+                        userRole={userRole}
+                        onEdit={handleEditInterview}
+                        onDelete={handleDeleteInterview}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </Box>
               {total > pageSize && (
                 <Stack spacing={2} alignItems="center" sx={{ mt: 4, mb: 2 }}>
@@ -368,6 +400,7 @@ export default function AppInterviewList() {
               )}
             </>
           )}
+          </motion.div>
         </>
       )}
 

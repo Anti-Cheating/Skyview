@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Box, IconButton, useMediaQuery, useTheme } from '@mui/material';
 import { Menu as MenuIcon } from '@mui/icons-material';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { TruoyyLogo } from '../layout/TruoyyLogo';
 import { TOKENS } from '../../theme';
 import { Sidebar } from '../layout/Sidebar';
@@ -126,7 +127,23 @@ export default function AppLayout() {
             </Box>
           </Box>
         )}
-        <Outlet />
+        {/* Right-side route content — subtle slide-up + fade on mount.
+            We skip AnimatePresence + exit on purpose. With the key tied
+            to pathname, React unmounts the old page instantly and the
+            new one animates in. That eliminates the blank flash that
+            `mode="wait"` introduces (old fades out → empty frame → new
+            fades in) and the layout-doubling that overlap modes cause.
+            Net effect: as soon as you click a sidebar item, content
+            slides up into place — directional, snappy, no gap. */}
+        <motion.div
+          key={location.pathname}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: 'easeOut' }}
+          style={{ height: '100%' }}
+        >
+          <Outlet />
+        </motion.div>
       </Box>
     </Box>
   );

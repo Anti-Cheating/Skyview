@@ -29,6 +29,7 @@ import {
   TextField,
   InputAdornment,
 } from '@mui/material';
+import { motion } from 'framer-motion';
 import {
   Add as AddIcon,
   MoreVert as MoreVertIcon,
@@ -623,8 +624,19 @@ export default function TeamPage() {
         />
       </Tabs>
 
+      {/* Slide-up + fade on the active tab content. Mirrors the
+          right-side route animation in AppLayout so in-app tab swaps
+          read as the same gesture, just at a smaller scale. No exit
+          animation — old tab unmounts instantly when `tab` flips,
+          new one mounts and animates in. That eliminates the
+          double-mount blink the previous MUI Fade setup produced. */}
       {tab === 'members' && (
-        <>
+        <motion.div
+          key="members"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+        >
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
             <TextField
               size="small"
@@ -675,11 +687,16 @@ export default function TeamPage() {
               },
             }}
           />
-        </>
+        </motion.div>
       )}
 
       {tab === 'pending' && (
-        <>
+        <motion.div
+          key="pending"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+        >
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
             <TextField
               size="small"
@@ -730,7 +747,7 @@ export default function TeamPage() {
               },
             }}
           />
-        </>
+        </motion.div>
       )}
 
       {/* Row-level actions menu for pending invites */}
