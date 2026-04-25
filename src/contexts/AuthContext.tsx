@@ -10,6 +10,13 @@ interface AuthContextType {
   signup: (credentials: SignupCredentials) => Promise<void>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
+  /**
+   * Merge a partial user into the cached user — no API call, no
+   * isLoading toggle. Use after a PATCH that returned the updated
+   * row, instead of calling refreshAuth() (which would refetch and
+   * cause a visible blink while isLoading is true).
+   */
+  updateUser: (patch: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -41,6 +48,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  const updateUser = useCallback((patch: Partial<User>) => {
+    setUser((prev) => (prev ? { ...prev, ...patch } : prev));
   }, []);
 
   const handleLogout = useCallback(async () => {
@@ -101,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signup,
       logout: handleLogout,
       refreshAuth,
+      updateUser,
     }}>
       {children}
     </AuthContext.Provider>

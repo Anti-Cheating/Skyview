@@ -25,7 +25,7 @@ import { ProfileService } from '../../services/profile.service';
 import { AuthService } from '../../services/auth.service';
 
 export default function PersonalTab() {
-  const { user, refreshAuth } = useAuth();
+  const { user, updateUser } = useAuth();
   const { showSuccess, showError } = useSnackbar();
 
   const [firstName, setFirstName] = useState('');
@@ -62,11 +62,15 @@ export default function PersonalTab() {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
       });
-      if (resp.success) {
+      if (resp.success && resp.data) {
         showSuccess('Profile updated');
-        // Pull the canonical user back from /auth/me so the sidebar
-        // greeting and any other consumers re-render with the new name.
-        await refreshAuth();
+        // Merge the PATCH response into the cached user — sidebar
+        // greeting and any other consumers re-render with the new
+        // name immediately, no refetch + no isLoading blink.
+        updateUser({
+          first_name: resp.data.first_name,
+          last_name: resp.data.last_name,
+        });
       } else {
         const msg = resp.message || 'Failed to update profile';
         setError(msg);
