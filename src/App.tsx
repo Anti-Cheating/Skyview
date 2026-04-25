@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { ErrorBoundary, LoadingSpinner } from './components/common';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SnackbarProvider } from './contexts/SnackbarContext';
-import { InterviewCacheProvider } from './contexts/InterviewCacheContext';
 import Login from './components/Login/Login';
 import Signup from './components/Signup/Signup';
 import ForgotPassword from './components/Auth/ForgotPassword';
@@ -138,11 +137,9 @@ export default function App() {
     <ErrorBoundary>
       <SnackbarProvider>
         <AuthProvider>
-          <InterviewCacheProvider>
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
-          </InterviewCacheProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
         </AuthProvider>
       </SnackbarProvider>
     </ErrorBoundary>

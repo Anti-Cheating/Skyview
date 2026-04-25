@@ -92,16 +92,21 @@ export default function CreateInterviewPage() {
     let cancelled = false;
     (async () => {
       try {
-        const resp = await InvitesService.listMembers(user.company_id!);
+        // listMembers is now server-paginated. The dropdown wants every
+        // staff member, not a 10-row page — request a high pageSize so
+        // companies with up to 100 staff resolve in one round trip.
+        // (Larger orgs get a search affordance on a future iteration.)
+        const resp = await InvitesService.listMembers(user.company_id!, { pageSize: 100 });
         if (cancelled) return;
-        if (resp.success && Array.isArray(resp.data)) {
-          setMembers(resp.data);
+        if (resp.success && resp.data) {
+          const list = resp.data.items;
+          setMembers(list);
           // Default to current user on create when they're a company
           // member. Edit mode prefills from the loaded session further
           // down so we don't override that here.
           if (!isEditMode && user?.id) {
             setInterviewerUserId((prev) =>
-              prev || (resp.data!.some((m) => m.id === user.id) ? user.id : '')
+              prev || (list.some((m) => m.id === user.id) ? user.id : '')
             );
           }
         }

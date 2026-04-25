@@ -152,6 +152,8 @@ export default function TeamPage() {
   const [tab, setTab] = useState<TabValue>('members');
   const [pending, setPending] = useState<PendingInvite[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [pendingTotal, setPendingTotal] = useState(0);
+  const [membersTotal, setMembersTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -184,32 +186,36 @@ export default function TeamPage() {
   // shown. `refresh()` (both) is still used on initial mount and after
   // mutations that can change either list (invite created → pending
   // grows; accept happens elsewhere → pending shrinks + members grows).
-  const refreshInvites = useCallback(async () => {
+  const refreshInvites = useCallback(async (page = pendingPage, size = pendingPageSize) => {
     if (!companyId || !canManage) return;
     try {
-      const resp = await InvitesService.list(companyId);
-      if (resp.success && Array.isArray(resp.data)) {
-        setPending(resp.data);
+      const resp = await InvitesService.list(companyId, { page, pageSize: size });
+      if (resp.success && resp.data) {
+        setPending(resp.data.items);
+        setPendingTotal(resp.data.total);
       } else if (resp.message) {
         setError(resp.message);
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to load invites');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, canManage]);
 
-  const refreshMembers = useCallback(async () => {
+  const refreshMembers = useCallback(async (page = membersPage, size = membersPageSize) => {
     if (!companyId || !canManage) return;
     try {
-      const resp = await InvitesService.listMembers(companyId);
-      if (resp.success && Array.isArray(resp.data)) {
-        setMembers(resp.data);
+      const resp = await InvitesService.listMembers(companyId, { page, pageSize: size });
+      if (resp.success && resp.data) {
+        setMembers(resp.data.items);
+        setMembersTotal(resp.data.total);
       } else if (resp.message) {
         setError(resp.message);
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to load team members');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, canManage]);
 
   const refresh = useCallback(async () => {
@@ -224,6 +230,18 @@ export default function TeamPage() {
   }, [companyId, canManage, refreshInvites, refreshMembers]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Page / page-size changes refetch only the affected tab. Avoids a
+  // full both-lists round trip just because the user paged the
+  // currently-visible table.
+  useEffect(() => {
+    refreshMembers(membersPage, membersPageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [membersPage, membersPageSize]);
+  useEffect(() => {
+    refreshInvites(pendingPage, pendingPageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPage, pendingPageSize]);
 
   const handleOpenDialog = () => {
     setDialogEmail('');
@@ -557,7 +575,7 @@ export default function TeamPage() {
           label={
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               Members
-              <TabCountBadge count={members.length} active={tab === 'members'} />
+              <TabCountBadge count={membersTotal} active={tab === 'members'} />
             </Box>
           }
         />
@@ -566,7 +584,7 @@ export default function TeamPage() {
           label={
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               Pending invitations
-              <TabCountBadge count={pending.length} active={tab === 'pending'} />
+              <TabCountBadge count={pendingTotal} active={tab === 'pending'} />
             </Box>
           }
         />
@@ -575,17 +593,21 @@ export default function TeamPage() {
       {tab === 'members' && (
         <DataTable<TeamMember>
           columns={memberColumns}
-          rows={members.slice((membersPage - 1) * membersPageSize, membersPage * membersPageSize)}
+          rows={members}
           rowKey={(m) => m.id}
           loading={loading}
           emptyText="No active members yet. Invite your teammates to get started."
           pagination={{
             page: membersPage,
             pageSize: membersPageSize,
-            total: members.length,
+            total: membersTotal,
             onChange: (nextPage, nextSize) => {
-              if (nextSize !== membersPageSize) setMembersPageSize(nextSize);
-              else setMembersPage(nextPage);
+              if (nextSize !== membersPageSize) {
+                setMembersPageSize(nextSize);
+                setMembersPage(1);
+              } else {
+                setMembersPage(nextPage);
+              }
             },
           }}
         />
@@ -594,17 +616,21 @@ export default function TeamPage() {
       {tab === 'pending' && (
         <DataTable<PendingInvite>
           columns={pendingColumns}
-          rows={pending.slice((pendingPage - 1) * pendingPageSize, pendingPage * pendingPageSize)}
+          rows={pending}
           rowKey={(i) => i.id}
           loading={loading}
           emptyText="No pending invitations. Click Invite teammate to get started."
           pagination={{
             page: pendingPage,
             pageSize: pendingPageSize,
-            total: pending.length,
+            total: pendingTotal,
             onChange: (nextPage, nextSize) => {
-              if (nextSize !== pendingPageSize) setPendingPageSize(nextSize);
-              else setPendingPage(nextPage);
+              if (nextSize !== pendingPageSize) {
+                setPendingPageSize(nextSize);
+                setPendingPage(1);
+              } else {
+                setPendingPage(nextPage);
+              }
             },
           }}
         />

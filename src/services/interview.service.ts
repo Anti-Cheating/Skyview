@@ -1,6 +1,6 @@
 import { ApiService } from './api.service';
 import type { ApiResponse } from '../types/api.types';
-import type { InterviewSessionResponse, InterviewSession, InterviewType } from '../types/interview.types';
+import type { InterviewSession, InterviewType } from '../types/interview.types';
 
 export interface CreateInterviewParticipantInput {
   // Picked from a company-staff dropdown; backend validates the user
@@ -26,57 +26,57 @@ export interface CreateInterviewInput {
   interview_session_participants: CreateInterviewParticipantInput[];
 }
 
+export type InterviewListPill = 'all' | 'scheduled' | 'completed';
+
+export interface SessionsListResponse {
+  items: InterviewSession[];
+  total: number;
+  counts: { all: number; scheduled: number; completed: number };
+  page: number;
+  pageSize: number;
+}
+
+export interface SessionsListFilter {
+  status?: InterviewListPill;
+  search?: string;
+  page?: number;     // 1-based
+  pageSize?: number;
+}
+
 export class InterviewService {
   /**
-   * List upcoming sessions visible to the caller. The server decides WHO
-   * the caller is (from the JWT) and which sessions they may see — the
-   * client never sends a user ID or filter. Works for both candidate and
-   * interviewer roles.
+   * Unified list endpoint. Replaces the old getUpcoming/getPast pair +
+   * the standalone counts route. Server takes status pill + search and
+   * returns items, total, and pill counts in one shot — counts apply
+   * the search filter but ignore the status filter so the pills always
+   * show their accurate scope.
    */
-  static async getUpcoming(
-    limit: number = 10,
-    offset: number = 0
-  ): Promise<ApiResponse<InterviewSession[]>> {
-    const endpoint = `/interview-sessions/upcoming?limit=${limit}&offset=${offset}`;
-    const response = await ApiService.get<InterviewSessionResponse | InterviewSession[]>(endpoint, undefined, 'auth');
+  static async getSessions(filter: SessionsListFilter = {}): Promise<ApiResponse<SessionsListResponse>> {
+    const page = Math.max(1, filter.page ?? 1);
+    const pageSize = Math.max(1, Math.min(filter.pageSize ?? 10, 100));
+    const offset = (page - 1) * pageSize;
 
-    let interviews: InterviewSession[] = [];
-    if (Array.isArray(response.data)) {
-      interviews = response.data;
-    } else if (response.data?.interview_sessions) {
-      interviews = response.data.interview_sessions;
-    }
+    const qs = new URLSearchParams();
+    qs.set('limit', String(pageSize));
+    qs.set('offset', String(offset));
+    if (filter.status && filter.status !== 'all') qs.set('status', filter.status);
+    if (filter.search && filter.search.trim()) qs.set('search', filter.search.trim());
 
-    return { success: response.success, data: interviews, message: response.message };
+    const response = await ApiService.get<SessionsListResponse>(
+      `/interview-sessions?${qs.toString()}`,
+      undefined,
+      'auth'
+    );
+    return { success: response.success, data: response.data, message: response.message };
   }
 
   /**
-   * List past sessions visible to the caller. Same access rules as
-   * getUpcoming — JWT-driven on the server.
+   * Lightweight counts-only call for the dashboard widget. Same shape
+   * as the unified endpoint's `counts` field so the dashboard reads
+   * one type regardless of which endpoint it called.
    */
-  static async getPast(
-    limit: number = 10,
-    offset: number = 0
-  ): Promise<ApiResponse<InterviewSession[]>> {
-    const endpoint = `/interview-sessions/past?limit=${limit}&offset=${offset}`;
-    const response = await ApiService.get<InterviewSessionResponse | InterviewSession[]>(endpoint, undefined, 'auth');
-
-    let interviews: InterviewSession[] = [];
-    if (Array.isArray(response.data)) {
-      interviews = response.data;
-    } else if (response.data?.interview_sessions) {
-      interviews = response.data.interview_sessions;
-    }
-
-    return { success: response.success, data: interviews, message: response.message };
-  }
-
-  /**
-   * Lightweight counts for the dashboard. Avoids fetching full session
-   * objects just to read `.length`.
-   */
-  static async getCounts(): Promise<ApiResponse<{ upcoming: number; past: number }>> {
-    const response = await ApiService.get<{ upcoming: number; past: number }>(
+  static async getCounts(): Promise<ApiResponse<{ all: number; scheduled: number; completed: number }>> {
+    const response = await ApiService.get<{ all: number; scheduled: number; completed: number }>(
       '/interview-sessions/counts',
       undefined,
       'auth'
@@ -104,7 +104,7 @@ export class InterviewService {
       scheduled_start_at: input.scheduled_start_at,
       scheduled_end_at: input.scheduled_end_at,
       // Canonical uppercase vocabulary — matches Cortex's sessionGuard
-      // and the session_lifecycle migration (SCHEDULED → ACTIVE → ENDED).
+      // and the session_lifecycle migration (SCHEDULED → ACTIVE → COMPLETED).
       status: input.status ?? 'SCHEDULED',
       timezone: input.timezone,
       interview_type: input.interview_type,

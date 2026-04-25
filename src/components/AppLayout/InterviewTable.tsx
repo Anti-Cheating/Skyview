@@ -205,7 +205,7 @@ export default function InterviewTable({
       showOnHover: true,
       render: (row) => {
         if (!isInterviewer) return null;
-        const showEdit = !!onEdit && row.status !== 'ENDED';
+        const showEdit = !!onEdit && row.status !== 'COMPLETED';
         const showDelete = canDeleteRows && !!onDelete;
         if (!showEdit && !showDelete) return null;
         return (

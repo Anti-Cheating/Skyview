@@ -15,7 +15,7 @@ import { Box, Typography } from '@mui/material';
 export type SessionStatus =
   | 'SCHEDULED'
   | 'ACTIVE'
-  | 'ENDED'
+  | 'COMPLETED'
   | 'CANCELLED'
   | string;
 
@@ -25,7 +25,7 @@ const STATUS_TOKENS: Record<
 > = {
   SCHEDULED: { dot: '#9CA3AF', label: '#374151' },
   ACTIVE:    { dot: '#4CD964', label: '#047857', pulse: true },
-  ENDED:     { dot: '#2E7D32', label: '#374151' },
+  COMPLETED: { dot: '#2E7D32', label: '#374151' },
   CANCELLED: { dot: '#EF4444', label: '#374151' },
 };
 

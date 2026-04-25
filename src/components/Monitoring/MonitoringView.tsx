@@ -70,7 +70,7 @@ export default function MonitoringView() {
 
   // Cortex is the single authority on session lifecycle. On mount we
   // flip SCHEDULED → ACTIVE; a 10s heartbeat refreshes a Redis TTL;
-  // unmount / beforeunload flips ACTIVE → ENDED so the daemon stops.
+  // unmount / beforeunload flips ACTIVE → COMPLETED so the daemon stops.
   useEffect(() => {
     if (!interviewId) return;
     let cancelled = false;
@@ -86,7 +86,7 @@ export default function MonitoringView() {
         }
       } catch (err: any) {
         if (cancelled) return;
-        // 409: session ENDED/CANCELLED beyond reload-grace. 404: session
+        // 409: session COMPLETED/CANCELLED beyond reload-grace. 404: session
         // gone. 401: stale JWT (refresh path already tried). Anything
         // else: network / server error. In all cases Skyview can't
         // meaningfully drive this session — surface it and redirect.
@@ -116,7 +116,7 @@ export default function MonitoringView() {
       try {
         const res = await InterviewService.heartbeat(interviewId);
         // Cortex now returns the session's current status on every beat.
-        // If it drifted to ENDED/CANCELLED (other tab's deactivate,
+        // If it drifted to COMPLETED/CANCELLED (other tab's deactivate,
         // scheduled-end cleanup, admin override), bail — there's nothing
         // useful this page can do any more.
         const status = res?.data?.status;

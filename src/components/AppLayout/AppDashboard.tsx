@@ -87,10 +87,11 @@ export default function AppDashboard() {
   const theme = useTheme();
   const navigate = useNavigate();
 
-  // Dedicated counts endpoint — one cheap query that returns
-  // `{ upcoming, past }` instead of shipping two 100-row lists just
-  // to read `.length`. Refetches on every dashboard mount so the
-  // numbers match whatever the user just did on /interviews.
+  // Dedicated counts endpoint — one cheap query, no JOINs, no items.
+  // Shape changed from { upcoming, past } to { all, scheduled, completed }
+  // when the list page consolidated to a single status-pill model.
+  // We map "upcoming" → scheduled and "past" → completed so the
+  // welcome-message copy below stays meaningful.
   const [upcomingCount, setUpcomingCount] = useState(0);
   const [pastCount, setPastCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -103,8 +104,8 @@ export default function AppDashboard() {
         const resp = await InterviewService.getCounts();
         if (cancelled) return;
         if (resp.success && resp.data) {
-          setUpcomingCount(resp.data.upcoming ?? 0);
-          setPastCount(resp.data.past ?? 0);
+          setUpcomingCount(resp.data.scheduled ?? 0);
+          setPastCount(resp.data.completed ?? 0);
         }
       } catch {/* snackbar handles failures elsewhere */}
       finally {

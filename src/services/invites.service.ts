@@ -81,19 +81,45 @@ export class InvitesService {
     );
   }
 
-  /** GET /companies/:id/members */
-  static async listMembers(companyId: string): Promise<ApiResponse<TeamMember[]>> {
-    return ApiService.get<TeamMember[]>(
-      `/companies/${companyId}/members`,
+  /**
+   * GET /companies/:id/members
+   *
+   * Server-paginated. Pass `page` (1-based) + `pageSize` and the server
+   * returns `{ items, total, page, pageSize }`. Optional `search`
+   * matches name OR email server-side.
+   */
+  static async listMembers(
+    companyId: string,
+    opts: { page?: number; pageSize?: number; search?: string } = {}
+  ): Promise<ApiResponse<{ items: TeamMember[]; total: number; page: number; pageSize: number }>> {
+    const page = Math.max(1, opts.page ?? 1);
+    const pageSize = Math.max(1, Math.min(opts.pageSize ?? 10, 100));
+    const offset = (page - 1) * pageSize;
+    const qs = new URLSearchParams();
+    qs.set('limit', String(pageSize));
+    qs.set('offset', String(offset));
+    if (opts.search?.trim()) qs.set('search', opts.search.trim());
+    return ApiService.get<{ items: TeamMember[]; total: number; page: number; pageSize: number }>(
+      `/companies/${companyId}/members?${qs.toString()}`,
       undefined,
       'auth'
     );
   }
 
-  /** GET /companies/:id/invites */
-  static async list(companyId: string): Promise<ApiResponse<PendingInvite[]>> {
-    return ApiService.get<PendingInvite[]>(
-      `/companies/${companyId}/invites`,
+  /** GET /companies/:id/invites — same pagination shape as listMembers. */
+  static async list(
+    companyId: string,
+    opts: { page?: number; pageSize?: number; search?: string } = {}
+  ): Promise<ApiResponse<{ items: PendingInvite[]; total: number; page: number; pageSize: number }>> {
+    const page = Math.max(1, opts.page ?? 1);
+    const pageSize = Math.max(1, Math.min(opts.pageSize ?? 10, 100));
+    const offset = (page - 1) * pageSize;
+    const qs = new URLSearchParams();
+    qs.set('limit', String(pageSize));
+    qs.set('offset', String(offset));
+    if (opts.search?.trim()) qs.set('search', opts.search.trim());
+    return ApiService.get<{ items: PendingInvite[]; total: number; page: number; pageSize: number }>(
+      `/companies/${companyId}/invites?${qs.toString()}`,
       undefined,
       'auth'
     );

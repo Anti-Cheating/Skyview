@@ -18,7 +18,7 @@ import { Box } from '@mui/material';
 export type SessionStatus =
   | 'SCHEDULED'
   | 'ACTIVE'
-  | 'ENDED'
+  | 'COMPLETED'
   | 'CANCELLED'
   | string;
 
@@ -42,7 +42,7 @@ const STATUS_TOKENS: Record<string, TagTokens> = {
     border: 'rgba(76, 217, 100, 0.45)',
     text:   '#047857',
   },
-  ENDED: {
+  COMPLETED: {
     bg:     '#ECFDF5',
     border: '#A7F3D0',
     text:   '#065F46',

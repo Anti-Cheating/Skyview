@@ -51,7 +51,7 @@ export default function AppInterviewCard({ interview, userRole, onJoin, onEdit, 
   // We also hide both once the session is ENDED — there's nothing useful
   // to edit on a finished interview, and deleting completed sessions is
   // destructive audit-trail loss we prefer to avoid from this surface.
-  const canEdit = isStaffRole(userRole) && interview.status !== 'ENDED' && !!onEdit;
+  const canEdit = isStaffRole(userRole) && interview.status !== 'COMPLETED' && !!onEdit;
   const canDelete = isCompanyManagerRole(userRole) && !!onDelete;
   // Format date and time
   const formatDateTime = (dateString: string) => {
@@ -78,7 +78,7 @@ export default function AppInterviewCard({ interview, userRole, onJoin, onEdit, 
   //   - Candidate   + extension  → "Join Interview" (→ message Jarvis extension)
   //   - Completed                → "View Details"
   //   - Otherwise (candidate + application) → "Join in Falcon App"
-  const isCompleted = interview.status === 'ENDED';
+  const isCompleted = interview.status === 'COMPLETED';
   const isInterviewer = isStaffRole(userRole);
   const isCandidate = userRole === USER_ROLES.CANDIDATE;
   const canMonitor = isInterviewer && !isCompleted;
@@ -176,7 +176,7 @@ export default function AppInterviewCard({ interview, userRole, onJoin, onEdit, 
     scheduler?.id !== interviewerParticipant?.interviewer_id;
   const durationMinutes = interview.duration_minutes;
   const statusLabel = interview.status || 'Scheduled';
-  const isEnded = statusLabel === 'ENDED';
+  const isEnded = statusLabel === 'COMPLETED';
   const isActive = statusLabel === 'ACTIVE';
   const statusChipSx = {
     fontSize: '0.625rem',
