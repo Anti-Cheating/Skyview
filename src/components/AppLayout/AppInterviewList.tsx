@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { InterviewListShimmer } from '../common/Shimmer';
 import {
@@ -11,6 +11,7 @@ import {
   Stack,
   Chip,
   useTheme,
+  useMediaQuery,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -18,14 +19,18 @@ import {
   DialogActions,
   Button,
   CircularProgress,
+  InputAdornment,
+  TextField,
 } from '@mui/material';
 import {
   EventBusy as EventBusyIcon,
   History as HistoryIcon,
   CalendarToday as CalendarTodayIcon,
   Add as AddIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import AppInterviewCard from './AppInterviewCard';
+import InterviewTable from './InterviewTable';
 import { InterviewService } from '../../services/interview.service';
 import type { InterviewSession } from '../../types/interview.types';
 import { useAuth } from '../../contexts/AuthContext';
@@ -34,6 +39,36 @@ import { USER_ROLES, isStaffRole } from '../../config/constants';
 import { ActionButton } from '../common/ActionButton';
 import { useInterviewList } from '../../contexts/InterviewCacheContext';
 import { useDelayedFlag } from '../../hooks/useDelayedFlag';
+
+type StatusFilter = 'ALL' | 'SCHEDULED' | 'ACTIVE' | 'ENDED' | 'CANCELLED';
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: 'ALL', label: 'All' },
+  { value: 'SCHEDULED', label: 'Scheduled' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'ENDED', label: 'Ended' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+];
+
+function applyFilters(
+  rows: InterviewSession[],
+  statusFilter: StatusFilter,
+  search: string
+): InterviewSession[] {
+  const q = search.trim().toLowerCase();
+  return rows.filter((r) => {
+    if (statusFilter !== 'ALL' && r.status !== statusFilter) return false;
+    if (!q) return true;
+    if (r.title?.toLowerCase().includes(q)) return true;
+    const participants = r.interview_session_participants || [];
+    return participants.some((p) => {
+      const c = p.candidate;
+      const i = p.interviewer;
+      const cName = c ? `${c.first_name} ${c.last_name} ${c.email}`.toLowerCase() : '';
+      const iName = i ? `${i.first_name} ${i.last_name} ${i.email}`.toLowerCase() : '';
+      return cName.includes(q) || iName.includes(q);
+    });
+  });
+}
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -49,7 +84,7 @@ function TabPanel({ children, value, index }: TabPanelProps) {
   );
 }
 
-const ITEMS_PER_PAGE = 10;
+const DEFAULT_PAGE_SIZE = 10;
 
 export default function AppInterviewList() {
   const { user } = useAuth();
@@ -67,6 +102,8 @@ export default function AppInterviewList() {
 
   const [upcomingPage, setUpcomingPage] = useState(1);
   const [pastPage, setPastPage] = useState(1);
+  const [upcomingPageSize, setUpcomingPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [pastPageSize, setPastPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [pagedUpcoming, setPagedUpcoming] = useState<InterviewSession[] | null>(null);
   const [pagedPast, setPagedPast] = useState<InterviewSession[] | null>(null);
   const [pageLoading, setPageLoading] = useState(false);
@@ -74,6 +111,13 @@ export default function AppInterviewList() {
 
   const userRole = user?.role || USER_ROLES.CANDIDATE;
   const isInterviewer = isStaffRole(userRole);
+  // Breakpoint switch — staff get a table on desktop and cards on
+  // mobile; candidates always see cards regardless of width because
+  // their list is short and rich-per-row.
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const useTableView = isInterviewer && !isMobile;
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Delete-confirmation dialog state. We block clicks until the user
   // says yes (destructive action + visible to the whole company).
@@ -109,49 +153,67 @@ export default function AppInterviewList() {
     }
   };
 
-  // Resolved list shown for the active tab — prefer the explicit paged
-  // result when the user has navigated past page 1, otherwise fall back
-  // to the cached full list.
-  const upcomingInterviews = upcomingPage === 1
-    ? (upcomingCache.data ?? [])
-    : (pagedUpcoming ?? []);
-  const pastInterviews = pastPage === 1
-    ? (pastCache.data ?? [])
-    : (pagedPast ?? []);
+  // Cache is keyed by 'upcoming' / 'past' only — it's a fixed page-1
+  // default-size fetch. We fall back to it only when the user is on
+  // page 1 with the default size; any other (page, size) tuple
+  // bypasses the cache and triggers a direct API call below.
+  const upcomingUsesCache = upcomingPage === 1 && upcomingPageSize === DEFAULT_PAGE_SIZE;
+  const pastUsesCache     = pastPage     === 1 && pastPageSize     === DEFAULT_PAGE_SIZE;
 
-  // "Has more" = we have a full page's worth of results; signals that
-  // advancing pagination will likely find additional rows.
-  const upcomingHasMore = upcomingPage === 1
-    ? (upcomingCache.data?.length ?? 0) > ITEMS_PER_PAGE
-    : (pagedUpcoming?.length ?? 0) === ITEMS_PER_PAGE;
-  const pastHasMore = pastPage === 1
-    ? (pastCache.data?.length ?? 0) > ITEMS_PER_PAGE
-    : (pagedPast?.length ?? 0) === ITEMS_PER_PAGE;
+  const upcomingInterviews = upcomingUsesCache ? (upcomingCache.data ?? []) : (pagedUpcoming ?? []);
+  const pastInterviews     = pastUsesCache     ? (pastCache.data ?? [])     : (pagedPast ?? []);
 
-  // `loading` is only true on the very first fetch when there is no
-  // cached data at all. Returning visitors render instantly from cache.
+  // Filters are staff-only — candidates have a short list, no value
+  // adding chips. Memoise so the table doesn't reflow on every render.
+  const filteredUpcoming = useMemo(
+    () => (isInterviewer ? applyFilters(upcomingInterviews, statusFilter, searchQuery) : upcomingInterviews),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [upcomingInterviews, statusFilter, searchQuery, isInterviewer]
+  );
+  const filteredPast = useMemo(
+    () => (isInterviewer ? applyFilters(pastInterviews, statusFilter, searchQuery) : pastInterviews),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pastInterviews, statusFilter, searchQuery, isInterviewer]
+  );
+
+  // "Has more" = current view filled a full page, suggesting more
+  // exists. Server doesn't return a total count, so this heuristic
+  // drives the pagination "next" affordance.
+  const upcomingHasMore = upcomingUsesCache
+    ? (upcomingCache.data?.length ?? 0) >= upcomingPageSize
+    : (pagedUpcoming?.length ?? 0) === upcomingPageSize;
+  const pastHasMore = pastUsesCache
+    ? (pastCache.data?.length ?? 0) >= pastPageSize
+    : (pagedPast?.length ?? 0) === pastPageSize;
+
   const loading = tabValue === 0
-    ? (upcomingPage === 1 ? upcomingCache.loading : pageLoading)
-    : (pastPage === 1 ? pastCache.loading : pageLoading);
+    ? (upcomingUsesCache ? upcomingCache.loading : pageLoading)
+    : (pastUsesCache     ? pastCache.loading     : pageLoading);
 
   // Delay the shimmer by 250ms so sub-threshold loads (fast networks,
   // return-visits with warm cache) never flash a placeholder.
   const showShimmer = useDelayedFlag(loading, 250);
 
-  // Fetch paged results when the user moves off page 1.
+  // Fetch directly whenever the active tab isn't sitting on the cached
+  // (page=1, size=DEFAULT_PAGE_SIZE) tuple — i.e. anytime the user
+  // changed page OR picked a non-default size. The chosen size is
+  // threaded straight into the API call so the server returns the
+  // requested limit. Cache is preserved for the common return-visit
+  // path (open page → see 10 items instantly).
   useEffect(() => {
     const when = tabValue === 0 ? 'upcoming' : 'past';
     const page = when === 'upcoming' ? upcomingPage : pastPage;
-    if (page === 1) return;
+    const size = when === 'upcoming' ? upcomingPageSize : pastPageSize;
+    if (page === 1 && size === DEFAULT_PAGE_SIZE) return; // cache covers this
     let cancelled = false;
     (async () => {
       setPageLoading(true);
       setError(null);
       try {
-        const offset = (page - 1) * ITEMS_PER_PAGE;
+        const offset = (page - 1) * size;
         const response = when === 'upcoming'
-          ? await InterviewService.getUpcoming(ITEMS_PER_PAGE, offset)
-          : await InterviewService.getPast(ITEMS_PER_PAGE, offset);
+          ? await InterviewService.getUpcoming(size, offset)
+          : await InterviewService.getPast(size, offset);
         if (cancelled) return;
         if (response.success) {
           const list = response.data || [];
@@ -174,7 +236,7 @@ export default function AppInterviewList() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabValue, upcomingPage, pastPage]);
+  }, [tabValue, upcomingPage, pastPage, upcomingPageSize, pastPageSize]);
 
   // Note: no explicit mount-refresh useEffect here. `useInterviewList`
   // already fetches on mount internally, so adding our own refresh()
@@ -211,6 +273,167 @@ export default function AppInterviewList() {
       <Typography variant="body2" sx={{ color: '#6B7280', textAlign: 'center', maxWidth: 400, lineHeight: 1.6 }}>{message}</Typography>
     </Box>
   );
+
+  // Toolbar — staff-only. Filter pills (status) on the left, search on
+  // the right. Sits above the table or card grid; collapses cleanly on
+  // mobile because pills wrap and the search field is full-width.
+  const renderToolbar = () => {
+    if (!isInterviewer) return null;
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 1.5,
+          flexWrap: 'wrap',
+          mb: 2,
+        }}
+      >
+        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+          {STATUS_FILTERS.map((f) => {
+            const selected = statusFilter === f.value;
+            return (
+              <Chip
+                key={f.value}
+                label={f.label}
+                onClick={() => setStatusFilter(f.value)}
+                size="small"
+                sx={{
+                  height: 28,
+                  fontSize: '0.8125rem',
+                  fontWeight: 500,
+                  borderRadius: '6px',
+                  border: '1px solid',
+                  borderColor: selected ? 'transparent' : '#E5E7EB',
+                  bgcolor: selected ? 'rgba(76, 217, 100, 0.14)' : '#FFFFFF',
+                  color: selected ? '#047857' : '#374151',
+                  '&:hover': {
+                    bgcolor: selected ? 'rgba(76, 217, 100, 0.20)' : '#F9FAFB',
+                  },
+                }}
+              />
+            );
+          })}
+        </Box>
+        <TextField
+          size="small"
+          placeholder="Search title, candidate, interviewer…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            width: { xs: '100%', sm: 280 },
+            '& .MuiOutlinedInput-root': {
+              borderRadius: '8px',
+              fontSize: '0.875rem',
+              bgcolor: '#FFFFFF',
+              '& fieldset': { borderColor: '#E5E7EB' },
+              '&:hover fieldset': { borderColor: '#D1D5DB' },
+              '&.Mui-focused fieldset': { borderColor: '#4CD964', borderWidth: 1 },
+            },
+          }}
+        />
+      </Box>
+    );
+  };
+
+  // Single helper that renders the body of a tab — toolbar + table on
+  // desktop staff, toolbar + card grid otherwise. DRYs the previously
+  // duplicated upcoming/past sections.
+  const renderInterviewView = (
+    rows: InterviewSession[],
+    page: number,
+    setPage: (n: number) => void,
+    pageSize: number,
+    setPageSize: (n: number) => void,
+    hasMore: boolean,
+    emptyContent: React.ReactNode
+  ) => {
+    if (showShimmer && rows.length === 0) {
+      return <Box sx={{ py: 2 }}><InterviewListShimmer count={3} /></Box>;
+    }
+    const filteredEmpty = rows.length === 0 && !loading;
+    // Approximated total — server-side pagination doesn't return a
+    // count, so we infer it from `hasMore`. Good enough to drive the
+    // page-of-pages display (N+1 when more pages exist).
+    const approxTotal = hasMore
+      ? page * pageSize + 1
+      : (page - 1) * pageSize + rows.length;
+    return (
+      <>
+        {renderToolbar()}
+        {filteredEmpty ? (
+          emptyContent
+        ) : useTableView ? (
+          <InterviewTable
+            rows={rows}
+            loading={loading}
+            userRole={userRole}
+            onEdit={handleEditInterview}
+            onDelete={handleDeleteInterview}
+            emptyText="No interviews match your filters."
+            pagination={{
+              page,
+              pageSize,
+              total: approxTotal,
+              // Distinguish page change from size change — the latter
+              // resets to page 1 inside DataTable, so we just adopt
+              // the new size and re-fetch with the new limit.
+              onChange: (nextPage, nextSize) => {
+                if (nextSize !== pageSize) setPageSize(nextSize);
+                else setPage(nextPage);
+              },
+            }}
+          />
+        ) : (
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2.5, mb: 3 }}>
+            {rows.map((interview) => (
+              <AppInterviewCard
+                key={interview.id}
+                interview={interview}
+                userRole={userRole}
+                onEdit={handleEditInterview}
+                onDelete={handleDeleteInterview}
+              />
+            ))}
+          </Box>
+        )}
+        {/* Card view keeps the standalone Pagination — DataTable's
+            antd footer only renders inside the table itself. */}
+        {!useTableView && (hasMore || page > 1) && (
+          <Stack spacing={2} alignItems="center" sx={{ mt: 4, mb: 2 }}>
+            <Pagination
+              count={hasMore ? page + 1 : page}
+              page={page}
+              onChange={(_, p) => setPage(p)}
+              color="primary"
+              shape="rounded"
+              sx={{
+                '& .MuiPaginationItem-root': {
+                  color: '#6B7280',
+                  fontSize: '0.875rem',
+                  '&.Mui-selected': {
+                    backgroundColor: 'primary.main',
+                    color: '#FFFFFF',
+                    fontWeight: 600,
+                    '&:hover': { backgroundColor: 'primary.dark' },
+                  },
+                  '&:hover': { backgroundColor: 'rgba(76, 217, 100, 0.15)', color: '#1F2937' },
+                },
+              }}
+            />
+          </Stack>
+        )}
+      </>
+    );
+  };
 
   return (
     <Box sx={{ width: '100%', p: { xs: 2, md: 3 } }}>
@@ -273,112 +496,42 @@ export default function AppInterviewList() {
       </Box>
 
       <TabPanel value={tabValue} index={0}>
-        {showShimmer && upcomingInterviews.length === 0 ? (
-          <Box sx={{ py: 2 }}><InterviewListShimmer count={3} /></Box>
-        ) : upcomingInterviews.length === 0 && !loading ? (
+        {renderInterviewView(
+          filteredUpcoming,
+          upcomingPage,
+          setUpcomingPage,
+          upcomingPageSize,
+          setUpcomingPageSize,
+          upcomingHasMore,
           <EmptyState
             icon={<EventBusyIcon sx={{ fontSize: 60, color: 'primary.main' }} />}
             title="No Upcoming Interviews"
-            message="You don't have any scheduled interviews at the moment. Check back later or wait for new interview invitations."
+            message={
+              isInterviewer && (statusFilter !== 'ALL' || searchQuery)
+                ? "No interviews match your current filters. Try clearing them."
+                : "You don't have any scheduled interviews at the moment. Check back later or wait for new interview invitations."
+            }
           />
-        ) : (
-          <>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2.5, mb: 3 }}>
-              {upcomingInterviews.map((interview) => (
-                <AppInterviewCard
-                  key={interview.id}
-                  interview={interview}
-                  userRole={userRole}
-                  onEdit={handleEditInterview}
-                  onDelete={handleDeleteInterview}
-                />
-              ))}
-            </Box>
-            {(upcomingHasMore || upcomingPage > 1) && (
-              <Stack spacing={2} alignItems="center" sx={{ mt: 4, mb: 2 }}>
-                <Pagination
-                  count={upcomingHasMore ? upcomingPage + 1 : upcomingPage}
-                  page={upcomingPage}
-                  onChange={(_, page) => setUpcomingPage(page)}
-                  color="primary"
-                  shape="rounded"
-                  sx={{
-                    '& .MuiPaginationItem-root': {
-                      color: '#6B7280',
-                      fontSize: '0.875rem',
-                      '&.Mui-selected': {
-                        backgroundColor: 'primary.main',
-                        color: '#FFFFFF',
-                        fontWeight: 600,
-                        '&:hover': {
-                          backgroundColor: 'primary.dark',
-                        },
-                      },
-                      '&:hover': {
-                        backgroundColor: 'rgba(76, 217, 100, 0.15)',
-                        color: '#1F2937',
-                      },
-                    },
-                  }}
-                />
-              </Stack>
-            )}
-          </>
         )}
       </TabPanel>
 
       <TabPanel value={tabValue} index={1}>
-        {showShimmer && pastInterviews.length === 0 ? (
-          <Box sx={{ py: 2 }}><InterviewListShimmer count={3} /></Box>
-        ) : pastInterviews.length === 0 && !loading ? (
+        {renderInterviewView(
+          filteredPast,
+          pastPage,
+          setPastPage,
+          pastPageSize,
+          setPastPageSize,
+          pastHasMore,
           <EmptyState
             icon={<HistoryIcon sx={{ fontSize: 60, color: 'primary.main' }} />}
             title="No Past Interviews"
-            message="Your completed interview history will appear here once you complete an interview."
+            message={
+              isInterviewer && (statusFilter !== 'ALL' || searchQuery)
+                ? "No past interviews match your current filters."
+                : "Your completed interview history will appear here once you complete an interview."
+            }
           />
-        ) : (
-          <>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2.5, mb: 3 }}>
-              {pastInterviews.map((interview) => (
-                <AppInterviewCard
-                  key={interview.id}
-                  interview={interview}
-                  userRole={userRole}
-                  onEdit={handleEditInterview}
-                  onDelete={handleDeleteInterview}
-                />
-              ))}
-            </Box>
-            {(pastHasMore || pastPage > 1) && (
-              <Stack spacing={2} alignItems="center" sx={{ mt: 4, mb: 2 }}>
-                <Pagination
-                  count={pastHasMore ? pastPage + 1 : pastPage}
-                  page={pastPage}
-                  onChange={(_, page) => setPastPage(page)}
-                  color="primary"
-                  shape="rounded"
-                  sx={{
-                    '& .MuiPaginationItem-root': {
-                      color: '#6B7280',
-                      fontSize: '0.875rem',
-                      '&.Mui-selected': {
-                        backgroundColor: 'primary.main',
-                        color: '#FFFFFF',
-                        fontWeight: 600,
-                        '&:hover': {
-                          backgroundColor: 'primary.dark',
-                        },
-                      },
-                      '&:hover': {
-                        backgroundColor: 'rgba(76, 217, 100, 0.15)',
-                        color: '#1F2937',
-                      },
-                    },
-                  }}
-                />
-              </Stack>
-            )}
-          </>
         )}
       </TabPanel>
 

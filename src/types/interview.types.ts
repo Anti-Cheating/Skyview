@@ -67,6 +67,12 @@ export interface InterviewSession {
   duration_minutes?: number;
   timezone?: string;
   interview_session_participants: InterviewParticipant[];
+  // Scheduler info — populated by the backend so the list card can show
+  // "Scheduled by Sarah" without an extra round-trip.
+  created_by_user?: UserInfo | null;
+  // Owning company — candidates see this on their card to disambiguate
+  // interviews across multiple employers ("Acme Corp" vs "Globex").
+  company?: { id: string; name: string } | null;
   created_at?: string;
   updated_at?: string;
 }

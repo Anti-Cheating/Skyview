@@ -3,7 +3,9 @@ import type { ApiResponse } from '../types/api.types';
 import type { InterviewSessionResponse, InterviewSession, InterviewType } from '../types/interview.types';
 
 export interface CreateInterviewParticipantInput {
-  interviewer_email?: string;
+  // Picked from a company-staff dropdown; backend validates the user
+  // exists and belongs to the creator's company.
+  interviewer_user_id?: string;
   candidate_email?: string;
   candidate_first_name?: string;
   candidate_last_name?: string;

@@ -171,6 +171,15 @@ export default function TeamPage() {
   const [busyInviteId, setBusyInviteId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<'revoke' | 'resend' | null>(null);
 
+  // Pagination — client-side, since Members + Pending lists are short
+  // and fully loaded into memory. Page + size are per-tab so switching
+  // tabs doesn't strand the user on a page that no longer exists in
+  // the other list.
+  const [membersPage, setMembersPage] = useState(1);
+  const [pendingPage, setPendingPage] = useState(1);
+  const [membersPageSize, setMembersPageSize] = useState(10);
+  const [pendingPageSize, setPendingPageSize] = useState(10);
+
   // Single-list refreshers so tab switches only fetch the list being
   // shown. `refresh()` (both) is still used on initial mount and after
   // mutations that can change either list (invite created → pending
@@ -566,20 +575,38 @@ export default function TeamPage() {
       {tab === 'members' && (
         <DataTable<TeamMember>
           columns={memberColumns}
-          rows={members}
+          rows={members.slice((membersPage - 1) * membersPageSize, membersPage * membersPageSize)}
           rowKey={(m) => m.id}
           loading={loading}
           emptyText="No active members yet. Invite your teammates to get started."
+          pagination={{
+            page: membersPage,
+            pageSize: membersPageSize,
+            total: members.length,
+            onChange: (nextPage, nextSize) => {
+              if (nextSize !== membersPageSize) setMembersPageSize(nextSize);
+              else setMembersPage(nextPage);
+            },
+          }}
         />
       )}
 
       {tab === 'pending' && (
         <DataTable<PendingInvite>
           columns={pendingColumns}
-          rows={pending}
+          rows={pending.slice((pendingPage - 1) * pendingPageSize, pendingPage * pendingPageSize)}
           rowKey={(i) => i.id}
           loading={loading}
           emptyText="No pending invitations. Click Invite teammate to get started."
+          pagination={{
+            page: pendingPage,
+            pageSize: pendingPageSize,
+            total: pending.length,
+            onChange: (nextPage, nextSize) => {
+              if (nextSize !== pendingPageSize) setPendingPageSize(nextSize);
+              else setPendingPage(nextPage);
+            },
+          }}
         />
       )}
 

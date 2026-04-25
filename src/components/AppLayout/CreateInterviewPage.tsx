@@ -21,6 +21,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import dayjs, { Dayjs } from 'dayjs';
 import { InterviewService } from '../../services/interview.service';
+import { InvitesService, type TeamMember } from '../../services/invites.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { FormField } from '../common/FormField';
@@ -67,9 +68,50 @@ export default function CreateInterviewPage() {
   const [interviewType, setInterviewType] = useState<InterviewType>('application');
   const [provider, setProvider] = useState('zoom');
   const [meetingLink, setMeetingLink] = useState('');
+  // Interviewer is picked from a dropdown of company staff. The HR
+  // person scheduling the interview is rarely the actual interviewer,
+  // so defaulting to "current user" is wrong as a hard rule — we still
+  // pre-select the current user when they appear in the staff list,
+  // since "I'm scheduling for myself" is the second most common case.
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [interviewerUserId, setInterviewerUserId] = useState<string>('');
+  // Track the interviewer at load-time so we only PATCH participants on
+  // edit when the user actually changed the dropdown selection — sending
+  // them on every save would 409 against the live-session guard for
+  // imminent / running interviews even when nothing changed.
+  const [originalInterviewerUserId, setOriginalInterviewerUserId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Fetch company members for the interviewer dropdown. Runs once per
+  // company; we don't need the snappy invalidation that the Team page
+  // uses since this list is read-only here.
+  useEffect(() => {
+    if (!user?.company_id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await InvitesService.listMembers(user.company_id!);
+        if (cancelled) return;
+        if (resp.success && Array.isArray(resp.data)) {
+          setMembers(resp.data);
+          // Default to current user on create when they're a company
+          // member. Edit mode prefills from the loaded session further
+          // down so we don't override that here.
+          if (!isEditMode && user?.id) {
+            setInterviewerUserId((prev) =>
+              prev || (resp.data!.some((m) => m.id === user.id) ? user.id : '')
+            );
+          }
+        }
+      } catch {
+        // Silently ignore — the dropdown will just be empty and the
+        // submit-time validation will surface a clear error.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.company_id, user?.id, isEditMode]);
 
   // Prefill the form from an existing session when the URL says edit.
   // We deliberately don't let the candidate's email be changed here —
@@ -110,6 +152,13 @@ export default function CreateInterviewPage() {
           setCandidateLastName(candidateParticipant.candidate.last_name || '');
           setCandidateEmail(candidateParticipant.candidate.email || '');
         }
+        const interviewerParticipant = s.interview_session_participants?.find(
+          (p) => p.interviewer_id
+        );
+        if (interviewerParticipant?.interviewer_id) {
+          setInterviewerUserId(interviewerParticipant.interviewer_id);
+          setOriginalInterviewerUserId(interviewerParticipant.interviewer_id);
+        }
       } catch (err: any) {
         if (!cancelled) setError(err?.message || 'Failed to load interview');
       }
@@ -135,6 +184,7 @@ export default function CreateInterviewPage() {
     interviewType,
     provider,
     meetingLink,
+    interviewerUserId,
   ]);
 
   const handleSubmit = async () => {
@@ -148,6 +198,9 @@ export default function CreateInterviewPage() {
       if (!candidateEmail.trim() || !candidateEmail.includes('@')) {
         setError('Valid candidate email is required'); return;
       }
+    }
+    if (!interviewerUserId) {
+      setError('Please pick an interviewer'); return;
     }
     if (!startDateTime || !startDateTime.isValid()) {
       setError('Valid start date and time are required'); return;
@@ -188,8 +241,28 @@ export default function CreateInterviewPage() {
         meeting_link: interviewType === 'extension' ? meetingLink.trim() : null,
       } as const;
 
+      // Edit mode: only send participants when the interviewer was
+      // actually swapped. Otherwise the dangerous-field guard on the
+      // backend would 409 imminent / running sessions even on a no-op
+      // save. We re-send the candidate row alongside the new interviewer
+      // because the service replaces all participants atomically.
+      const interviewerChanged =
+        isEditMode && interviewerUserId !== originalInterviewerUserId;
+
+      const updatePayload: Record<string, unknown> = { ...basePayload };
+      if (interviewerChanged) {
+        updatePayload.interview_session_participants = [
+          {
+            candidate_email: candidateEmail.trim().toLowerCase(),
+            candidate_first_name: candidateFirstName.trim(),
+            candidate_last_name: candidateLastName.trim(),
+          },
+          { interviewer_user_id: interviewerUserId },
+        ];
+      }
+
       const response = isEditMode && editingId
-        ? await InterviewService.update(editingId, basePayload)
+        ? await InterviewService.update(editingId, updatePayload)
         : await InterviewService.createInterview({
             ...basePayload,
             status: 'SCHEDULED',
@@ -199,7 +272,7 @@ export default function CreateInterviewPage() {
                 candidate_first_name: candidateFirstName.trim(),
                 candidate_last_name: candidateLastName.trim(),
               },
-              ...(user?.email ? [{ interviewer_email: user.email }] : []),
+              { interviewer_user_id: interviewerUserId },
             ],
           });
 
@@ -344,6 +417,35 @@ export default function CreateInterviewPage() {
                 disabled={loading || success || isEditMode}
                 helperText={isEditMode ? 'Candidate identity is fixed after creation.' : undefined}
               />
+            </Box>
+
+            {/* Row: Interviewer (company-staff dropdown) */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr' }, gap: 3 }}>
+              <FormField
+                label="Interviewer"
+                required
+                select
+                value={interviewerUserId}
+                onChange={(e) => setInterviewerUserId(e.target.value)}
+                disabled={loading || success}
+                helperText={
+                  members.length === 0
+                    ? 'No team members found — invite someone from the Team page first.'
+                    : 'Pick the person who will actually take this interview.'
+                }
+              >
+                {members.map((m) => {
+                  const fullName = [m.first_name, m.last_name].filter(Boolean).join(' ').trim() || m.email;
+                  return (
+                    <MenuItem key={m.id} value={m.id}>
+                      {fullName}
+                      <Typography component="span" sx={{ fontSize: '0.75rem', color: '#9CA3AF', ml: 1 }}>
+                        {m.email}
+                      </Typography>
+                    </MenuItem>
+                  );
+                })}
+              </FormField>
             </Box>
 
             {/* Interview Type Selector */}

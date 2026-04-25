@@ -54,10 +54,13 @@ export function useInterviewList(when: When): Snapshot {
       if (mode === 'cold') setLoading(true);
       else setRefetching(true);
       try {
+        // Initial fetch matches the table's default page size (10).
+        // Pagination at the call site re-fetches direct with the
+        // user-chosen limit when they change page or page size.
         const resp =
           when === 'upcoming'
-            ? await InterviewService.getUpcoming(100, 0)
-            : await InterviewService.getPast(100, 0);
+            ? await InterviewService.getUpcoming(10, 0)
+            : await InterviewService.getPast(10, 0);
         setData(resp.data ?? []);
       } catch {
         // Swallow — UI surfaces failures via snackbar / inline alert
