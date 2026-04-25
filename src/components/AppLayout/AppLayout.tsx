@@ -45,6 +45,9 @@ export default function AppLayout() {
     if (isCompanyManagerRole(userRole)) {
       shared.push({ id: 'team', label: 'Team', iconName: 'Person', route: '/team', badge: null });
     }
+    // Profile is available to every authenticated user — the page itself
+    // gates the Owner-only Company tab inside.
+    shared.push({ id: 'profile', label: 'Profile', iconName: 'Person', route: '/profile', badge: null });
     return shared;
   })();
 

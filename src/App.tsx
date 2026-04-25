@@ -15,6 +15,7 @@ import CreateInterviewPage from './components/AppLayout/CreateInterviewPage';
 import MonitoringView from './components/Monitoring/MonitoringView';
 import CandidateJoinPage from './components/AppLayout/CandidateJoinPage';
 import TeamPage from './components/Team/TeamPage';
+import ProfilePage from './components/Profile/ProfilePage';
 import InviteAcceptPage from './components/Team/InviteAcceptPage';
 import { isCompanyManagerRole } from './config/constants';
 
@@ -125,6 +126,7 @@ function AppRoutes() {
           <Route path="interviews/:id/join" element={<CandidateJoinPage />} />
           <Route path="interviews/:id/monitor" element={<MonitoringView />} />
           <Route path="team" element={<CompanyManagerRoute><TeamPage /></CompanyManagerRoute>} />
+          <Route path="profile" element={<ProfilePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
