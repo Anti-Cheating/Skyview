@@ -26,10 +26,13 @@ import {
   DialogContent,
   DialogActions,
   MenuItem,
+  TextField,
+  InputAdornment,
 } from '@mui/material';
 import {
   Add as AddIcon,
   MoreVert as MoreVertIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import { CircularProgress } from '@mui/material';
 import { PageTitle, Caption, Secondary } from '../layout/Typography';
@@ -182,14 +185,40 @@ export default function TeamPage() {
   const [membersPageSize, setMembersPageSize] = useState(10);
   const [pendingPageSize, setPendingPageSize] = useState(10);
 
+  // Search — per-tab, so flipping between Members and Pending preserves
+  // each search context independently. The `*Search` state is what we
+  // actually send to the server; `*SearchInput` is the live text-field
+  // value, debounced 300ms below to avoid a request per keystroke.
+  const [membersSearchInput, setMembersSearchInput] = useState('');
+  const [pendingSearchInput, setPendingSearchInput] = useState('');
+  const [membersSearch, setMembersSearch] = useState('');
+  const [pendingSearch, setPendingSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setMembersSearch(membersSearchInput), 300);
+    return () => clearTimeout(t);
+  }, [membersSearchInput]);
+  useEffect(() => {
+    const t = setTimeout(() => setPendingSearch(pendingSearchInput), 300);
+    return () => clearTimeout(t);
+  }, [pendingSearchInput]);
+  // Reset to page 1 whenever the search term commits — otherwise the
+  // user lands on an empty page that may no longer exist for the new
+  // (smaller) result set.
+  useEffect(() => { setMembersPage(1); }, [membersSearch]);
+  useEffect(() => { setPendingPage(1); }, [pendingSearch]);
+
   // Single-list refreshers so tab switches only fetch the list being
   // shown. `refresh()` (both) is still used on initial mount and after
   // mutations that can change either list (invite created → pending
   // grows; accept happens elsewhere → pending shrinks + members grows).
-  const refreshInvites = useCallback(async (page = pendingPage, size = pendingPageSize) => {
+  const refreshInvites = useCallback(async (
+    page = pendingPage,
+    size = pendingPageSize,
+    search = pendingSearch
+  ) => {
     if (!companyId || !canManage) return;
     try {
-      const resp = await InvitesService.list(companyId, { page, pageSize: size });
+      const resp = await InvitesService.list(companyId, { page, pageSize: size, search });
       if (resp.success && resp.data) {
         setPending(resp.data.items);
         setPendingTotal(resp.data.total);
@@ -202,10 +231,14 @@ export default function TeamPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, canManage]);
 
-  const refreshMembers = useCallback(async (page = membersPage, size = membersPageSize) => {
+  const refreshMembers = useCallback(async (
+    page = membersPage,
+    size = membersPageSize,
+    search = membersSearch
+  ) => {
     if (!companyId || !canManage) return;
     try {
-      const resp = await InvitesService.listMembers(companyId, { page, pageSize: size });
+      const resp = await InvitesService.listMembers(companyId, { page, pageSize: size, search });
       if (resp.success && resp.data) {
         setMembers(resp.data.items);
         setMembersTotal(resp.data.total);
@@ -231,17 +264,17 @@ export default function TeamPage() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Page / page-size changes refetch only the affected tab. Avoids a
-  // full both-lists round trip just because the user paged the
-  // currently-visible table.
+  // Page / page-size / search changes refetch only the affected tab.
+  // Avoids a full both-lists round trip just because the user paged or
+  // searched the currently-visible table.
   useEffect(() => {
-    refreshMembers(membersPage, membersPageSize);
+    refreshMembers(membersPage, membersPageSize, membersSearch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [membersPage, membersPageSize]);
+  }, [membersPage, membersPageSize, membersSearch]);
   useEffect(() => {
-    refreshInvites(pendingPage, pendingPageSize);
+    refreshInvites(pendingPage, pendingPageSize, pendingSearch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingPage, pendingPageSize]);
+  }, [pendingPage, pendingPageSize, pendingSearch]);
 
   const handleOpenDialog = () => {
     setDialogEmail('');
@@ -591,49 +624,113 @@ export default function TeamPage() {
       </Tabs>
 
       {tab === 'members' && (
-        <DataTable<TeamMember>
-          columns={memberColumns}
-          rows={members}
-          rowKey={(m) => m.id}
-          loading={loading}
-          emptyText="No active members yet. Invite your teammates to get started."
-          pagination={{
-            page: membersPage,
-            pageSize: membersPageSize,
-            total: membersTotal,
-            onChange: (nextPage, nextSize) => {
-              if (nextSize !== membersPageSize) {
-                setMembersPageSize(nextSize);
-                setMembersPage(1);
-              } else {
-                setMembersPage(nextPage);
-              }
-            },
-          }}
-        />
+        <>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
+            <TextField
+              size="small"
+              placeholder="Search name or email…"
+              value={membersSearchInput}
+              onChange={(e) => setMembersSearchInput(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                width: { xs: '100%', sm: 280 },
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                  fontSize: '0.875rem',
+                  bgcolor: '#FFFFFF',
+                  '& fieldset': { borderColor: '#E5E7EB' },
+                  '&:hover fieldset': { borderColor: '#D1D5DB' },
+                  '&.Mui-focused fieldset': { borderColor: '#4CD964', borderWidth: 1 },
+                },
+              }}
+            />
+          </Box>
+          <DataTable<TeamMember>
+            columns={memberColumns}
+            rows={members}
+            rowKey={(m) => m.id}
+            loading={loading}
+            emptyText={
+              membersSearch
+                ? `No members match "${membersSearch}".`
+                : 'No active members yet. Invite your teammates to get started.'
+            }
+            pagination={{
+              page: membersPage,
+              pageSize: membersPageSize,
+              total: membersTotal,
+              onChange: (nextPage, nextSize) => {
+                if (nextSize !== membersPageSize) {
+                  setMembersPageSize(nextSize);
+                  setMembersPage(1);
+                } else {
+                  setMembersPage(nextPage);
+                }
+              },
+            }}
+          />
+        </>
       )}
 
       {tab === 'pending' && (
-        <DataTable<PendingInvite>
-          columns={pendingColumns}
-          rows={pending}
-          rowKey={(i) => i.id}
-          loading={loading}
-          emptyText="No pending invitations. Click Invite teammate to get started."
-          pagination={{
-            page: pendingPage,
-            pageSize: pendingPageSize,
-            total: pendingTotal,
-            onChange: (nextPage, nextSize) => {
-              if (nextSize !== pendingPageSize) {
-                setPendingPageSize(nextSize);
-                setPendingPage(1);
-              } else {
-                setPendingPage(nextPage);
-              }
-            },
-          }}
-        />
+        <>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
+            <TextField
+              size="small"
+              placeholder="Search invitee email…"
+              value={pendingSearchInput}
+              onChange={(e) => setPendingSearchInput(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                width: { xs: '100%', sm: 280 },
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '8px',
+                  fontSize: '0.875rem',
+                  bgcolor: '#FFFFFF',
+                  '& fieldset': { borderColor: '#E5E7EB' },
+                  '&:hover fieldset': { borderColor: '#D1D5DB' },
+                  '&.Mui-focused fieldset': { borderColor: '#4CD964', borderWidth: 1 },
+                },
+              }}
+            />
+          </Box>
+          <DataTable<PendingInvite>
+            columns={pendingColumns}
+            rows={pending}
+            rowKey={(i) => i.id}
+            loading={loading}
+            emptyText={
+              pendingSearch
+                ? `No pending invitations match "${pendingSearch}".`
+                : 'No pending invitations. Click Invite teammate to get started.'
+            }
+            pagination={{
+              page: pendingPage,
+              pageSize: pendingPageSize,
+              total: pendingTotal,
+              onChange: (nextPage, nextSize) => {
+                if (nextSize !== pendingPageSize) {
+                  setPendingPageSize(nextSize);
+                  setPendingPage(1);
+                } else {
+                  setPendingPage(nextPage);
+                }
+              },
+            }}
+          />
+        </>
       )}
 
       {/* Row-level actions menu for pending invites */}
