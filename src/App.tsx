@@ -16,6 +16,7 @@ import MonitoringView from './components/Monitoring/MonitoringView';
 import CandidateJoinPage from './components/AppLayout/CandidateJoinPage';
 import TeamPage from './components/Team/TeamPage';
 import ProfilePage from './components/Profile/ProfilePage';
+import NotFoundPage from './components/NotFound/NotFoundPage';
 import InviteAcceptPage from './components/Team/InviteAcceptPage';
 import { isCompanyManagerRole } from './config/constants';
 
@@ -127,8 +128,14 @@ function AppRoutes() {
           <Route path="interviews/:id/monitor" element={<MonitoringView />} />
           <Route path="users" element={<CompanyManagerRoute><TeamPage /></CompanyManagerRoute>} />
           <Route path="profile" element={<ProfilePage />} />
+          {/* Authenticated 404 — renders inside AppLayout so the user
+              keeps the sidebar and can navigate out. */}
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* Standalone 404 for unauthenticated visitors who hit a
+            non-existent path. Replaces the old silent redirect to
+            /login (which would loop signed-in users back to /). */}
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </>
   );

@@ -240,38 +240,52 @@ export function Sidebar({
         )}
       </Box>
 
-      {/* Profile + logout */}
+      {/* Profile display + logout. The avatar+name block is intentionally
+          passive — clicking it used to navigate to /profile and light up
+          as "active", but that duplicates the dedicated Profile nav item
+          we added higher up. Keep this slot as a quiet identity badge so
+          the user knows who they're signed in as. Logout stays clickable
+          on the right. */}
       <Box sx={{ p: padding }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ListItemButton
-            onClick={() => handleItemClick(profile?.route || '/profile')}
-            role="link"
-            aria-current={activeId === profile?.id ? 'page' : undefined}
-            sx={{ ...rowSx(activeId === profile?.id), flex: 1, mb: 0 }}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              flex: 1,
+              minWidth: 0,
+              px: 1,
+              py: 0.75,
+            }}
           >
-            <ListItemIcon sx={{ minWidth: 40 }}>
-              <Avatar
-                src={profile?.avatarUrl}
-                sx={{
-                  width: 32,
-                  height: 32,
-                  bgcolor: 'primary.main',
-                  color: 'white',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                }}
-              >
-                {!profile?.avatarUrl && getInitials(profile?.label || 'User')}
-              </Avatar>
-            </ListItemIcon>
-            <ListItemText
-              primary={profile?.label || 'User'}
-              primaryTypographyProps={{
-                variant: 'body1',
-                sx: { fontWeight: activeId === profile?.id ? 600 : 400 },
+            <Avatar
+              src={profile?.avatarUrl}
+              sx={{
+                width: 32,
+                height: 32,
+                bgcolor: 'primary.main',
+                color: 'white',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                mr: 1.25,
               }}
-            />
-          </ListItemButton>
+            >
+              {!profile?.avatarUrl && getInitials(profile?.label || 'User')}
+            </Avatar>
+            <Box
+              sx={{
+                fontSize: '0.875rem',
+                fontWeight: 400,
+                color: '#FFFFFF',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+              }}
+            >
+              {profile?.label || 'User'}
+            </Box>
+          </Box>
 
           <Tooltip title="Logout" placement="top" arrow enterDelay={300}>
             <IconButton
