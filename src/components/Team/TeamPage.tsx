@@ -561,7 +561,7 @@ export default function TeamPage() {
     <Box sx={{ p: { xs: 2, md: 3 } }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
-          <PageTitle sx={{ color: TOKENS.textPrimary, mb: 0.5 }}>Team</PageTitle>
+          <PageTitle sx={{ color: TOKENS.textPrimary, mb: 0.5 }}>Users</PageTitle>
           <Secondary sx={{ color: TOKENS.textSecondary }}>
             Invite colleagues and manage their access.
           </Secondary>

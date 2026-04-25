@@ -18,6 +18,7 @@ import {
   Settings as SettingsIcon,
   HelpOutline as HelpOutlineIcon,
   Person as PersonIcon,
+  People as PeopleIcon,
   ExitToApp as ExitIcon,
   VideoCall as VideoCallIcon,
 } from '@mui/icons-material';
@@ -34,6 +35,7 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   Settings: SettingsIcon,
   HelpOutline: HelpOutlineIcon,
   Person: PersonIcon,
+  People: PeopleIcon,
   ExitToApp: ExitIcon,
 };
 

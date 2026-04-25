@@ -72,7 +72,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 /**
  * Role guard — redirects non-manager users away from pages that
- * require Owner / Admin / System Admin privileges (e.g. /team).
+ * require Owner / Admin / System Admin privileges (e.g. /users).
  * Belt-and-suspenders with the server's `requireRole` middleware: the
  * server is authoritative, but we don't want to let a Member even reach
  * the page URL by typing it manually.
@@ -125,7 +125,7 @@ function AppRoutes() {
           <Route path="interviews/:id/edit" element={<CreateInterviewPage />} />
           <Route path="interviews/:id/join" element={<CandidateJoinPage />} />
           <Route path="interviews/:id/monitor" element={<MonitoringView />} />
-          <Route path="team" element={<CompanyManagerRoute><TeamPage /></CompanyManagerRoute>} />
+          <Route path="users" element={<CompanyManagerRoute><TeamPage /></CompanyManagerRoute>} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/login" replace />} />

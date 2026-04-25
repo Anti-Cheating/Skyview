@@ -34,16 +34,16 @@ export default function AppLayout() {
 
   // Role-aware primary nav. Candidates get a minimal nav (their dashboard
   // + scheduled interviews). Only Owners / Admins / System Admins see the
-  // Team tab — Members can't manage the team, so showing the tab to them
+  // Users tab — Members can't manage the team, so showing the tab to them
   // just leads to an info-only page. The route itself is also guarded in
-  // App.tsx so a Member manually typing /team gets redirected.
+  // App.tsx so a Member manually typing /users gets redirected.
   const sidebarItems: NavItem[] = (() => {
     const shared: NavItem[] = [
       { id: 'dashboard',  label: 'Dashboard',  iconName: 'Dashboard',  route: '/',           badge: null },
       { id: 'interviews', label: 'Interviews', iconName: 'Interviews', route: '/interviews', badge: null },
     ];
     if (isCompanyManagerRole(userRole)) {
-      shared.push({ id: 'team', label: 'Team', iconName: 'Person', route: '/team', badge: null });
+      shared.push({ id: 'users', label: 'Users', iconName: 'People', route: '/users', badge: null });
     }
     // Profile is available to every authenticated user — the page itself
     // gates the Owner-only Company tab inside.
@@ -60,7 +60,7 @@ export default function AppLayout() {
 
   const getActiveId = (): string => {
     if (location.pathname.startsWith('/interviews')) return 'interviews';
-    if (location.pathname.startsWith('/team')) return 'team';
+    if (location.pathname.startsWith('/users')) return 'users';
     if (location.pathname.startsWith('/profile')) return 'profile';
     return 'dashboard';
   };
