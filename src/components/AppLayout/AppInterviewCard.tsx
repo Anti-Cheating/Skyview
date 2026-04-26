@@ -349,7 +349,7 @@ export default function AppInterviewCard({ interview, userRole, onJoin, onEdit, 
                 </Tooltip>
               )}
               {canDelete && (
-                <Tooltip title="Delete interview" arrow placement="top">
+                <Tooltip title="Cancel interview" arrow placement="top">
                   <IconButton
                     size="small"
                     sx={{

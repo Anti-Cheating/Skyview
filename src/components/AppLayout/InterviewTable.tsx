@@ -229,7 +229,7 @@ export default function InterviewTable({
               </Tooltip>
             )}
             {showDelete && (
-              <Tooltip title="Delete interview" arrow placement="top">
+              <Tooltip title="Cancel interview" arrow placement="top">
                 <IconButton
                   size="small"
                   sx={{

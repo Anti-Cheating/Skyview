@@ -162,9 +162,11 @@ export default function AppInterviewList() {
     try {
       const resp = await InterviewService.remove(pendingDelete.id);
       if (resp.success) {
-        showSuccess(`"${pendingDelete.title}" deleted`);
+        showSuccess(`"${pendingDelete.title}" cancelled`);
         setPendingDelete(null);
-        // Re-fetch the current page so the row disappears.
+        // Re-fetch the current page so the row's status flips into the
+        // Completed pill (server-side it's now status=CANCELLED, not
+        // gone — soft-delete preserves the audit trail).
         fetchSeq.current++;
         const seq = fetchSeq.current;
         const fresh = await InterviewService.getSessions({ status: pill, search, page, pageSize });
@@ -174,10 +176,10 @@ export default function AppInterviewList() {
           setCounts(fresh.data.counts);
         }
       } else {
-        showError(resp.message || 'Failed to delete interview');
+        showError(resp.message || 'Failed to cancel interview');
       }
     } catch (err: any) {
-      showError(err?.data?.error || err?.message || 'Failed to delete interview');
+      showError(err?.data?.error || err?.message || 'Failed to cancel interview');
     } finally {
       setDeleting(false);
     }
@@ -415,12 +417,13 @@ export default function AppInterviewList() {
         PaperProps={{ sx: { borderRadius: 2 } }}
       >
         <DialogTitle sx={{ fontSize: '1rem', fontWeight: 700 }}>
-          Delete interview?
+          Cancel interview?
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ fontSize: '0.875rem', color: '#4B5563' }}>
-            This will permanently delete <strong>{pendingDelete?.title}</strong> and
-            any monitoring data associated with it. This action can't be undone.
+            This will cancel <strong>{pendingDelete?.title}</strong>. The candidate
+            and interviewer will be notified by email. The session moves to your
+            Completed list and stays there for audit. This action can't be undone.
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -429,7 +432,7 @@ export default function AppInterviewList() {
             disabled={deleting}
             sx={{ textTransform: 'none', color: '#6B7280' }}
           >
-            Cancel
+            Keep
           </Button>
           <Button
             onClick={confirmDelete}
@@ -443,7 +446,7 @@ export default function AppInterviewList() {
             }
             sx={{ textTransform: 'none', boxShadow: 'none' }}
           >
-            {deleting ? 'Deleting…' : 'Delete'}
+            {deleting ? 'Cancelling…' : 'Cancel interview'}
           </Button>
         </DialogActions>
       </Dialog>
