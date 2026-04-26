@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ErrorBoundary, LoadingSpinner } from './components/common';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { CompanyProvider } from './contexts/CompanyContext';
 import { SnackbarProvider } from './contexts/SnackbarContext';
 import Login from './components/Login/Login';
 import Signup from './components/Signup/Signup';
@@ -154,9 +155,11 @@ export default function App() {
     <ErrorBoundary>
       <SnackbarProvider>
         <AuthProvider>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
+          <CompanyProvider>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </CompanyProvider>
         </AuthProvider>
       </SnackbarProvider>
     </ErrorBoundary>

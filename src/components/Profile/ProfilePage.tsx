@@ -53,8 +53,11 @@ export default function ProfilePage() {
           alignItems: 'start',
         }}
       >
-        <PersonalTab />
+        {/* Owners see Company first — branding is the higher-leverage
+            edit; Personal stays on the right as the secondary card.
+            Non-Owners only see Personal so order is moot. */}
         {showCompanyCard && <CompanyTab companyId={user.company_id!} />}
+        <PersonalTab />
       </Box>
     </Box>
   );

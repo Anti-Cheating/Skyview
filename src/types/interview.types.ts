@@ -72,7 +72,14 @@ export interface InterviewSession {
   created_by_user?: UserInfo | null;
   // Owning company — candidates see this on their card to disambiguate
   // interviews across multiple employers ("Acme Corp" vs "Globex").
-  company?: { id: string; name: string } | null;
+  // Logo and description are surfaced so the candidate join page can
+  // render the host's branding without a separate /companies/:id call.
+  company?: {
+    id: string;
+    name: string;
+    logo_url?: string | null;
+    description?: string | null;
+  } | null;
   created_at?: string;
   updated_at?: string;
 }

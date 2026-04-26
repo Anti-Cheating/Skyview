@@ -182,7 +182,9 @@ export default function CandidateJoinPage() {
 
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#F9FAFB' }}>
-      {/* Header */}
+      {/* Header — back arrow, optional company logo (host branding),
+          interview title + subtitle. Logo only renders if the host
+          company has uploaded one; falls back to title-only otherwise. */}
       <Box sx={{
         display: 'flex', alignItems: 'center', gap: 2,
         px: { xs: 2, md: 3 }, py: 1.5,
@@ -191,12 +193,37 @@ export default function CandidateJoinPage() {
         <IconButton onClick={() => navigate('/')} size="small" sx={{ color: '#6B7280' }}>
           <ArrowBackIcon />
         </IconButton>
+        {interview.company?.logo_url && (
+          <Box
+            sx={{
+              width: 40,
+              height: 40,
+              borderRadius: '8px',
+              border: `1px solid ${LIGHT_BORDER}`,
+              bgcolor: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              flexShrink: 0,
+            }}
+          >
+            <img
+              src={interview.company.logo_url}
+              alt={interview.company.name}
+              style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }}
+              draggable={false}
+            />
+          </Box>
+        )}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <CardTitle sx={{ fontWeight: 700, color: TOKENS.textPrimary }}>
             {interview.title}
           </CardTitle>
           <Secondary sx={{ color: TOKENS.textSecondary }}>
-            Setup your monitoring before joining
+            {interview.company?.name
+              ? `Hosted by ${interview.company.name}`
+              : 'Setup your monitoring before joining'}
           </Secondary>
         </Box>
       </Box>

@@ -27,6 +27,7 @@ import { SidebarProps } from './sidebar.types';
 import { TruoyyLogo } from './TruoyyLogo';
 import { TOKENS } from '../../theme';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCompany } from '../../contexts/CompanyContext';
 
 // Single icon family, only what the app actually renders.
 const iconMap: Record<string, React.ComponentType<any>> = {
@@ -79,6 +80,7 @@ export function Sidebar({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { logout } = useAuth();
+  const { company } = useCompany();
   const listRef = useRef<HTMLUListElement>(null);
 
   const flatItems = useMemo(
@@ -249,6 +251,109 @@ export function Sidebar({
           <TruoyyLogo collapsed={false} size="large" />
         </Box>
       </Box>
+
+      {/* Workspace chip — below the brand, above the nav. Frames the
+          nav as "this is the company you're acting in" without
+          displacing the Trueyy mark. Renders only when the user
+          belongs to a company (candidates have no company_id) and
+          lights up softly on hover so it's clearly tappable for the
+          /profile flow. */}
+      {company && (
+        <Box sx={{ px: padding, pb: 1.25 }}>
+          <Box
+            onClick={() => handleItemClick('/profile')}
+            role="link"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleItemClick('/profile');
+              }
+            }}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.25,
+              p: 1,
+              borderRadius: '10px',
+              cursor: 'pointer',
+              bgcolor: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.06)',
+              transition: 'background-color 120ms ease, border-color 120ms ease',
+              '&:hover': {
+                bgcolor: 'rgba(255,255,255,0.08)',
+                borderColor: 'rgba(255,255,255,0.12)',
+              },
+              minWidth: 0,
+            }}
+          >
+            <Box
+              sx={{
+                width: 32,
+                height: 32,
+                borderRadius: '8px',
+                bgcolor: '#FFFFFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                overflow: 'hidden',
+              }}
+            >
+              {company.logo_url ? (
+                <img
+                  // key forces React to mount a fresh <img> node when
+                  // logo_url changes (e.g. on replace) so we never
+                  // re-use a cached DOM element pointed at the old src.
+                  key={company.logo_url}
+                  src={company.logo_url}
+                  alt={company.name}
+                  style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }}
+                  draggable={false}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    color: TOKENS.sidebar,
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  {getInitials(company.name)}
+                </Box>
+              )}
+            </Box>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Box
+                sx={{
+                  fontSize: '0.7rem',
+                  color: 'rgba(255,255,255,0.55)',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  lineHeight: 1.1,
+                }}
+              >
+                Workspace
+              </Box>
+              <Box
+                sx={{
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  color: '#FFFFFF',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  lineHeight: 1.3,
+                  mt: '2px',
+                }}
+              >
+                {company.name}
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      )}
 
       {/* Main navigation */}
       <Box

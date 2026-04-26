@@ -1,30 +1,82 @@
 /**
- * CompanyTab — Owner-only. Loads the current company on mount, lets
- * the Owner rename it, and shows a soft success on save. The new name
- * flows into invite emails, candidate join page, and dashboard counts
- * because all of those read company-by-id at render time — no cache
- * to bust.
+ * CompanyTab — Owner-only. Loads the current company on mount and lets
+ * the Owner edit:
+ *
+ *   - Logo (image upload, 2MB, PNG/JPG/WebP/SVG)
+ *   - Name
+ *   - Website
+ *   - Description (short blurb shown on candidate join page)
+ *   - HQ location
+ *
+ * Logo is its own endpoint (POST/DELETE /companies/:id/logo) because
+ * it's a multipart upload. Everything else is one PATCH on Save.
+ *
+ * Save is enabled only when text fields are dirty. Logo upload/clear
+ * fires immediately and shows its own spinner — keeping it out of the
+ * Save flow means you never have a half-saved state where the logo
+ * landed in R2 but the rest of the form blew up validation.
  */
 
-import { useEffect, useState } from 'react';
-import { Box, Alert, CircularProgress, Typography } from '@mui/material';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Box,
+  Alert,
+  CircularProgress,
+  Typography,
+  IconButton,
+} from '@mui/material';
+import {
+  CloudUpload as CloudUploadIcon,
+  DeleteOutline as DeleteIcon,
+} from '@mui/icons-material';
 import { FormField } from '../common/FormField';
 import { ActionButton } from '../common/ActionButton';
 import { TOKENS } from '../../theme';
 import { useSnackbar } from '../../contexts/SnackbarContext';
-import { CompaniesService } from '../../services/companies.service';
+import { useCompany } from '../../contexts/CompanyContext';
+import { CompaniesService, type Company } from '../../services/companies.service';
 
 interface CompanyTabProps {
   companyId: string;
 }
 
+const DESCRIPTION_MAX = 280;
+const LOCATION_MAX = 120;
+
 export default function CompanyTab({ companyId }: CompanyTabProps) {
   const { showSuccess, showError } = useSnackbar();
+  const { updateCompany: pushToContext, refreshCompany } = useCompany();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [company, setCompany] = useState<Company | null>(null);
   const [name, setName] = useState('');
-  const [originalName, setOriginalName] = useState('');
+  const [website, setWebsite] = useState('');
+  const [description, setDescription] = useState('');
+  const [location, setLocation] = useState('');
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [logoBusy, setLogoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Hydrate the local form state and push the same row into the
+  // CompanyContext so the sidebar / candidate join page see the update
+  // immediately. The optional `mutated` flag also fires a background
+  // refresh — belt-and-suspenders so the workspace chip can never
+  // diverge from the server even if the optimistic update is dropped.
+  const hydrate = (c: Company, mutated = false) => {
+    setCompany(c);
+    setName(c.name);
+    setWebsite(c.website ?? '');
+    setDescription(c.description ?? '');
+    setLocation(c.location ?? '');
+    pushToContext(c);
+    if (mutated) {
+      // Fire-and-forget — the optimistic update has already landed, so
+      // any failure here is invisible to the user.
+      refreshCompany().catch(() => {});
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -35,8 +87,7 @@ export default function CompanyTab({ companyId }: CompanyTabProps) {
         const resp = await CompaniesService.getById(companyId);
         if (cancelled) return;
         if (resp.success && resp.data) {
-          setName(resp.data.name);
-          setOriginalName(resp.data.name);
+          hydrate(resp.data);
         } else {
           setError(resp.message || 'Failed to load company');
         }
@@ -50,7 +101,12 @@ export default function CompanyTab({ companyId }: CompanyTabProps) {
     return () => { cancelled = true; };
   }, [companyId]);
 
-  const dirty = name.trim() !== originalName.trim();
+  const dirty =
+    company !== null &&
+    (name.trim() !== company.name ||
+      website.trim() !== (company.website ?? '') ||
+      description.trim() !== (company.description ?? '') ||
+      location.trim() !== (company.location ?? ''));
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -60,11 +116,15 @@ export default function CompanyTab({ companyId }: CompanyTabProps) {
     setSaving(true);
     setError(null);
     try {
-      const resp = await CompaniesService.update(companyId, { name: name.trim() });
+      const resp = await CompaniesService.update(companyId, {
+        name: name.trim(),
+        website: website.trim(),
+        description: description.trim(),
+        location: location.trim(),
+      });
       if (resp.success && resp.data) {
-        showSuccess('Company name updated');
-        setOriginalName(resp.data.name);
-        setName(resp.data.name);
+        showSuccess('Company details updated');
+        hydrate(resp.data, true);
       } else {
         const msg = resp.message || 'Failed to update company';
         setError(msg);
@@ -76,6 +136,49 @@ export default function CompanyTab({ companyId }: CompanyTabProps) {
       showError(msg);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleLogoFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      showError('Logo must be an image file');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showError('Logo must be 2MB or smaller');
+      return;
+    }
+    setLogoBusy(true);
+    try {
+      const resp = await CompaniesService.uploadLogo(companyId, file);
+      if (resp.success && resp.data) {
+        hydrate(resp.data, true);
+        showSuccess('Logo updated');
+      } else {
+        showError(resp.message || 'Logo upload failed');
+      }
+    } catch (err: any) {
+      showError(err?.data?.error || err?.message || 'Logo upload failed');
+    } finally {
+      setLogoBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleLogoRemove = async () => {
+    setLogoBusy(true);
+    try {
+      const resp = await CompaniesService.deleteLogo(companyId);
+      if (resp.success && resp.data) {
+        hydrate(resp.data, true);
+        showSuccess('Logo removed');
+      } else {
+        showError(resp.message || 'Failed to remove logo');
+      }
+    } catch (err: any) {
+      showError(err?.data?.error || err?.message || 'Failed to remove logo');
+    } finally {
+      setLogoBusy(false);
     }
   };
 
@@ -100,6 +203,165 @@ export default function CompanyTab({ companyId }: CompanyTabProps) {
         </Box>
       ) : (
         <>
+          {/* Logo block — one clickable box.
+              - Empty state: full-box dropzone with upload icon + helper.
+                Clicking anywhere triggers the file picker.
+              - Filled state: shows the logo; hovering reveals an Edit
+                (replace) and Delete pair pinned to the top-right of the
+                same box. Edit re-opens the picker; Delete clears.
+              The whole tile is the action surface so the user never has
+              to hunt for buttons elsewhere on the page. */}
+          <Box sx={{ mb: 2.5 }}>
+            <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, color: TOKENS.textPrimary, mb: 0.25 }}>
+              Logo
+            </Typography>
+            <Typography sx={{ fontSize: '0.75rem', color: TOKENS.textSecondary, mb: 1.25 }}>
+              PNG, JPG, WebP, or SVG. Up to 2MB.
+            </Typography>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleLogoFile(f);
+              }}
+            />
+
+            <Box
+              role={company?.logo_url ? undefined : 'button'}
+              tabIndex={company?.logo_url ? -1 : 0}
+              onClick={() => {
+                if (logoBusy) return;
+                if (!company?.logo_url) fileInputRef.current?.click();
+              }}
+              onKeyDown={(e) => {
+                if (logoBusy || company?.logo_url) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+              sx={{
+                position: 'relative',
+                width: 120,
+                height: 120,
+                borderRadius: '12px',
+                border: `1px ${company?.logo_url ? 'solid' : 'dashed'} ${TOKENS.border}`,
+                bgcolor: '#FAFAFA',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                cursor: company?.logo_url || logoBusy ? 'default' : 'pointer',
+                transition: 'border-color 120ms ease, background-color 120ms ease',
+                '&:hover': company?.logo_url
+                  ? { '& .logo-actions': { opacity: 1 } }
+                  : {
+                      borderColor: TOKENS.brand,
+                      bgcolor: `${TOKENS.brand}08`,
+                    },
+              }}
+            >
+              {company?.logo_url ? (
+                <>
+                  <img
+                    key={company.logo_url}
+                    src={company.logo_url}
+                    alt="Company logo"
+                    style={{
+                      maxWidth: '82%',
+                      maxHeight: '82%',
+                      objectFit: 'contain',
+                    }}
+                  />
+                  {/* Hover overlay — appears as a soft top-strip with
+                      Edit + Delete. Pinned top-right so the logo stays
+                      visible underneath. */}
+                  <Box
+                    className="logo-actions"
+                    sx={{
+                      position: 'absolute',
+                      top: 6,
+                      right: 6,
+                      display: 'flex',
+                      gap: 0.5,
+                      opacity: 0,
+                      transition: 'opacity 120ms ease',
+                    }}
+                  >
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!logoBusy) fileInputRef.current?.click();
+                      }}
+                      disabled={logoBusy}
+                      aria-label="Replace logo"
+                      sx={{
+                        bgcolor: '#FFFFFF',
+                        color: TOKENS.textPrimary,
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                        '&:hover': { bgcolor: '#F3F4F6' },
+                      }}
+                    >
+                      <CloudUploadIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!logoBusy) handleLogoRemove();
+                      }}
+                      disabled={logoBusy}
+                      aria-label="Remove logo"
+                      sx={{
+                        bgcolor: '#FFFFFF',
+                        color: TOKENS.textSecondary,
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                        '&:hover': { bgcolor: '#FEE2E2', color: '#B91C1C' },
+                      }}
+                    >
+                      <DeleteIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  </Box>
+                  {logoBusy && (
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        inset: 0,
+                        bgcolor: 'rgba(255,255,255,0.7)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <CircularProgress size={20} thickness={5} sx={{ color: TOKENS.brand }} />
+                    </Box>
+                  )}
+                </>
+              ) : (
+                <Box sx={{ textAlign: 'center', px: 2 }}>
+                  {logoBusy ? (
+                    <CircularProgress size={20} thickness={5} sx={{ color: TOKENS.brand }} />
+                  ) : (
+                    <>
+                      <CloudUploadIcon sx={{ fontSize: 22, color: TOKENS.textMuted, mb: 0.25 }} />
+                      <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: TOKENS.textPrimary }}>
+                        Click to upload
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.65rem', color: TOKENS.textSecondary, mt: 0.25 }}>
+                        2MB max
+                      </Typography>
+                    </>
+                  )}
+                </Box>
+              )}
+            </Box>
+          </Box>
+
           <FormField
             label="Company name"
             required
@@ -108,6 +370,34 @@ export default function CompanyTab({ companyId }: CompanyTabProps) {
             onChange={(e) => setName(e.target.value)}
             disabled={saving}
           />
+          <Box sx={{ height: 12 }} />
+          <FormField
+            label="Website"
+            placeholder="https://acme.com"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            disabled={saving}
+          />
+          <Box sx={{ height: 12 }} />
+          <FormField
+            label="HQ location"
+            placeholder="Bangalore, IN"
+            value={location}
+            onChange={(e) => setLocation(e.target.value.slice(0, LOCATION_MAX))}
+            disabled={saving}
+          />
+          <Box sx={{ height: 12 }} />
+          <FormField
+            label="Description"
+            placeholder="What you do, in a sentence."
+            multiline
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value.slice(0, DESCRIPTION_MAX))}
+            disabled={saving}
+            helperText={`${description.length}/${DESCRIPTION_MAX}`}
+          />
+
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
             <ActionButton onClick={handleSave} loading={saving} disabled={!dirty || saving}>
               Save changes
