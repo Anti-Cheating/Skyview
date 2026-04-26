@@ -63,6 +63,12 @@ export interface TeamMember {
   email: string;
   first_name: string | null;
   last_name: string | null;
+  /**
+   * Profile picture — Google's URL or an R2 URL (set by /auth/me/avatar).
+   * Null for members who haven't uploaded one and didn't sign in via
+   * Google. Falls back to deterministic initials in the table.
+   */
+  avatar_url: string | null;
   role: string;
   joined_at: string;
 }

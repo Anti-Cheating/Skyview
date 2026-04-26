@@ -374,6 +374,10 @@ export default function TeamPage() {
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
             <Avatar
+              src={m.avatar_url ?? undefined}
+              // Google's avatar CDN returns 403 for non-Google referrers;
+              // harmless for our own R2 URLs.
+              imgProps={{ referrerPolicy: 'no-referrer' }}
               sx={{
                 width: 28,
                 height: 28,
