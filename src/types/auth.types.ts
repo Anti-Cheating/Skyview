@@ -6,6 +6,12 @@ export interface User {
   last_name?: string;
   middle_name?: string;
   /**
+   * Profile picture. Either Google's URL (auto-filled at first
+   * Google sign-in) or an R2 URL from a manual upload. Null = UI
+   * falls back to initials.
+   */
+  avatar_url?: string | null;
+  /**
    * Null for candidates (global identity). Populated for staff users
    * (Owner / Admin / Member / System Admin) — points at the company
    * they belong to. Used by the Team page to know which company's

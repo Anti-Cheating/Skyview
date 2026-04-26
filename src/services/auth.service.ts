@@ -138,6 +138,38 @@ export class AuthService {
   }
 
   /**
+   * Upload a profile picture. Multipart with `avatar` field, 2MB
+   * cap, image MIME only (server enforces). Returns the updated
+   * user. Caller should push the new user into AuthContext so the
+   * sidebar / profile tab refresh without a round-trip.
+   */
+  static async uploadAvatar(file: File): Promise<User> {
+    const fd = new FormData();
+    fd.append('avatar', file);
+    const response = await ApiService.post<{ user: User }>(
+      '/auth/me/avatar',
+      fd,
+    );
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Avatar upload failed');
+    }
+    const user = response.data.user;
+    localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+    return user;
+  }
+
+  /** Clears the user's avatar (and deletes the R2 object if owned). */
+  static async deleteAvatar(): Promise<User> {
+    const response = await ApiService.delete<{ user: User }>('/auth/me/avatar');
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Failed to remove avatar');
+    }
+    const user = response.data.user;
+    localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+    return user;
+  }
+
+  /**
    * Finish the Google sign-up flow by naming the workspace. JWT
    * required (the access token from googleLogin). Returns the
    * updated user shape — caller should call AuthContext.refreshAuth

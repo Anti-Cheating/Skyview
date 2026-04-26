@@ -308,7 +308,7 @@ export function Sidebar({
                   key={company.logo_url}
                   src={company.logo_url}
                   alt={company.name}
-                  style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }}
+                  style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain' }}
                   draggable={false}
                 />
               ) : (
@@ -324,32 +324,20 @@ export function Sidebar({
                 </Box>
               )}
             </Box>
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Box
-                sx={{
-                  fontSize: '0.7rem',
-                  color: 'rgba(255,255,255,0.55)',
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                  lineHeight: 1.1,
-                }}
-              >
-                Workspace
-              </Box>
-              <Box
-                sx={{
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  color: '#FFFFFF',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  lineHeight: 1.3,
-                  mt: '2px',
-                }}
-              >
-                {company.name}
-              </Box>
+            <Box
+              sx={{
+                fontSize: '0.9375rem',
+                fontWeight: 600,
+                color: '#FFFFFF',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                lineHeight: 1.3,
+                minWidth: 0,
+                flex: 1,
+              }}
+            >
+              {company.name}
             </Box>
           </Box>
         </Box>
@@ -394,6 +382,11 @@ export function Sidebar({
           >
             <Avatar
               src={profile?.avatarUrl}
+              // Google's avatar CDN (lh3.googleusercontent.com) returns
+              // 403 when the request carries a non-Google referrer. Set
+              // no-referrer so Google avatars load reliably; harmless
+              // for our own R2 URLs.
+              imgProps={{ referrerPolicy: 'no-referrer' }}
               sx={{
                 width: 32,
                 height: 32,

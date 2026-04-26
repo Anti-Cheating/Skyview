@@ -12,9 +12,13 @@
  *      rotate the password; they'd need inbox access too.
  */
 
-import { useEffect, useState } from 'react';
-import { Box, Alert, Typography } from '@mui/material';
-import { CheckCircle as CheckCircleIcon } from '@mui/icons-material';
+import { useEffect, useRef, useState } from 'react';
+import { Box, Alert, Typography, IconButton, CircularProgress } from '@mui/material';
+import {
+  CheckCircle as CheckCircleIcon,
+  CloudUpload as CloudUploadIcon,
+  DeleteOutline as DeleteIcon,
+} from '@mui/icons-material';
 import { FormField } from '../common/FormField';
 import { ActionButton } from '../common/ActionButton';
 import { LOCKED_INPUT_SX } from '../common/formTokens';
@@ -24,13 +28,25 @@ import { useSnackbar } from '../../contexts/SnackbarContext';
 import { ProfileService } from '../../services/profile.service';
 import { AuthService } from '../../services/auth.service';
 
+function getInitials(first?: string, last?: string, email?: string): string {
+  const f = (first ?? '').trim();
+  const l = (last ?? '').trim();
+  if (f && l) return (f[0]! + l[0]!).toUpperCase();
+  if (f) return f.slice(0, 2).toUpperCase();
+  if (email) return email.slice(0, 2).toUpperCase();
+  return 'U';
+}
+
+
 export default function PersonalTab() {
   const { user, updateUser } = useAuth();
   const { showSuccess, showError } = useSnackbar();
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Three-state machine for the change-password affordance — idle (button
@@ -85,6 +101,44 @@ export default function PersonalTab() {
     }
   };
 
+  const handleAvatarFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      showError('Avatar must be an image file');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showError('Avatar must be 2MB or smaller');
+      return;
+    }
+    setAvatarBusy(true);
+    try {
+      const updated = await AuthService.uploadAvatar(file);
+      // Push the new avatar URL into AuthContext so the sidebar
+      // re-renders without a refetch. We only need the avatar_url
+      // delta since updateUser merges by key.
+      updateUser({ avatar_url: updated.avatar_url ?? null });
+      showSuccess('Profile picture updated');
+    } catch (err: any) {
+      showError(err?.data?.error || err?.message || 'Avatar upload failed');
+    } finally {
+      setAvatarBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    setAvatarBusy(true);
+    try {
+      await AuthService.deleteAvatar();
+      updateUser({ avatar_url: null });
+      showSuccess('Profile picture removed');
+    } catch (err: any) {
+      showError(err?.data?.error || err?.message || 'Failed to remove picture');
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
   const handleChangePassword = async () => {
     if (!user?.email) return;
     setPwState('sending');
@@ -115,6 +169,168 @@ export default function PersonalTab() {
       </Typography>
 
       {error && <Alert severity="error" sx={{ mb: 2, borderRadius: '10px' }}>{error}</Alert>}
+
+      {/* Avatar block — circular dropzone with a full dimming overlay
+          on hover. Empty state shows the user's initials + a click-to-
+          upload hint; filled state surfaces Replace + Delete in the
+          centre of the dimmed overlay. The Company tab uses the same
+          interaction pattern (dimmed overlay, centred buttons) on a
+          square tile so both editors feel coherent. */}
+      <Box sx={{ mb: 2.5 }}>
+        <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, color: TOKENS.textPrimary, mb: 0.25 }}>
+          Profile picture
+        </Typography>
+        <Typography sx={{ fontSize: '0.75rem', color: TOKENS.textSecondary, mb: 1.25 }}>
+          PNG, JPG, WebP, or SVG. Up to 2MB.
+        </Typography>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleAvatarFile(f);
+          }}
+        />
+
+        <Box
+          role={user?.avatar_url ? undefined : 'button'}
+          tabIndex={user?.avatar_url ? -1 : 0}
+          onClick={() => {
+            if (avatarBusy) return;
+            if (!user?.avatar_url) fileInputRef.current?.click();
+          }}
+          onKeyDown={(e) => {
+            if (avatarBusy || user?.avatar_url) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
+          sx={{
+            position: 'relative',
+            width: 120,
+            height: 120,
+            borderRadius: '50%',
+            border: `1px ${user?.avatar_url ? 'solid' : 'dashed'} ${TOKENS.border}`,
+            bgcolor: '#FAFAFA',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            cursor: user?.avatar_url || avatarBusy ? 'default' : 'pointer',
+            transition: 'border-color 120ms ease, background-color 120ms ease',
+            '&:hover': user?.avatar_url
+              ? { '& .avatar-actions': { opacity: 1 } }
+              : {
+                  borderColor: TOKENS.brand,
+                  bgcolor: `${TOKENS.brand}08`,
+                },
+          }}
+        >
+          {user?.avatar_url ? (
+            <>
+              <img
+                key={user.avatar_url}
+                src={user.avatar_url}
+                alt="Profile picture"
+                referrerPolicy="no-referrer"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+              />
+              <Box
+                className="avatar-actions"
+                sx={{
+                  position: 'absolute',
+                  inset: 0,
+                  bgcolor: 'rgba(0,0,0,0.45)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 1,
+                  opacity: 0,
+                  transition: 'opacity 120ms ease',
+                }}
+              >
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!avatarBusy) fileInputRef.current?.click();
+                  }}
+                  disabled={avatarBusy}
+                  aria-label="Replace picture"
+                  sx={{
+                    bgcolor: '#FFFFFF',
+                    color: TOKENS.textPrimary,
+                    '&:hover': { bgcolor: '#F3F4F6' },
+                  }}
+                >
+                  <CloudUploadIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!avatarBusy) handleAvatarRemove();
+                  }}
+                  disabled={avatarBusy}
+                  aria-label="Remove picture"
+                  sx={{
+                    bgcolor: '#FFFFFF',
+                    color: TOKENS.textSecondary,
+                    '&:hover': { bgcolor: '#FEE2E2', color: '#B91C1C' },
+                  }}
+                >
+                  <DeleteIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Box>
+              {avatarBusy && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    bgcolor: 'rgba(255,255,255,0.7)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <CircularProgress size={20} thickness={5} sx={{ color: TOKENS.brand }} />
+                </Box>
+              )}
+            </>
+          ) : (
+            <Box sx={{ textAlign: 'center', px: 2 }}>
+              {avatarBusy ? (
+                <CircularProgress size={20} thickness={5} sx={{ color: TOKENS.brand }} />
+              ) : (
+                <>
+                  <Typography
+                    sx={{
+                      fontSize: '1.5rem',
+                      fontWeight: 700,
+                      color: TOKENS.textMuted,
+                      letterSpacing: '-0.02em',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {getInitials(user?.first_name, user?.last_name, user?.email)}
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.65rem', color: TOKENS.textSecondary, mt: 0.5 }}>
+                    Click to upload
+                  </Typography>
+                </>
+              )}
+            </Box>
+          )}
+        </Box>
+      </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2.5, mb: 2.5 }}>
         <FormField

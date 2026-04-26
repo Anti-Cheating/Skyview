@@ -55,7 +55,10 @@ export default function AppLayout() {
   const sidebarProfile: ProfileConfig = {
     id: 'profile',
     label: getUserDisplayName(user),
-    avatarUrl: undefined,
+    // Pull from the user's profile-picture URL (Google's or the
+    // R2-uploaded one). undefined when null so MUI's Avatar falls
+    // back to the initials child.
+    avatarUrl: user?.avatar_url ?? undefined,
     route: '/profile',
   };
 

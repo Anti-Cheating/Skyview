@@ -43,6 +43,16 @@ interface CompanyTabProps {
 const DESCRIPTION_MAX = 280;
 const LOCATION_MAX = 120;
 
+function getCompanyInitials(name?: string): string {
+  const trimmed = (name ?? '').trim();
+  if (!trimmed) return 'CO';
+  const parts = trimmed.split(/\s+/);
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return (parts[0][0]! + parts[1][0]!).toUpperCase();
+  }
+  return trimmed.slice(0, 2).toUpperCase();
+}
+
 export default function CompanyTab({ companyId }: CompanyTabProps) {
   const { showSuccess, showError } = useSnackbar();
   const { updateCompany: pushToContext, refreshCompany } = useCompany();
@@ -248,7 +258,7 @@ export default function CompanyTab({ companyId }: CompanyTabProps) {
                 position: 'relative',
                 width: 120,
                 height: 120,
-                borderRadius: '12px',
+                borderRadius: '50%',
                 border: `1px ${company?.logo_url ? 'solid' : 'dashed'} ${TOKENS.border}`,
                 bgcolor: '#FAFAFA',
                 display: 'flex',
@@ -277,17 +287,20 @@ export default function CompanyTab({ companyId }: CompanyTabProps) {
                       objectFit: 'contain',
                     }}
                   />
-                  {/* Hover overlay — appears as a soft top-strip with
-                      Edit + Delete. Pinned top-right so the logo stays
-                      visible underneath. */}
+                  {/* Hover overlay — full-tile dim with centered Edit +
+                      Delete buttons. Same interaction pattern as the
+                      profile-picture editor on the Personal tab so
+                      both upload surfaces feel like one design. */}
                   <Box
                     className="logo-actions"
                     sx={{
                       position: 'absolute',
-                      top: 6,
-                      right: 6,
+                      inset: 0,
+                      bgcolor: 'rgba(0,0,0,0.45)',
                       display: 'flex',
-                      gap: 0.5,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 1,
                       opacity: 0,
                       transition: 'opacity 120ms ease',
                     }}
@@ -303,7 +316,6 @@ export default function CompanyTab({ companyId }: CompanyTabProps) {
                       sx={{
                         bgcolor: '#FFFFFF',
                         color: TOKENS.textPrimary,
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
                         '&:hover': { bgcolor: '#F3F4F6' },
                       }}
                     >
@@ -320,7 +332,6 @@ export default function CompanyTab({ companyId }: CompanyTabProps) {
                       sx={{
                         bgcolor: '#FFFFFF',
                         color: TOKENS.textSecondary,
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
                         '&:hover': { bgcolor: '#FEE2E2', color: '#B91C1C' },
                       }}
                     >
@@ -348,12 +359,19 @@ export default function CompanyTab({ companyId }: CompanyTabProps) {
                     <CircularProgress size={20} thickness={5} sx={{ color: TOKENS.brand }} />
                   ) : (
                     <>
-                      <CloudUploadIcon sx={{ fontSize: 22, color: TOKENS.textMuted, mb: 0.25 }} />
-                      <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: TOKENS.textPrimary }}>
-                        Click to upload
+                      <Typography
+                        sx={{
+                          fontSize: '1.5rem',
+                          fontWeight: 700,
+                          color: TOKENS.textMuted,
+                          letterSpacing: '-0.02em',
+                          lineHeight: 1,
+                        }}
+                      >
+                        {getCompanyInitials(company?.name)}
                       </Typography>
-                      <Typography sx={{ fontSize: '0.65rem', color: TOKENS.textSecondary, mt: 0.25 }}>
-                        2MB max
+                      <Typography sx={{ fontSize: '0.65rem', color: TOKENS.textSecondary, mt: 0.5 }}>
+                        Click to upload
                       </Typography>
                     </>
                   )}
