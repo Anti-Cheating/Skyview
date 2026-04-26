@@ -15,7 +15,22 @@
         frame-src 'self' https://accounts.google.com;
       " />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <!-- iOS Safari status-bar tint matches the dark sidebar/navbar so
+       the top of the screen reads as one continuous chrome strip. -->
+  <meta name="theme-color" content="#0B1A10" />
   <title>Trueyy | Interview Monitor</title>
+  <style>
+    /* Fixes the "white flash on scroll" the user saw at the very top
+       and bottom of the viewport. iOS bounce / desktop overscroll
+       reveals the html element's background — match it to the app
+       content (light grey) and disable the bounce on the body so the
+       sticky dark navbar can't be uncovered above. */
+    html, body {
+      margin: 0;
+      background: #F8F9FA;
+      overscroll-behavior: none;
+    }
+  </style>
 </head>
 
 <body>

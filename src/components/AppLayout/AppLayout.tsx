@@ -125,9 +125,11 @@ export default function AppLayout() {
             >
               <MenuIcon sx={{ fontSize: 20 }} />
             </IconButton>
-            <Box sx={{ transform: 'scale(0.7)', transformOrigin: 'right center' }}>
-              <TruoyyLogo collapsed={false} size="small" />
-            </Box>
+            {/* Bumped from a scaled-down `small` (~20px tall) to a full
+                `medium` (~40px) so the wordmark is legible. The header's
+                py:0.75 + 36px IconButton already reserves enough room
+                for a 40px logo without expanding the bar. */}
+            <TruoyyLogo collapsed={false} size="medium" />
           </Box>
         )}
         {/* Right-side route content — subtle slide-up + fade on mount.
