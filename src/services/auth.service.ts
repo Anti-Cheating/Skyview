@@ -118,6 +118,45 @@ export class AuthService {
   }
 
   /**
+   * Sign in (or sign up) with Google. Posts the ID token from the
+   * Google popup; server figures out signin vs signup based on what's
+   * already in the DB. Returns the same shape as login plus an extra
+   * `requiresOnboarding` flag — true only for brand-new users (and
+   * the rare resume-mid-onboarding case).
+   */
+  static async googleLogin(idToken: string): Promise<AuthResponse['data'] & {
+    requiresOnboarding?: boolean;
+  }> {
+    const response = await ApiService.post<AuthResponse['data'] & {
+      requiresOnboarding?: boolean;
+    }>('/auth/google', { idToken });
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Google sign-in failed');
+    }
+    AuthService.storeAuthData(response.data);
+    return response.data;
+  }
+
+  /**
+   * Finish the Google sign-up flow by naming the workspace. JWT
+   * required (the access token from googleLogin). Returns the
+   * updated user shape — caller should call AuthContext.refreshAuth
+   * afterwards so company_id is reflected app-wide.
+   */
+  static async completeOnboarding(companyName: string): Promise<User> {
+    const response = await ApiService.post<{ user: User }>(
+      '/auth/onboarding/workspace',
+      { companyName },
+    );
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Failed to create workspace');
+    }
+    const user = response.data.user;
+    localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+    return user;
+  }
+
+  /**
    * Ask the server for a fresh verification email. Always succeeds
    * (the endpoint is anti-enumeration and silent on unknown / already-
    * verified addresses), so the UI just shows a "check your inbox"

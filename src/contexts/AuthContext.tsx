@@ -13,6 +13,18 @@ interface AuthContextType {
   signup: (credentials: SignupCredentials) => Promise<{
     email: string;
   }>;
+  /**
+   * Sign in / sign up via Google. Returns `requiresOnboarding=true`
+   * for brand-new users so the caller can route them to
+   * /onboarding/workspace; otherwise behaves like login.
+   */
+  googleLogin: (idToken: string) => Promise<{ requiresOnboarding: boolean }>;
+  /**
+   * Finishes Google sign-up by creating the workspace. Sets the
+   * user's company_id on success so PrivateRoute releases the
+   * onboarding gate.
+   */
+  completeOnboarding: (companyName: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
   /**
@@ -106,6 +118,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { email: result.user.email };
   };
 
+  const googleLogin = async (idToken: string) => {
+    const data = await AuthService.googleLogin(idToken);
+    // Set the user immediately — they're authenticated regardless of
+    // onboarding state. The route guard handles the rest.
+    setUser(data.user);
+    return { requiresOnboarding: !!data.requiresOnboarding };
+  };
+
+  const completeOnboarding = async (companyName: string) => {
+    const updated = await AuthService.completeOnboarding(companyName);
+    // Merge into context so PrivateRoute's `requiresOnboarding`
+    // derivation flips to false on the next render.
+    setUser(updated);
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -113,6 +140,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       login,
       signup,
+      googleLogin,
+      completeOnboarding,
       logout: handleLogout,
       refreshAuth,
       updateUser,

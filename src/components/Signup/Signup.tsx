@@ -29,6 +29,7 @@ import { isValidEmail, isStrongPassword } from '../../utils/validation';
 import { AuthCard } from '../common/AuthCard';
 import { FormField } from '../common/FormField';
 import { ActionButton } from '../common/ActionButton';
+import { GoogleAuthButton } from '../Auth/GoogleAuthButton';
 import { TOKENS } from '../../theme';
 
 export default function Signup() {
@@ -276,6 +277,11 @@ export default function Signup() {
           {loading ? 'Creating account…' : 'Sign up'}
         </ActionButton>
       </Box>
+
+      {/* Google sign-up — auto-routes to /onboarding/workspace for new
+          users so they can name their workspace before landing in the
+          app. Auto-hides if VITE_GOOGLE_CLIENT_ID isn't set. */}
+      <GoogleAuthButton mode="signup" onError={(msg) => setApiError(msg)} />
 
       <Box sx={{ textAlign: 'center', mt: 2, fontSize: '0.813rem', color: TOKENS.textSecondary }}>
         Already have an account?{' '}

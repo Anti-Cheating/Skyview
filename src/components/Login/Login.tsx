@@ -27,6 +27,7 @@ import { isValidEmail, getEmailError } from '../../utils/validation';
 import { AuthCard } from '../common/AuthCard';
 import { FormField } from '../common/FormField';
 import { ActionButton } from '../common/ActionButton';
+import { GoogleAuthButton } from '../Auth/GoogleAuthButton';
 import { TOKENS } from '../../theme';
 
 export default function Login() {
@@ -218,6 +219,10 @@ export default function Login() {
           {loading ? 'Signing in…' : 'Sign in'}
         </ActionButton>
       </Box>
+
+      {/* Google sign-in — same endpoint handles both signin and signup
+          server-side. Auto-hides if VITE_GOOGLE_CLIENT_ID isn't set. */}
+      <GoogleAuthButton mode="signin" onError={(msg) => setError(msg)} />
 
       <Box sx={{ textAlign: 'center', mt: 2, fontSize: '0.813rem', color: TOKENS.textSecondary }}>
         Don&apos;t have an account?{' '}
