@@ -7,7 +7,7 @@
  */
 
 import { useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
   Box,
   Alert,
@@ -33,6 +33,7 @@ import { TOKENS } from '../../theme';
 
 export default function Signup() {
   const { signup } = useAuth();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -90,13 +91,17 @@ export default function Signup() {
 
     setLoading(true);
     try {
-      await signup({
+      const { email } = await signup({
         firstName: formData.firstName,
         lastName: formData.lastName,
         companyName: formData.companyName,
         email: formData.email,
         password: formData.password,
       });
+      // Email-verification flow: signup didn't log the user in. Send
+      // them to /check-inbox with the email pre-filled so they know
+      // where to look and can resend if needed.
+      navigate(`/check-inbox?email=${encodeURIComponent(email)}`);
     } catch (err: any) {
       const apiError = err as ApiError;
       if (apiError.status === 0) {

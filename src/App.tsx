@@ -18,6 +18,8 @@ import TeamPage from './components/Team/TeamPage';
 import ProfilePage from './components/Profile/ProfilePage';
 import NotFoundPage from './components/NotFound/NotFoundPage';
 import InviteAcceptPage from './components/Team/InviteAcceptPage';
+import CheckInbox from './components/Auth/CheckInbox';
+import VerifyEmail from './components/Auth/VerifyEmail';
 import { isCompanyManagerRole } from './config/constants';
 
 /**
@@ -114,6 +116,12 @@ function AppRoutes() {
             — the server will log them out on success anyway. */}
         <Route path="/forgot-password" element={<AuthRoute><ForgotPassword /></AuthRoute>} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        {/* Email verification — public, signed-out users land here.
+            CheckInbox is the post-signup landing page; VerifyEmail
+            consumes the token from the email link and signs the
+            user in on success. */}
+        <Route path="/check-inbox" element={<CheckInbox />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
         {/* Public invite acceptance — invitee may not have an account yet */}
         <Route path="/invite/:token" element={<InviteAcceptPage />} />
         {/* Falcon deep-link return page — simple "open desktop app" view */}

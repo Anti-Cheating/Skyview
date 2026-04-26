@@ -7,7 +7,7 @@
  */
 
 import { useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
   Box,
   Alert,
@@ -31,6 +31,7 @@ import { TOKENS } from '../../theme';
 
 export default function Login() {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -77,6 +78,14 @@ export default function Login() {
       // here after login).
     } catch (err: any) {
       const apiError = err as ApiError;
+      // Email-not-verified: server returns 403 with code === 'EMAIL_NOT_VERIFIED'.
+      // Send the user to /check-inbox with the email pre-filled so they
+      // can resend the link from the same component the signup flow uses.
+      const code = (apiError as { data?: { code?: string } })?.data?.code;
+      if (apiError.status === 403 && code === 'EMAIL_NOT_VERIFIED') {
+        navigate(`/check-inbox?email=${encodeURIComponent(email.trim().toLowerCase())}`);
+        return;
+      }
       if (apiError.status === 401) setError('Invalid email or password');
       else if (apiError.status === 0)
         setError('Unable to connect to server. Please check if the server is running.');

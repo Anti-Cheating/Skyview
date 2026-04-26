@@ -12,10 +12,22 @@ export class AuthService {
     throw new Error(response.message || 'Login failed');
   }
 
-  static async signup(credentials: SignupCredentials): Promise<AuthResponse['data']> {
-    const response = await ApiService.post<AuthResponse['data']>(API_ENDPOINTS.AUTH.SIGNUP, credentials);
+  /**
+   * Signup now returns a verification-required response — the server
+   * creates the user but does NOT issue tokens. The caller routes
+   * the user to /check-inbox where they wait for the verification
+   * email. Auth tokens are handed out by /auth/verify-email after
+   * the user clicks the link.
+   */
+  static async signup(credentials: SignupCredentials): Promise<{
+    user: { id: string; email: string; first_name: string; last_name: string };
+    requiresVerification: true;
+  }> {
+    const response = await ApiService.post<{
+      user: { id: string; email: string; first_name: string; last_name: string };
+      requiresVerification: true;
+    }>(API_ENDPOINTS.AUTH.SIGNUP, credentials);
     if (response.success && response.data) {
-      this.storeAuthData(response.data);
       return response.data;
     }
     throw new Error(response.message || 'Signup failed');
@@ -86,6 +98,40 @@ export class AuthService {
     if (!response.success) {
       throw new Error(response.message || 'Failed to reset password');
     }
+  }
+
+  /**
+   * Consume the verification token from the email link. On success
+   * the server returns the same shape as login (user + tokens), so
+   * we store auth data immediately and treat this as a sign-in too.
+   */
+  static async verifyEmail(token: string): Promise<AuthResponse['data']> {
+    const response = await ApiService.post<AuthResponse['data']>(
+      '/auth/verify-email',
+      { token },
+    );
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'This verification link is no longer valid');
+    }
+    AuthService.storeAuthData(response.data);
+    return response.data;
+  }
+
+  /**
+   * Ask the server for a fresh verification email. Always succeeds
+   * (the endpoint is anti-enumeration and silent on unknown / already-
+   * verified addresses), so the UI just shows a "check your inbox"
+   * confirmation regardless.
+   */
+  static async resendVerification(email: string): Promise<string> {
+    const response = await ApiService.post<{ message?: string }>(
+      '/auth/resend-verification',
+      { email },
+    );
+    return (
+      response.message ||
+      'If an unverified account exists for that email, a verification link has been sent.'
+    );
   }
 
   static getAccessToken(): string | null {

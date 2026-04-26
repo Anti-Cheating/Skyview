@@ -7,7 +7,12 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
-  signup: (credentials: SignupCredentials) => Promise<void>;
+  // Signup now returns the verification-pending shape so the caller
+  // (Signup page) can route to /check-inbox. No user is set on the
+  // context — they're not logged in until they verify.
+  signup: (credentials: SignupCredentials) => Promise<{
+    email: string;
+  }>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
   /**
@@ -94,13 +99,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signup = async (credentials: SignupCredentials) => {
-    const authData = await AuthService.signup(credentials);
-    try {
-      const userDetails = await AuthService.getCurrentUserDetails();
-      setUser(userDetails);
-    } catch {
-      setUser(authData.user);
-    }
+    const result = await AuthService.signup(credentials);
+    // Don't set the user on context — verification still pending.
+    // Caller routes to /check-inbox where the email address is
+    // displayed and the user waits for the link.
+    return { email: result.user.email };
   };
 
   return (
