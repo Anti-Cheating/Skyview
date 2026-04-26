@@ -118,18 +118,20 @@ export class AuthService {
   }
 
   /**
-   * Sign in (or sign up) with Google. Posts the ID token from the
-   * Google popup; server figures out signin vs signup based on what's
-   * already in the DB. Returns the same shape as login plus an extra
-   * `requiresOnboarding` flag — true only for brand-new users (and
-   * the rare resume-mid-onboarding case).
+   * Sign in (or sign up) with Google. We accept Google's OAuth2
+   * access token (returned by the implicit popup flow we use on the
+   * frontend); the server calls Google's userinfo endpoint to derive
+   * the same identity claims it would have validated from an ID
+   * token. Backend handles signin vs signup automatically based on
+   * existing DB state and returns `requiresOnboarding=true` for
+   * brand-new users.
    */
-  static async googleLogin(idToken: string): Promise<AuthResponse['data'] & {
+  static async googleLogin(accessToken: string): Promise<AuthResponse['data'] & {
     requiresOnboarding?: boolean;
   }> {
     const response = await ApiService.post<AuthResponse['data'] & {
       requiresOnboarding?: boolean;
-    }>('/auth/google', { idToken });
+    }>('/auth/google', { accessToken });
     if (!response.success || !response.data) {
       throw new Error(response.message || 'Google sign-in failed');
     }
