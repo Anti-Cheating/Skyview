@@ -307,7 +307,12 @@ export default function AppInterviewList() {
         </Box>
       </Box>
 
-      {showShimmer ? (
+      {/* Desktop staff get the InterviewTable's built-in skeleton rows
+          via DataTable's loading prop — no need for a top-level shimmer
+          there. The card-form shimmer is only useful in the mobile /
+          candidate views which would otherwise render an empty grid
+          while the first request is in flight. */}
+      {showShimmer && !useTableView ? (
         <Box sx={{ py: 2 }}><InterviewListShimmer count={3} /></Box>
       ) : (
         <>
@@ -324,7 +329,12 @@ export default function AppInterviewList() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
           >
-          {items.length === 0 ? (
+          {/* While the first request is in flight, render the actual
+              view (table on desktop, cards on mobile) so its built-in
+              skeleton can paint. Showing EmptyState during loading
+              made the desktop page flash a card-style loader for a
+              fraction of a second before swapping to the table. */}
+          {!loading && items.length === 0 ? (
             <EmptyState />
           ) : useTableView ? (
             <InterviewTable
