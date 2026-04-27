@@ -99,10 +99,18 @@ export default function AppInterviewList() {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  // Reset to page 1 whenever the filter or search changes — otherwise
-  // the user lands on a page that may not exist for the new query.
+  // Reset to page 1 + clear items whenever the filter or the
+  // *debounced* search changes — otherwise the user lands on a page
+  // that may not exist for the new query, and the previous results
+  // linger until the new fetch returns. Clearing makes the table
+  // skeleton kick in during the transition.
+  //
+  // We listen on `search` (the 300ms-debounced value), not the raw
+  // `searchInput`, so per-keystroke typing doesn't blow the table
+  // away on every character.
   useEffect(() => {
     setPage(1);
+    setItems([]);
   }, [pill, search]);
 
   // Track the latest fetch so out-of-order responses don't paint stale

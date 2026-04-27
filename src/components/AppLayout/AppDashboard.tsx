@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react';
 import { InterviewService } from '../../services/interview.service';
 import { useDelayedFlag } from '../../hooks/useDelayedFlag';
+
+// Module-scoped cache for the dashboard counts. Lives for the lifetime
+// of the SPA tab — survives navigating away from /dashboard and back,
+// but is cleared by a hard reload (which is what we want — a fresh
+// page load is the user signalling they want the latest).
+//
+// Stale-while-revalidate: if a cached value exists we render it
+// immediately (no shimmer) and re-fetch in the background. The first
+// dashboard visit in a session shows shimmer; every subsequent visit
+// is instant. We don't bother with a TTL — the background refresh on
+// every mount catches any drift within a couple hundred milliseconds.
+let _countsCache: { upcoming: number; past: number } | null = null;
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -92,20 +104,33 @@ export default function AppDashboard() {
   // when the list page consolidated to a single status-pill model.
   // We map "upcoming" → scheduled and "past" → completed so the
   // welcome-message copy below stays meaningful.
-  const [upcomingCount, setUpcomingCount] = useState(0);
-  const [pastCount, setPastCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // Hydrate from the module cache up front so a returning visit paints
+  // the previous numbers immediately. `loading` is only true on the
+  // very first dashboard mount of the SPA session — subsequent visits
+  // skip the shimmer entirely and the background refresh updates the
+  // numbers in place if anything changed.
+  const [upcomingCount, setUpcomingCount] = useState(_countsCache?.upcoming ?? 0);
+  const [pastCount, setPastCount] = useState(_countsCache?.past ?? 0);
+  const [loading, setLoading] = useState(_countsCache === null);
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
     (async () => {
-      setLoading(true);
+      // Only flip the spinner when we have nothing to show. With cache
+      // present, refresh quietly so the user doesn't see a flash of
+      // shimmer over data they were just looking at.
+      if (_countsCache === null) setLoading(true);
       try {
         const resp = await InterviewService.getCounts();
         if (cancelled) return;
         if (resp.success && resp.data) {
-          setUpcomingCount(resp.data.scheduled ?? 0);
-          setPastCount(resp.data.completed ?? 0);
+          const next = {
+            upcoming: resp.data.scheduled ?? 0,
+            past: resp.data.completed ?? 0,
+          };
+          _countsCache = next;
+          setUpcomingCount(next.upcoming);
+          setPastCount(next.past);
         }
       } catch {/* snackbar handles failures elsewhere */}
       finally {
@@ -114,6 +139,8 @@ export default function AppDashboard() {
     })();
     return () => { cancelled = true; };
   }, [user?.id]);
+  // Only delay-shimmer the first cold load; warm visits never go
+  // through the loading path so this is a no-op for them.
   const showShimmer = useDelayedFlag(loading, 250);
 
   // `helperInstalled` is a historical name kept because the dashboard

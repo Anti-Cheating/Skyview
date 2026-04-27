@@ -202,11 +202,20 @@ export default function TeamPage() {
     const t = setTimeout(() => setPendingSearch(pendingSearchInput), 300);
     return () => clearTimeout(t);
   }, [pendingSearchInput]);
-  // Reset to page 1 whenever the search term commits — otherwise the
-  // user lands on an empty page that may no longer exist for the new
-  // (smaller) result set.
-  useEffect(() => { setMembersPage(1); }, [membersSearch]);
-  useEffect(() => { setPendingPage(1); }, [pendingSearch]);
+  // Reset to page 1 + clear the tab's items whenever the search term
+  // commits — otherwise the user lands on an empty page that may no
+  // longer exist for the new (smaller) result set, AND the previous
+  // results linger over the new query for the duration of the round
+  // trip. Clearing makes the table skeleton kick in during the
+  // transition (matches the Interviews page pattern).
+  useEffect(() => {
+    setMembersPage(1);
+    setMembers([]);
+  }, [membersSearch]);
+  useEffect(() => {
+    setPendingPage(1);
+    setPending([]);
+  }, [pendingSearch]);
 
   // Single-list refreshers so tab switches only fetch the list being
   // shown. `refresh()` (both) is still used on initial mount and after
@@ -267,13 +276,21 @@ export default function TeamPage() {
 
   // Page / page-size / search changes refetch only the affected tab.
   // Avoids a full both-lists round trip just because the user paged or
-  // searched the currently-visible table.
+  // searched the currently-visible table. We flip `loading` around
+  // each per-tab refetch so the DataTable's built-in skeleton kicks
+  // in during the transition (search committed / page change).
   useEffect(() => {
-    refreshMembers(membersPage, membersPageSize, membersSearch);
+    setLoading(true);
+    refreshMembers(membersPage, membersPageSize, membersSearch).finally(() => {
+      setLoading(false);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [membersPage, membersPageSize, membersSearch]);
   useEffect(() => {
-    refreshInvites(pendingPage, pendingPageSize, pendingSearch);
+    setLoading(true);
+    refreshInvites(pendingPage, pendingPageSize, pendingSearch).finally(() => {
+      setLoading(false);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingPage, pendingPageSize, pendingSearch]);
 
