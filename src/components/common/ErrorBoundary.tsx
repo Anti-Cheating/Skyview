@@ -1,6 +1,7 @@
 import { Component, ReactNode, ErrorInfo } from 'react';
-import { Box, Typography, Button, Paper } from '@mui/material';
+import { Box, Typography, Paper } from '@mui/material';
 import { ErrorOutline as ErrorIcon } from '@mui/icons-material';
+import { ActionButton } from './ActionButton';
 
 interface Props { children: ReactNode; fallback?: ReactNode; }
 interface State { hasError: boolean; error: Error | null; }
@@ -23,7 +24,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               {this.state.error?.message || 'An unexpected error occurred'}
             </Typography>
-            <Button variant="contained" onClick={this.handleReset}>Try Again</Button>
+            <ActionButton onClick={this.handleReset}>Try Again</ActionButton>
           </Paper>
         </Box>
       );

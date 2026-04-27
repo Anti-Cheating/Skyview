@@ -26,24 +26,10 @@ export interface ProfileConfig {
   route: string;
 }
 
-export interface UIConfig {
-  collapsed: boolean;
-  width: number;
-  collapsedWidth: number;
-}
-
-export interface SidebarData {
-  logo: LogoConfig;
-  items: NavItem[];
-  secondary: SecondaryNavItem[];
-  profile: ProfileConfig;
-  ui: UIConfig;
-}
-
 export interface SidebarProps {
   logo: LogoConfig;
   items: NavItem[];
-  secondary: SecondaryNavItem[];
+  secondary?: SecondaryNavItem[];
   profile: ProfileConfig;
   collapsed: boolean;
   onToggle: () => void;
@@ -51,6 +37,5 @@ export interface SidebarProps {
   activeId: string;
   width?: number;
   collapsedWidth?: number;
-  colorMode?: 'light' | 'dark';
   density?: 'comfortable' | 'compact';
 }

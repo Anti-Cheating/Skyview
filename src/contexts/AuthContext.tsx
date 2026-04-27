@@ -7,9 +7,33 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
-  signup: (credentials: SignupCredentials) => Promise<void>;
+  // Signup now returns the verification-pending shape so the caller
+  // (Signup page) can route to /check-inbox. No user is set on the
+  // context — they're not logged in until they verify.
+  signup: (credentials: SignupCredentials) => Promise<{
+    email: string;
+  }>;
+  /**
+   * Sign in / sign up via Google. Returns `requiresOnboarding=true`
+   * for brand-new users so the caller can route them to
+   * /onboarding/workspace; otherwise behaves like login.
+   */
+  googleLogin: (idToken: string) => Promise<{ requiresOnboarding: boolean }>;
+  /**
+   * Finishes Google sign-up by creating the workspace. Sets the
+   * user's company_id on success so PrivateRoute releases the
+   * onboarding gate.
+   */
+  completeOnboarding: (companyName: string) => Promise<void>;
   logout: () => Promise<void>;
-  refreshAuth: () => void;
+  refreshAuth: () => Promise<void>;
+  /**
+   * Merge a partial user into the cached user — no API call, no
+   * isLoading toggle. Use after a PATCH that returned the updated
+   * row, instead of calling refreshAuth() (which would refetch and
+   * cause a visible blink while isLoading is true).
+   */
+  updateUser: (patch: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -41,6 +65,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  const updateUser = useCallback((patch: Partial<User>) => {
+    setUser((prev) => (prev ? { ...prev, ...patch } : prev));
   }, []);
 
   const handleLogout = useCallback(async () => {
@@ -83,13 +111,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signup = async (credentials: SignupCredentials) => {
-    const authData = await AuthService.signup(credentials);
-    try {
-      const userDetails = await AuthService.getCurrentUserDetails();
-      setUser(userDetails);
-    } catch {
-      setUser(authData.user);
-    }
+    const result = await AuthService.signup(credentials);
+    // Don't set the user on context — verification still pending.
+    // Caller routes to /check-inbox where the email address is
+    // displayed and the user waits for the link.
+    return { email: result.user.email };
+  };
+
+  const googleLogin = async (idToken: string) => {
+    const data = await AuthService.googleLogin(idToken);
+    // Set the user immediately — they're authenticated regardless of
+    // onboarding state. The route guard handles the rest.
+    setUser(data.user);
+    return { requiresOnboarding: !!data.requiresOnboarding };
+  };
+
+  const completeOnboarding = async (companyName: string) => {
+    const updated = await AuthService.completeOnboarding(companyName);
+    // Merge into context so PrivateRoute's `requiresOnboarding`
+    // derivation flips to false on the next render.
+    setUser(updated);
   };
 
   return (
@@ -99,8 +140,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       login,
       signup,
+      googleLogin,
+      completeOnboarding,
       logout: handleLogout,
       refreshAuth,
+      updateUser,
     }}>
       {children}
     </AuthContext.Provider>

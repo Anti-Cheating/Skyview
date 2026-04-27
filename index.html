@@ -6,15 +6,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="Content-Security-Policy" content="
         default-src 'self';
-        script-src 'self' 'unsafe-eval' blob:;
-        script-src-elem 'self' 'unsafe-eval' blob:;
-        style-src 'self' 'unsafe-inline';
+        script-src 'self' 'unsafe-eval' blob: https://accounts.google.com https://apis.google.com;
+        script-src-elem 'self' 'unsafe-eval' blob: https://accounts.google.com https://apis.google.com;
+        style-src 'self' 'unsafe-inline' https://accounts.google.com;
         font-src 'self' data: blob: https:;
         img-src 'self' data: https:;
-        connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 https://cortex-production-2484.up.railway.app;
-        frame-src 'self';
+        connect-src 'self' http://localhost:4000 http://127.0.0.1:4000 ws://localhost:4000 ws://127.0.0.1:4000 http://localhost:48123 http://127.0.0.1:48123 https://cortex-production-1dea.up.railway.app wss://cortex-production-1dea.up.railway.app https://accounts.google.com;
+        frame-src 'self' https://accounts.google.com;
       " />
-  <title>Skyview</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <!-- iOS Safari status-bar tint matches the dark sidebar/navbar so
+       the top of the screen reads as one continuous chrome strip. -->
+  <meta name="theme-color" content="#0B1A10" />
+  <title>Trueyy | Interview Monitor</title>
+  <style>
+    /* Fixes the "white flash on scroll" the user saw at the very top
+       and bottom of the viewport. iOS bounce / desktop overscroll
+       reveals the html element's background — match it to the app
+       content (light grey) and disable the bounce on the body so the
+       sticky dark navbar can't be uncovered above. */
+    html, body {
+      margin: 0;
+      background: #F8F9FA;
+      overscroll-behavior: none;
+    }
+  </style>
 </head>
 
 <body>

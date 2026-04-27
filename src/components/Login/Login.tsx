@@ -1,25 +1,48 @@
+/**
+ * Login — white-card auth flow matching InviteAcceptPage / Signup.
+ *
+ * Every input uses the shared <FormField>, the submit uses <ActionButton>,
+ * and the card + logo come from <AuthCard>. All the auth logic
+ * (isValidEmail, post-login redirect handled by AuthRoute) is unchanged.
+ */
+
 import { useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
-  Box, Container, Typography, TextField, Button, Alert,
-  InputAdornment, IconButton, Link,
+  Box,
+  Alert,
+  InputAdornment,
+  IconButton,
+  Link,
 } from '@mui/material';
 import {
-  Lock as LockIcon, Email as EmailIcon,
-  Visibility, VisibilityOff,
+  Email as EmailIcon,
+  Lock as LockIcon,
+  Visibility,
+  VisibilityOff,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import type { ApiError } from '../../types/api.types';
 import { isValidEmail, getEmailError } from '../../utils/validation';
+import { AuthCard } from '../common/AuthCard';
+import { FormField } from '../common/FormField';
+import { ActionButton } from '../common/ActionButton';
+import { GoogleAuthButton } from '../Auth/GoogleAuthButton';
+import { TOKENS } from '../../theme';
 
 export default function Login() {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Note: post-login redirect (including ?returnTo=) is handled by AuthRoute
+  // in App.tsx — once `login()` flips isAuthenticated to true, AuthRoute
+  // re-renders and Navigates to the right place. We don't navigate here.
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -32,116 +55,190 @@ export default function Login() {
     setError('');
     setLoading(true);
 
-    if (!email.trim()) { setError('Please enter your email address'); setLoading(false); return; }
-    if (!isValidEmail(email)) { setError('Please enter a valid email address'); setEmailError('Please enter a valid email address'); setLoading(false); return; }
-    if (!password.trim()) { setError('Please enter your password'); setLoading(false); return; }
+    if (!email.trim()) {
+      setError('Please enter your email address');
+      setLoading(false);
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setError('Please enter a valid email address');
+      setEmailError('Please enter a valid email address');
+      setLoading(false);
+      return;
+    }
+    if (!password.trim()) {
+      setError('Please enter your password');
+      setLoading(false);
+      return;
+    }
 
     try {
       await login({ email, password });
+      // AuthRoute (App.tsx) handles the post-login redirect, including
+      // ?returnTo= (which is how the /authorize-extension flow comes back
+      // here after login).
     } catch (err: any) {
       const apiError = err as ApiError;
+      // Email-not-verified: server returns 403 with code === 'EMAIL_NOT_VERIFIED'.
+      // Send the user to /check-inbox with the email pre-filled so they
+      // can resend the link from the same component the signup flow uses.
+      const code = (apiError as { data?: { code?: string } })?.data?.code;
+      if (apiError.status === 403 && code === 'EMAIL_NOT_VERIFIED') {
+        navigate(`/check-inbox?email=${encodeURIComponent(email.trim().toLowerCase())}`);
+        return;
+      }
       if (apiError.status === 401) setError('Invalid email or password');
-      else if (apiError.status === 0) setError('Unable to connect to server. Please check if the server is running.');
+      else if (apiError.status === 0)
+        setError('Unable to connect to server. Please check if the server is running.');
       else setError(apiError.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const darkFieldSx = {
-    '& .MuiOutlinedInput-root': {
-      color: '#E5E7EB',
-      bgcolor: 'rgba(255,255,255,0.05)',
-      '& fieldset': { borderColor: 'rgba(255,255,255,0.15)' },
-      '&:hover': { bgcolor: 'rgba(255,255,255,0.07)' },
-      '&:hover fieldset': { borderColor: 'rgba(76, 217, 100, 0.4)' },
-      '&.Mui-focused': { bgcolor: 'rgba(255,255,255,0.08)' },
-      '&.Mui-focused fieldset': { borderColor: 'rgba(255,255,255,0.35)', borderWidth: '1px' },
-      '& input': {
-        color: '#E5E7EB !important',
-        WebkitTextFillColor: '#E5E7EB !important',
-        '&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus': {
-          WebkitBoxShadow: '0 0 0 100px #122318 inset',
-          WebkitTextFillColor: '#E5E7EB !important',
-          caretColor: '#E5E7EB',
-        },
-      },
-    },
-    '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' },
-    '& .MuiInputLabel-root.Mui-focused': { color: 'rgba(255,255,255,0.7)' },
-  };
+  const disableSubmit = loading || !email.trim() || !password.trim() || !!emailError;
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default', p: 2 }}>
-      <Container maxWidth="xs">
-        <Box sx={{ p: 3, borderRadius: '12px', bgcolor: '#122318', border: '1px solid rgba(76, 217, 100, 0.12)' }}>
-          <Box sx={{ textAlign: 'center', mb: 3 }}>
-            <Typography variant="h5" component="h1" fontWeight="bold" sx={{ color: '#FFFFFF' }}>
-              Sign In
-            </Typography>
-          </Box>
-
-          {error && <Alert severity="error" sx={{ mb: 2, borderRadius: '8px' }}>{error}</Alert>}
-
-          <Box component="form" onSubmit={handleSubmit}>
-            <TextField
-              fullWidth label="Email" type="email" variant="outlined"
-              margin="normal" size="small" value={email}
-              onChange={handleEmailChange} disabled={loading}
-              error={!!emailError} helperText={emailError}
-              InputProps={{ startAdornment: <InputAdornment position="start"><EmailIcon fontSize="small" sx={{ color: 'rgba(255,255,255,0.4)' }} /></InputAdornment> }}
-              sx={{
-                ...darkFieldSx,
-                '& .MuiOutlinedInput-root.Mui-error': {
-                  '& fieldset': { borderColor: 'rgba(239, 68, 68, 0.5) !important', borderWidth: '1px !important' },
-                },
-                '& .MuiInputLabel-root.Mui-error': { color: 'rgba(239, 68, 68, 0.7)' },
-                '& .MuiFormHelperText-root.Mui-error': { color: 'rgba(239, 68, 68, 0.7)' },
-              }}
-              autoFocus
-            />
-
-            <TextField
-              fullWidth label="Password" type={showPassword ? 'text' : 'password'}
-              variant="outlined" margin="normal" size="small"
-              value={password} onChange={(e) => setPassword(e.target.value)} disabled={loading}
-              InputProps={{
-                startAdornment: <InputAdornment position="start"><LockIcon fontSize="small" sx={{ color: 'rgba(255,255,255,0.4)' }} /></InputAdornment>,
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" size="small" disabled={loading} sx={{ color: 'rgba(255,255,255,0.4)' }}>
-                      {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-              sx={darkFieldSx}
-            />
-
-            <Button
-              type="submit" fullWidth variant="contained"
-              sx={{
-                mt: 2, mb: 2,
-                bgcolor: '#4CD964', color: '#0B1A10', fontWeight: 600, borderRadius: '8px',
-                '&:hover': { bgcolor: '#3CB853' },
-                '&.Mui-disabled': { backgroundColor: 'rgba(76, 217, 100, 0.15) !important', color: 'rgba(255,255,255,0.3) !important' },
-              }}
-              disabled={loading || !email.trim() || !password.trim() || !!emailError}
-            >
-              {loading ? 'Signing in...' : 'Sign In'}
-            </Button>
-          </Box>
-
-          <Box sx={{ textAlign: 'center', mt: 2 }}>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-              Don't have an account?{' '}
-              <Link component={RouterLink} to="/signup" sx={{ color: '#4CD964', textDecoration: 'none', fontWeight: 600, '&:hover': { textDecoration: 'underline' } }}>
-                Sign up
-              </Link>
-            </Typography>
-          </Box>
+    <AuthCard maxWidth={420}>
+      <Box sx={{ textAlign: { xs: 'center', md: 'left' }, mb: 2.5 }}>
+        <Box
+          sx={{
+            fontSize: '1.375rem',
+            fontWeight: 700,
+            color: TOKENS.textPrimary,
+            letterSpacing: '-0.01em',
+            lineHeight: 1.25,
+            mb: 0.5,
+          }}
+        >
+          Welcome back.
         </Box>
-      </Container>
-    </Box>
+        <Box
+          sx={{
+            fontSize: '0.875rem',
+            color: TOKENS.textSecondary,
+            lineHeight: 1.5,
+          }}
+        >
+          Sign in and get back to your interviews.
+        </Box>
+      </Box>
+
+      {(error || emailError) && (
+        <Alert severity="error" sx={{ mb: 1.75, borderRadius: '10px', py: 0.5 }}>
+          {error || emailError}
+        </Alert>
+      )}
+
+      <Box
+        component="form"
+        onSubmit={handleSubmit}
+        autoComplete="on"
+        sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}
+      >
+        <FormField
+          label="Email"
+          required
+          type="email"
+          value={email}
+          onChange={handleEmailChange}
+          disabled={loading}
+          error={!!emailError}
+          autoComplete="email"
+          autoFocus
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <EmailIcon sx={{ fontSize: 18, color: TOKENS.textMuted }} />
+              </InputAdornment>
+            ),
+          }}
+        />
+
+        <FormField
+          label="Password"
+          required
+          type={showPassword ? 'text' : 'password'}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={loading}
+          autoComplete="current-password"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <LockIcon sx={{ fontSize: 18, color: TOKENS.textMuted }} />
+              </InputAdornment>
+            ),
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  onClick={() => setShowPassword((v) => !v)}
+                  edge="end"
+                  tabIndex={-1}
+                  sx={{ color: TOKENS.textSecondary }}
+                >
+                  {showPassword ? (
+                    <VisibilityOff fontSize="small" />
+                  ) : (
+                    <Visibility fontSize="small" />
+                  )}
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
+
+        {/* Right-aligned "Forgot password?" tucked directly under the
+            password field. Styled identically to the "Sign up" link in
+            the footer — brand green, fontWeight 600, underline on
+            hover — so all inline auth links on this page read the same. */}
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -0.5 }}>
+          <Link
+            component={RouterLink}
+            to="/forgot-password"
+            sx={{
+              fontSize: '0.813rem',
+              color: TOKENS.brand,
+              textDecoration: 'none',
+              fontWeight: 600,
+              '&:hover': { opacity: 0.75 },
+            }}
+          >
+            Forgot password?
+          </Link>
+        </Box>
+
+        <ActionButton
+          type="submit"
+          loading={loading}
+          disabled={disableSubmit}
+          fullWidth
+          sx={{ mt: 1 }}
+        >
+          {loading ? 'Signing in…' : 'Sign in'}
+        </ActionButton>
+      </Box>
+
+      {/* Google sign-in — same endpoint handles both signin and signup
+          server-side. Auto-hides if VITE_GOOGLE_CLIENT_ID isn't set. */}
+      <GoogleAuthButton mode="signin" onError={(msg) => setError(msg)} />
+
+      <Box sx={{ textAlign: 'center', mt: 2, fontSize: '0.813rem', color: TOKENS.textSecondary }}>
+        Don&apos;t have an account?{' '}
+        <Link
+          component={RouterLink}
+          to="/signup"
+          sx={{
+            color: TOKENS.brand,
+            textDecoration: 'none',
+            fontWeight: 600,
+            '&:hover': { opacity: 0.75 },
+          }}
+        >
+          Sign up
+        </Link>
+      </Box>
+    </AuthCard>
   );
 }

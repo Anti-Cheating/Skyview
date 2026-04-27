@@ -12,10 +12,22 @@ export class AuthService {
     throw new Error(response.message || 'Login failed');
   }
 
-  static async signup(credentials: SignupCredentials): Promise<AuthResponse['data']> {
-    const response = await ApiService.post<AuthResponse['data']>(API_ENDPOINTS.AUTH.SIGNUP, credentials);
+  /**
+   * Signup now returns a verification-required response — the server
+   * creates the user but does NOT issue tokens. The caller routes
+   * the user to /check-inbox where they wait for the verification
+   * email. Auth tokens are handed out by /auth/verify-email after
+   * the user clicks the link.
+   */
+  static async signup(credentials: SignupCredentials): Promise<{
+    user: { id: string; email: string; first_name: string; last_name: string };
+    requiresVerification: true;
+  }> {
+    const response = await ApiService.post<{
+      user: { id: string; email: string; first_name: string; last_name: string };
+      requiresVerification: true;
+    }>(API_ENDPOINTS.AUTH.SIGNUP, credentials);
     if (response.success && response.data) {
-      this.storeAuthData(response.data);
       return response.data;
     }
     throw new Error(response.message || 'Signup failed');
@@ -54,6 +66,145 @@ export class AuthService {
       return response.data;
     }
     throw new Error(response.message || 'Failed to generate desktop code');
+  }
+
+  /**
+   * Kick off the forgot-password flow. Server always returns 200 with
+   * a generic message regardless of whether the email is on file —
+   * we don't leak account existence. The frontend just shows "check
+   * your inbox" no matter what.
+   */
+  static async requestPasswordReset(email: string): Promise<string> {
+    const response = await ApiService.post<{ message?: string }>(
+      '/auth/forgot-password',
+      { email },
+    );
+    return (
+      response.message ||
+      'If an account exists for that email, a reset link has been sent.'
+    );
+  }
+
+  /**
+   * Consume a reset token and set a new password. Server invalidates
+   * every refresh token for the user on success, so active sessions
+   * are logged out.
+   */
+  static async resetPassword(token: string, password: string): Promise<void> {
+    const response = await ApiService.post<{ message?: string }>(
+      '/auth/reset-password',
+      { token, password },
+    );
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to reset password');
+    }
+  }
+
+  /**
+   * Consume the verification token from the email link. On success
+   * the server returns the same shape as login (user + tokens), so
+   * we store auth data immediately and treat this as a sign-in too.
+   */
+  static async verifyEmail(token: string): Promise<AuthResponse['data']> {
+    const response = await ApiService.post<AuthResponse['data']>(
+      '/auth/verify-email',
+      { token },
+    );
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'This verification link is no longer valid');
+    }
+    AuthService.storeAuthData(response.data);
+    return response.data;
+  }
+
+  /**
+   * Sign in (or sign up) with Google. We accept Google's OAuth2
+   * access token (returned by the implicit popup flow we use on the
+   * frontend); the server calls Google's userinfo endpoint to derive
+   * the same identity claims it would have validated from an ID
+   * token. Backend handles signin vs signup automatically based on
+   * existing DB state and returns `requiresOnboarding=true` for
+   * brand-new users.
+   */
+  static async googleLogin(accessToken: string): Promise<AuthResponse['data'] & {
+    requiresOnboarding?: boolean;
+  }> {
+    const response = await ApiService.post<AuthResponse['data'] & {
+      requiresOnboarding?: boolean;
+    }>('/auth/google', { accessToken });
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Google sign-in failed');
+    }
+    AuthService.storeAuthData(response.data);
+    return response.data;
+  }
+
+  /**
+   * Upload a profile picture. Multipart with `avatar` field, 2MB
+   * cap, image MIME only (server enforces). Returns the updated
+   * user. Caller should push the new user into AuthContext so the
+   * sidebar / profile tab refresh without a round-trip.
+   */
+  static async uploadAvatar(file: File): Promise<User> {
+    const fd = new FormData();
+    fd.append('avatar', file);
+    const response = await ApiService.post<{ user: User }>(
+      '/auth/me/avatar',
+      fd,
+    );
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Avatar upload failed');
+    }
+    const user = response.data.user;
+    localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+    return user;
+  }
+
+  /** Clears the user's avatar (and deletes the R2 object if owned). */
+  static async deleteAvatar(): Promise<User> {
+    const response = await ApiService.delete<{ user: User }>('/auth/me/avatar');
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Failed to remove avatar');
+    }
+    const user = response.data.user;
+    localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+    return user;
+  }
+
+  /**
+   * Finish the Google sign-up flow by naming the workspace. JWT
+   * required (the access token from googleLogin). Returns the
+   * updated user shape — caller should call AuthContext.refreshAuth
+   * afterwards so company_id is reflected app-wide.
+   */
+  static async completeOnboarding(companyName: string): Promise<User> {
+    const response = await ApiService.post<{ user: User }>(
+      '/auth/onboarding/workspace',
+      { companyName },
+    );
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Failed to create workspace');
+    }
+    const user = response.data.user;
+    localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+    return user;
+  }
+
+  /**
+   * Ask the server for a fresh verification email. Always succeeds
+   * (the endpoint is anti-enumeration and silent on unknown / already-
+   * verified addresses), so the UI just shows a "check your inbox"
+   * confirmation regardless.
+   */
+  static async resendVerification(email: string): Promise<string> {
+    const response = await ApiService.post<{ message?: string }>(
+      '/auth/resend-verification',
+      { email },
+    );
+    return (
+      response.message ||
+      'If an unverified account exists for that email, a verification link has been sent.'
+    );
   }
 
   static getAccessToken(): string | null {
