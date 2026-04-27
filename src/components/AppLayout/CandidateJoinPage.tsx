@@ -36,7 +36,11 @@ import {
 import { InterviewService } from '../../services/interview.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { useHelper } from '../../hooks/useHelper';
-import { openSettingsPane, detectHelperPlatform } from '../../services/helperBridge';
+import {
+  openSettingsPane,
+  requestHelperPermission,
+  detectHelperPlatform,
+} from '../../services/helperBridge';
 import { USER_ROLES, STORAGE_KEYS, isStaffRole } from '../../config/constants';
 import { ENV } from '../../config/env';
 import type { InterviewSession } from '../../types/interview.types';
@@ -145,10 +149,29 @@ export default function CandidateJoinPage() {
   }, [interview]);
 
   // ── Permission request buttons — route through the helper daemon ──
-  // Chrome/Safari block x-apple.systempreferences: URLs via window.open,
-  // so we POST to the helper which shells out to `open` (that works).
-  const openScreenRecordingSettings = () => openSettingsPane('screen_recording');
-  const openMicSettings = () => openSettingsPane('microphone');
+  // Browsers can't open x-apple.systempreferences: URLs, so we POST to
+  // the helper. The /permissions/request endpoint:
+  //   1. Calls the matching macOS API (CGRequestScreenCaptureAccess /
+  //      AVCaptureDevice.requestAccess) — this is what registers
+  //      Trueyy Helper with TCC so it appears in Privacy & Security.
+  //      Without this step the System Settings list stays empty.
+  //   2. Opens System Settings at the matching pane.
+  // useHelper polls /permissions every few seconds so as soon as the
+  // candidate flips the toggle on, screenOk / micOk auto-flip and
+  // the row turns green — no need to come back and click Enable again.
+  //
+  // Falls back to plain openSettingsPane on non-mac platforms (Linux
+  // doesn't have these APIs; the helper just opens Settings).
+  const openScreenRecordingSettings = async () => {
+    const ok = await requestHelperPermission('screen_recording');
+    if (!ok) await openSettingsPane('screen_recording');
+    helper.refresh();
+  };
+  const openMicSettings = async () => {
+    const ok = await requestHelperPermission('microphone');
+    if (!ok) await openSettingsPane('microphone');
+    helper.refresh();
+  };
 
   // ── Render ────────────────────────────────────────────────────────
 

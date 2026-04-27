@@ -162,6 +162,52 @@ export async function openSettingsPane(
 }
 
 /**
+ * Trigger the macOS TCC permission flow for a given pane: the daemon
+ * calls the underlying API (CGRequestScreenCaptureAccess /
+ * AVCaptureDevice.requestAccess) so Trueyy Helper appears in System
+ * Settings, then opens System Settings at the matching pane. The
+ * candidate just has to flip the toggle on; getHelperPermissions()
+ * will pick up the change on the next poll.
+ */
+export async function requestHelperPermission(
+  pane: 'microphone' | 'screen_recording'
+): Promise<boolean> {
+  try {
+    const resp = await fetch(`${HELPER_BASE}/permissions/request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pane }),
+    });
+    const body = (await resp.json()) as { ok?: boolean };
+    return !!body.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Live TCC state — silent probes, safe to poll. Returns the helper's
+ * current view of Screen Recording + Microphone permissions so the
+ * Enable flow can detect when the user has granted them in System
+ * Settings without needing an active interview session.
+ */
+export async function getHelperPermissions(): Promise<{
+  screen_recording_ok: boolean;
+  microphone_ok: boolean;
+} | null> {
+  try {
+    const resp = await fetch(`${HELPER_BASE}/permissions`, { method: 'GET' });
+    if (!resp.ok) return null;
+    return (await resp.json()) as {
+      screen_recording_ok: boolean;
+      microphone_ok: boolean;
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Push a refreshed access token into the running helper daemon. Called
  * after Skyview's auto-refresh so the daemon's pulse / windows /
  * image-analysis / R2-upload calls stop hitting Cortex with an expired

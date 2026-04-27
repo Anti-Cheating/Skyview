@@ -24,7 +24,7 @@ import {
 } from '@mui/icons-material';
 import { useRiskSocket } from '../../hooks/useRiskSocket';
 import { useHelper } from '../../hooks/useHelper';
-import { openSettingsPane } from '../../services/helperBridge';
+import { openSettingsPane, requestHelperPermission } from '../../services/helperBridge';
 import { InterviewService } from '../../services/interview.service';
 import { ENV } from '../../config/env';
 import { STORAGE_KEYS } from '../../config/constants';
@@ -446,7 +446,15 @@ export default function MonitoringView() {
               installed={helper.installed}
               micGranted={!!helper.status?.microphone_ok}
               checking={helper.checking}
-              onEnableMic={() => openSettingsPane('microphone')}
+              // Same auto-flow the candidate side uses: register the
+              // helper with TCC + open System Settings → Microphone in
+              // one click. Falls back to plain "open settings" if the
+              // request endpoint isn't available (older helper builds).
+              onEnableMic={async () => {
+                const ok = await requestHelperPermission('microphone');
+                if (!ok) await openSettingsPane('microphone');
+                helper.refresh();
+              }}
               onRetryMic={() => helper.refresh()}
             />
           ) : null}

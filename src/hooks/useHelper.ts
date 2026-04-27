@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   checkHelperHealth,
   getHelperStatus,
+  getHelperPermissions,
   joinSession,
   leaveSession,
   type HelperHealth,
@@ -41,8 +42,25 @@ export function useHelper(pollMs = 3000): UseHelperReturn {
     setHealth(h);
     if (h?.ok) {
       setInstalled(true);
-      const s = await getHelperStatus();
-      setStatus(s);
+      // Fetch /status (session-attached flags) and /permissions (live
+      // TCC probe) in parallel. Pre-session /status flags default to
+      // false even when the user has granted permission, so we merge:
+      // /permissions is authoritative for screen_recording_ok /
+      // microphone_ok; /status keeps the rest (mic_active, connected).
+      const [s, p] = await Promise.all([
+        getHelperStatus(),
+        getHelperPermissions(),
+      ]);
+      if (s) {
+        setStatus({
+          ...s,
+          screen_recording_ok:
+            p?.screen_recording_ok ?? s.screen_recording_ok,
+          microphone_ok: p?.microphone_ok ?? s.microphone_ok,
+        });
+      } else {
+        setStatus(null);
+      }
     } else {
       setStatus(null);
     }
