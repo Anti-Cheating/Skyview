@@ -71,7 +71,10 @@ export default function HelperDownloadCard({ checking, onRetry }: Props) {
           <DownloadIcon sx={{ fontSize: 22 }} />
         </Box>
 
-        <CardTitle sx={{ mb: 0.75 }}>
+        {/* Section heading rendered as a real <h2>. The page-level
+            <h1> already exists in MonitoringView (or CandidateJoinPage's
+            header), and this card is a section under it. */}
+        <CardTitle component="h2" sx={{ m: 0, mb: 0.75 }}>
           Install Trueyy Helper
         </CardTitle>
         <Secondary sx={{ color: TOKENS.textSecondary, mb: 2 }}>

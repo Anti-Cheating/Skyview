@@ -26,6 +26,7 @@ import {
   HourglassEmpty as HourglassIcon,
 } from "@mui/icons-material";
 import type { CandidateStatus } from "../../hooks/useRiskSocket";
+import { TOKENS } from "../../theme";
 
 interface Props {
   status: CandidateStatus | null;
@@ -35,8 +36,10 @@ interface Props {
   revoked?: boolean;
 }
 
-const BRAND = "#4CD964";
-const PENDING = "#9CA3AF";
+// Was hardcoded "#4CD964" — now sourced from the canonical theme so a
+// brand-colour change propagates without a search-and-replace.
+const BRAND = TOKENS.brand;
+const PENDING = TOKENS.textMuted;
 const ROW_BG_DONE = "rgba(76, 217, 100, 0.08)";
 const ROW_BG_PENDING = "#F9FAFB";
 
@@ -70,7 +73,9 @@ const ROWS: CheckRow[] = [
   },
   {
     key: "joined",
-    label: "joined",
+    // Was lowercase "joined" while the other three are Title Case.
+    // Match the surrounding labels.
+    label: "Joined",
     doneText: "Candidate joined the meeting",
     pendingText: "Waiting for candidate to open the meeting tab",
   },

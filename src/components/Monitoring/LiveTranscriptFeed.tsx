@@ -83,6 +83,10 @@ export default function LiveTranscriptFeed({ fragments }: LiveTranscriptFeedProp
           )}
           {hasInterim && (
             <Box
+              // Decorative dot — aria-hidden so the "Live Transcript"
+              // label remains the single accessible name. Animation
+              // respects reduced-motion via the media query below.
+              aria-hidden
               sx={{
                 width: 6,
                 height: 6,
@@ -92,6 +96,9 @@ export default function LiveTranscriptFeed({ fragments }: LiveTranscriptFeedProp
                 '@keyframes transcriptPulse': {
                   '0%, 100%': { opacity: 1 },
                   '50%': { opacity: 0.3 },
+                },
+                '@media (prefers-reduced-motion: reduce)': {
+                  animation: 'none',
                 },
               }}
             />

@@ -294,8 +294,12 @@ export default function MonitoringView() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-        <CircularProgress sx={{ color: BRAND }} />
+      <Box
+        role="status"
+        aria-live="polite"
+        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}
+      >
+        <CircularProgress sx={{ color: BRAND }} aria-label="Loading interview" />
       </Box>
     );
   }
@@ -354,6 +358,11 @@ export default function MonitoringView() {
         <IconButton
           onClick={handleExit}
           size="small"
+          // Was unlabelled — exits the monitoring session and navigates
+          // back to the interviews list. Spelling it out also tells the
+          // user that this isn't a "browser back" — it actually ends
+          // the session server-side.
+          aria-label="Exit monitoring and return to interviews"
           sx={{
             color: '#6B7280',
             '&:hover': { bgcolor: 'rgba(0,0,0,0.04)', color: '#1F2937' },
@@ -363,9 +372,14 @@ export default function MonitoringView() {
         </IconButton>
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
+          {/* Page title rendered as a real <h1> so MonitoringView gets
+              a single canonical page heading like every other route.
+              The visual size from variant="h3" is preserved. */}
           <Typography
+            component="h1"
             variant="h3"
             sx={{
+              m: 0,
               color: '#1F2937',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -381,25 +395,35 @@ export default function MonitoringView() {
           </Typography>
         </Box>
 
-        {/* Connection / monitoring status */}
+        {/* Connection / monitoring status. Each chip carries an
+            aria-label so SR users + colour-blind users get the state
+            without relying on the green/red dot. The "Monitoring" pulse
+            animation is wrapped in prefers-reduced-motion so vestibular
+            users get a steady dot instead. */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
           <Chip
-            icon={<DotIcon sx={{ fontSize: '12px !important' }} />}
+            icon={<DotIcon sx={{ fontSize: '12px !important' }} aria-hidden />}
             label={riskData.isConnected ? 'Connected' : 'Disconnected'}
             size="small"
+            aria-label={
+              riskData.isConnected
+                ? 'Cortex socket connected'
+                : 'Cortex socket disconnected'
+            }
             sx={{
               height: 24,
               fontWeight: 600,
               bgcolor: riskData.isConnected ? 'rgba(76, 217, 100, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-              color: riskData.isConnected ? BRAND : '#ef4444',
+              color: riskData.isConnected ? BRAND : '#EF4444',
               '& .MuiChip-icon': { color: 'inherit' },
             }}
           />
           {isMonitoring && (
             <Chip
-              icon={<DotIcon sx={{ fontSize: '12px !important' }} />}
+              icon={<DotIcon sx={{ fontSize: '12px !important' }} aria-hidden />}
               label="Monitoring"
               size="small"
+              aria-label="Monitoring active"
               sx={{
                 height: 24,
                 fontWeight: 600,
@@ -408,6 +432,9 @@ export default function MonitoringView() {
                 '& .MuiChip-icon': {
                   color: BRAND,
                   animation: 'pulse 1.5s ease-in-out infinite',
+                  '@media (prefers-reduced-motion: reduce)': {
+                    animation: 'none',
+                  },
                 },
                 '@keyframes pulse': {
                   '0%, 100%': { opacity: 1 },

@@ -33,59 +33,70 @@ interface PulseAlertBannerProps {
   alerts: PulseAlert[];
 }
 
-// Dark-theme optimized: bright accent colors on subtle tinted backgrounds
+// Light-theme palette. Was authored against a dark surface (300/400-step
+// reds + 8% backgrounds), which read OK on near-black but washes out on
+// the white-on-#F8F9FA Skyview surface where this banner now lives.
+// Three changes:
+//   1. Foreground colours pinned to 600/700 steps so text + icons hit
+//      WCAG AA on white.
+//   2. Background tints raised from 8–10% → 14–18% so the chip border
+//      is actually visible.
+//   3. Severity tiers stay the same shape: red = critical/high,
+//      orange = medium, yellow = low, slate = neutral/observational.
 const CATEGORY_CONFIG: Record<string, { icon: typeof AiIcon; color: string; bg: string }> = {
-  cheating_platforms:     { icon: AiIcon,     color: '#EF4444', bg: 'rgba(239, 68, 68, 0.14)' },
-  ai_tools:             { icon: AiIcon,        color: '#F87171', bg: 'rgba(248, 113, 113, 0.10)' },
-  remote_access:        { icon: RemoteIcon,    color: '#F87171', bg: 'rgba(248, 113, 113, 0.10)' },
-  messaging:            { icon: MessagingIcon, color: '#FB923C', bg: 'rgba(251, 146, 60, 0.10)' },
-  education_platforms:  { icon: EducationIcon, color: '#FB923C', bg: 'rgba(251, 146, 60, 0.10)' },
-  code_resources:       { icon: CodeIcon,      color: '#FACC15', bg: 'rgba(250, 204, 21, 0.08)' },
-  search_engines:       { icon: SearchIcon,    color: '#FACC15', bg: 'rgba(250, 204, 21, 0.08)' },
-  translation:          { icon: TranslateIcon, color: '#FACC15', bg: 'rgba(250, 204, 21, 0.08)' },
-  vpn_proxy:            { icon: VpnIcon,       color: '#FB923C', bg: 'rgba(251, 146, 60, 0.10)' },
-  note_taking:          { icon: NoteIcon,      color: '#94A3B8', bg: 'rgba(148, 163, 184, 0.08)' },
-  email:                { icon: EmailIcon,     color: '#94A3B8', bg: 'rgba(148, 163, 184, 0.08)' },
-  social_media:         { icon: SocialIcon,    color: '#94A3B8', bg: 'rgba(148, 163, 184, 0.08)' },
-  cloud_storage:        { icon: CloudIcon,     color: '#94A3B8', bg: 'rgba(148, 163, 184, 0.08)' },
-  virtual_machines:     { icon: VmIcon,        color: '#FB923C', bg: 'rgba(251, 146, 60, 0.10)' },
-  automation:           { icon: ClipboardIcon, color: '#FB923C', bg: 'rgba(251, 146, 60, 0.10)' },
+  cheating_platforms:    { icon: AiIcon,        color: '#B91C1C', bg: 'rgba(185, 28, 28, 0.12)' },
+  ai_tools:              { icon: AiIcon,        color: '#DC2626', bg: 'rgba(220, 38, 38, 0.10)' },
+  remote_access:         { icon: RemoteIcon,    color: '#DC2626', bg: 'rgba(220, 38, 38, 0.10)' },
+  messaging:             { icon: MessagingIcon, color: '#C2410C', bg: 'rgba(194, 65, 12, 0.10)' },
+  education_platforms:   { icon: EducationIcon, color: '#C2410C', bg: 'rgba(194, 65, 12, 0.10)' },
+  code_resources:        { icon: CodeIcon,      color: '#A16207', bg: 'rgba(161, 98, 7, 0.10)' },
+  search_engines:        { icon: SearchIcon,    color: '#A16207', bg: 'rgba(161, 98, 7, 0.10)' },
+  translation:           { icon: TranslateIcon, color: '#A16207', bg: 'rgba(161, 98, 7, 0.10)' },
+  vpn_proxy:             { icon: VpnIcon,       color: '#C2410C', bg: 'rgba(194, 65, 12, 0.10)' },
+  note_taking:           { icon: NoteIcon,      color: '#475569', bg: 'rgba(71, 85, 105, 0.10)' },
+  email:                 { icon: EmailIcon,     color: '#475569', bg: 'rgba(71, 85, 105, 0.10)' },
+  social_media:          { icon: SocialIcon,    color: '#475569', bg: 'rgba(71, 85, 105, 0.10)' },
+  cloud_storage:         { icon: CloudIcon,     color: '#475569', bg: 'rgba(71, 85, 105, 0.10)' },
+  virtual_machines:      { icon: VmIcon,        color: '#C2410C', bg: 'rgba(194, 65, 12, 0.10)' },
+  automation:            { icon: ClipboardIcon, color: '#C2410C', bg: 'rgba(194, 65, 12, 0.10)' },
 };
 
 function getConfig(categoryId: string) {
   const baseId = categoryId.includes('::') ? categoryId.split('::')[0] : categoryId;
-  return CATEGORY_CONFIG[baseId] || { icon: FallbackIcon, color: '#94A3B8', bg: 'rgba(148, 163, 184, 0.08)' };
+  return CATEGORY_CONFIG[baseId] || { icon: FallbackIcon, color: '#475569', bg: 'rgba(71, 85, 105, 0.10)' };
 }
 
-// Activity → icon, label, color mapping
+// Activity → icon, label, color mapping. Light-theme palette — same
+// severity ladder as CATEGORY_CONFIG above. Foregrounds anchor at
+// 600/700-step values so AA contrast holds on the white panel surface.
 const ACTIVITY_CONFIG: Record<string, { icon: typeof AiIcon; label: string; color: string; bg: string }> = {
-  clipboard_paste:           { icon: ClipboardIcon,  label: 'Paste Detected',            color: '#FB923C', bg: 'rgba(251, 146, 60, 0.10)' },
-  clipboard_copy:            { icon: CopyIcon,       label: 'Copy Detected',             color: '#FB923C', bg: 'rgba(251, 146, 60, 0.10)' },
-  clipboard_paste_frequent:  { icon: ClipboardIcon,  label: 'Frequent Pasting (5+)',     color: '#F87171', bg: 'rgba(248, 113, 113, 0.10)' },
-  clipboard_paste_heavy:     { icon: ClipboardIcon,  label: 'Heavy Pasting (10+)',       color: '#EF4444', bg: 'rgba(239, 68, 68, 0.12)' },
-  clipboard_paste_suspicious:{ icon: ClipboardIcon,  label: 'Suspicious Pasting (20+)',  color: '#DC2626', bg: 'rgba(220, 38, 38, 0.14)' },
-  clipboard_paste_extreme:   { icon: ClipboardIcon,  label: 'Extreme Pasting (50+)',     color: '#B91C1C', bg: 'rgba(185, 28, 28, 0.16)' },
-  clipboard_copy_frequent:   { icon: CopyIcon,       label: 'Frequent Copying (5+)',     color: '#F87171', bg: 'rgba(248, 113, 113, 0.10)' },
-  clipboard_copy_heavy:      { icon: CopyIcon,       label: 'Heavy Copying (10+)',       color: '#EF4444', bg: 'rgba(239, 68, 68, 0.12)' },
-  clipboard_copy_suspicious: { icon: CopyIcon,       label: 'Suspicious Copying (20+)',  color: '#DC2626', bg: 'rgba(220, 38, 38, 0.14)' },
-  clipboard_copy_extreme:    { icon: CopyIcon,       label: 'Extreme Copying (50+)',     color: '#B91C1C', bg: 'rgba(185, 28, 28, 0.16)' },
-  app_switching:      { icon: AppSwitchIcon,  label: 'App Switching',        color: '#F87171', bg: 'rgba(248, 113, 113, 0.10)' },
-  search_launch:      { icon: SearchIcon,     label: 'Search / Launcher',    color: '#FACC15', bg: 'rgba(250, 204, 21, 0.08)' },
-  hide_window:        { icon: HideIcon,       label: 'Window Hidden',        color: '#FB923C', bg: 'rgba(251, 146, 60, 0.10)' },
-  close_window:       { icon: CloseIcon,      label: 'Window Closed',        color: '#FB923C', bg: 'rgba(251, 146, 60, 0.10)' },
-  screenshot:         { icon: ScreenshotIcon, label: 'Screenshot Taken',     color: '#F87171', bg: 'rgba(248, 113, 113, 0.10)' },
-  new_browser_tab:    { icon: TabIcon,        label: 'New Browser Tab',      color: '#FACC15', bg: 'rgba(250, 204, 21, 0.08)' },
-  new_browser_window: { icon: WindowIcon,     label: 'New Browser Window',   color: '#FACC15', bg: 'rgba(250, 204, 21, 0.08)' },
-  address_bar:        { icon: AddressBarIcon, label: 'Address Bar Focused',  color: '#FACC15', bg: 'rgba(250, 204, 21, 0.08)' },
-  dev_tools:          { icon: DevToolsIcon,   label: 'Developer Tools',      color: '#FB923C', bg: 'rgba(251, 146, 60, 0.10)' },
+  clipboard_paste:           { icon: ClipboardIcon,  label: 'Paste Detected',            color: '#C2410C', bg: 'rgba(194, 65, 12, 0.10)' },
+  clipboard_copy:            { icon: CopyIcon,       label: 'Copy Detected',             color: '#C2410C', bg: 'rgba(194, 65, 12, 0.10)' },
+  clipboard_paste_frequent:  { icon: ClipboardIcon,  label: 'Frequent Pasting (5+)',     color: '#DC2626', bg: 'rgba(220, 38, 38, 0.10)' },
+  clipboard_paste_heavy:     { icon: ClipboardIcon,  label: 'Heavy Pasting (10+)',       color: '#B91C1C', bg: 'rgba(185, 28, 28, 0.12)' },
+  clipboard_paste_suspicious:{ icon: ClipboardIcon,  label: 'Suspicious Pasting (20+)',  color: '#991B1B', bg: 'rgba(153, 27, 27, 0.14)' },
+  clipboard_paste_extreme:   { icon: ClipboardIcon,  label: 'Extreme Pasting (50+)',     color: '#7F1D1D', bg: 'rgba(127, 29, 29, 0.16)' },
+  clipboard_copy_frequent:   { icon: CopyIcon,       label: 'Frequent Copying (5+)',     color: '#DC2626', bg: 'rgba(220, 38, 38, 0.10)' },
+  clipboard_copy_heavy:      { icon: CopyIcon,       label: 'Heavy Copying (10+)',       color: '#B91C1C', bg: 'rgba(185, 28, 28, 0.12)' },
+  clipboard_copy_suspicious: { icon: CopyIcon,       label: 'Suspicious Copying (20+)',  color: '#991B1B', bg: 'rgba(153, 27, 27, 0.14)' },
+  clipboard_copy_extreme:    { icon: CopyIcon,       label: 'Extreme Copying (50+)',     color: '#7F1D1D', bg: 'rgba(127, 29, 29, 0.16)' },
+  app_switching:      { icon: AppSwitchIcon,  label: 'App Switching',        color: '#DC2626', bg: 'rgba(220, 38, 38, 0.10)' },
+  search_launch:      { icon: SearchIcon,     label: 'Search / Launcher',    color: '#A16207', bg: 'rgba(161, 98, 7, 0.10)' },
+  hide_window:        { icon: HideIcon,       label: 'Window Hidden',        color: '#C2410C', bg: 'rgba(194, 65, 12, 0.10)' },
+  close_window:       { icon: CloseIcon,      label: 'Window Closed',        color: '#C2410C', bg: 'rgba(194, 65, 12, 0.10)' },
+  screenshot:         { icon: ScreenshotIcon, label: 'Screenshot Taken',     color: '#DC2626', bg: 'rgba(220, 38, 38, 0.10)' },
+  new_browser_tab:    { icon: TabIcon,        label: 'New Browser Tab',      color: '#A16207', bg: 'rgba(161, 98, 7, 0.10)' },
+  new_browser_window: { icon: WindowIcon,     label: 'New Browser Window',   color: '#A16207', bg: 'rgba(161, 98, 7, 0.10)' },
+  address_bar:        { icon: AddressBarIcon, label: 'Address Bar Focused',  color: '#A16207', bg: 'rgba(161, 98, 7, 0.10)' },
+  dev_tools:          { icon: DevToolsIcon,   label: 'Developer Tools',      color: '#C2410C', bg: 'rgba(194, 65, 12, 0.10)' },
 };
 
 function getActivityConfig(activity: string) {
   return ACTIVITY_CONFIG[activity] || {
     icon: KeyboardIcon,
     label: activity.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-    color: '#94A3B8',
-    bg: 'rgba(148, 163, 184, 0.08)',
+    color: '#475569',
+    bg: 'rgba(71, 85, 105, 0.10)',
   };
 }
 

@@ -32,6 +32,7 @@ import {
   Extension as ExtensionIcon,
   Shield as ShieldIcon,
   VideoCall as VideoCallIcon,
+  Schedule as PendingIcon,
 } from '@mui/icons-material';
 import { InterviewService } from '../../services/interview.service';
 import { useAuth } from '../../contexts/AuthContext';
@@ -177,8 +178,15 @@ export default function CandidateJoinPage() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <CircularProgress sx={{ color: BRAND }} />
+      <Box
+        // role="status" + aria-live tells AT users that we're loading,
+        // and aria-label gives the spinner an accessible name. Was a
+        // silent spinner: SR users heard nothing while the page loaded.
+        role="status"
+        aria-live="polite"
+        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}
+      >
+        <CircularProgress sx={{ color: BRAND }} aria-label="Loading interview" />
       </Box>
     );
   }
@@ -213,7 +221,15 @@ export default function CandidateJoinPage() {
         px: { xs: 2, md: 3 }, py: 1.5,
         borderBottom: `1px solid ${LIGHT_BORDER}`, bgcolor: LIGHT_BG,
       }}>
-        <IconButton onClick={() => navigate('/')} size="small" sx={{ color: '#6B7280' }}>
+        <IconButton
+          onClick={() => navigate('/')}
+          size="small"
+          // Was an unlabelled icon-only button. SR users heard "button"
+          // with no destination — accessible name now describes the
+          // action and target.
+          aria-label="Back to dashboard"
+          sx={{ color: '#6B7280' }}
+        >
           <ArrowBackIcon />
         </IconButton>
         {interview.company?.logo_url && (
@@ -240,7 +256,10 @@ export default function CandidateJoinPage() {
           </Box>
         )}
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <CardTitle sx={{ fontWeight: 700, color: TOKENS.textPrimary }}>
+          {/* Use the interview title as the page-level <h1>. The page
+              previously had no h1 at all, breaking the heading rotor
+              flow that the rest of the app relies on. */}
+          <CardTitle component="h1" sx={{ m: 0, fontWeight: 700, color: TOKENS.textPrimary }}>
             {interview.title}
           </CardTitle>
           <Secondary sx={{ color: TOKENS.textSecondary }}>
@@ -350,7 +369,11 @@ function PermissionRow({ title, desc, done, onEnable }: {
         bgcolor: done ? BRAND : '#E5E7EB', color: done ? '#fff' : '#6B7280',
         fontSize: '0.7rem', fontWeight: 700, flexShrink: 0,
       }}>
-        {done ? <CheckIcon sx={{ fontSize: 14 }} /> : '⏳'}
+        {/* Was a literal '⏳' emoji which renders inconsistently across
+            platforms (Apple/Win/Linux glyphs differ) and has no
+            accessible name. PendingIcon (Schedule outline) is part of
+            MUI's icon set so it inherits the same look as CheckIcon. */}
+        {done ? <CheckIcon sx={{ fontSize: 14 }} /> : <PendingIcon sx={{ fontSize: 14 }} />}
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Secondary sx={{ fontWeight: 600, color: done ? '#065F46' : TOKENS.textPrimary }}>

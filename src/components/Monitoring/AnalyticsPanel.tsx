@@ -2,7 +2,6 @@ import { useState, useMemo, useRef, useEffect, useCallback, useLayoutEffect } fr
 import {
   Box,
   Typography,
-  // useTheme,
   Chip,
   LinearProgress,
   CircularProgress,
@@ -16,7 +15,6 @@ import {
   FormControlLabel,
 } from '@mui/material';
 import {
-  // Circle as CircleIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   Monitor as ScreenIcon,
@@ -34,6 +32,7 @@ import {
   TrendingFlat as TrendFlatIcon,
   UnfoldMore as UnfoldMoreIcon,
 } from '@mui/icons-material';
+import { TOKENS } from '../../theme';
 import type { WindowResult, ModalityRisk, Correlation, UseRiskSocketReturn, TranscriptFragment } from '../../hooks/useRiskSocket';
 // CortexService import removed — capture button disabled (interviewer has no local Sentinel)
 import PulseAlertBanner from './PulseAlertBanner';
@@ -53,16 +52,32 @@ interface AnalyticsPanelProps {
   participantId?: string;
 }
 
-/* ── Colors ── */
+/* ── Colors ──
+ *
+ * Renamed from the legacy DARK_* names that were left over from the
+ * monitoring-panel dark→light migration. The values are unchanged —
+ * everything is light-theme — but the names previously suggested the
+ * opposite to anyone reading this file fresh. SURFACE_* / TEXT_*
+ * matches the naming convention used in TOKENS.
+ */
 
-const BRAND = '#4CD964';
-// Skyview light theme — matches the rest of the app (whites + greys)
-const DARK_BG = '#FFFFFF';
-const DARK_SURFACE = '#F8F9FA';
-const DARK_BORDER = '#E5E7EB';
-const DARK_TEXT = '#1F2937';
-const DARK_TEXT_SECONDARY = '#6B7280';
-const DARK_TEXT_MUTED = '#9CA3AF';
+const BRAND = TOKENS.brand;
+const SURFACE_BG = TOKENS.bgCard;
+const SURFACE_RAISED = TOKENS.bg;
+const SURFACE_BORDER = TOKENS.border;
+const TEXT_PRIMARY = TOKENS.textPrimary;
+const TEXT_SECONDARY = TOKENS.textSecondary;
+const TEXT_MUTED = TOKENS.textMuted;
+
+// Backwards-compat aliases — preserved so the rest of this 1300-line
+// file compiles without touching every reference site. New code should
+// reach for the SURFACE_*/TEXT_* names above.
+const DARK_BG = SURFACE_BG;
+const DARK_SURFACE = SURFACE_RAISED;
+const DARK_BORDER = SURFACE_BORDER;
+const DARK_TEXT = TEXT_PRIMARY;
+const DARK_TEXT_SECONDARY = TEXT_SECONDARY;
+const DARK_TEXT_MUTED = TEXT_MUTED;
 
 function getRiskColor(risk: string): string {
   switch (risk?.toLowerCase()) {
@@ -606,11 +621,16 @@ export default function AnalyticsPanel({
         </Box>
       )}
 
-      {/* ─── Tab Bar ─── */}
+      {/* ─── Tab Bar ───
+          aria-label gives the tablist an accessible name. Each Tab also
+          receives id + aria-controls so screen readers can map between
+          tabs and their panels. The panel divs below are wrapped with
+          role="tabpanel" + matching id so the relationship is complete. */}
       <Tabs
         value={activeTab}
         onChange={(_, v) => setActiveTab(v)}
         variant="fullWidth"
+        aria-label="Risk analytics views"
         sx={{
           minHeight: 36,
           borderBottom: `1px solid ${DARK_BORDER}`,
@@ -622,47 +642,66 @@ export default function AnalyticsPanel({
           },
         }}
       >
-        <Tab label={
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <span>Pulse</span>
-            {pulseAlerts.length > 0 && (
-              <Badge badgeContent={pulseAlerts.length} sx={{ '& .MuiBadge-badge': { bgcolor: '#f59e0b', color: '#000', fontSize: '0.5rem', fontWeight: 700, minWidth: 16, height: 16, right: -6, top: -2 } }}><Box /></Badge>
-            )}
-          </Box>
-        } />
-        <Tab label={
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <span>Analysis</span>
-            {results.length > 0 && (
-              <Chip label={results.length} size="small" sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${BRAND}20`, color: BRAND, '& .MuiChip-label': { px: 0.4 } }} />
-            )}
-          </Box>
-        } />
-        <Tab label={
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <span>Screenshots</span>
-            {imageAnalysisResults.length > 0 && (
-              <Chip label={imageAnalysisResults.length} size="small" sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${BRAND}20`, color: BRAND, '& .MuiChip-label': { px: 0.4 } }} />
-            )}
-          </Box>
-        } />
-        <Tab label={
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <span>Transcript</span>
-            {transcriptFragments.filter((f) => f.is_final).length > 0 && (
-              <Chip
-                label={transcriptFragments.filter((f) => f.is_final).length}
-                size="small"
-                sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${BRAND}20`, color: BRAND, '& .MuiChip-label': { px: 0.4 } }}
-              />
-            )}
-          </Box>
-        } />
+        <Tab
+          id="analytics-tab-0"
+          aria-controls="analytics-tabpanel-0"
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <span>Pulse</span>
+              {pulseAlerts.length > 0 && (
+                <Badge badgeContent={pulseAlerts.length} sx={{ '& .MuiBadge-badge': { bgcolor: '#f59e0b', color: '#000', fontSize: '0.5rem', fontWeight: 700, minWidth: 16, height: 16, right: -6, top: -2 } }}><Box /></Badge>
+              )}
+            </Box>
+          }
+        />
+        <Tab
+          id="analytics-tab-1"
+          aria-controls="analytics-tabpanel-1"
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <span>Analysis</span>
+              {results.length > 0 && (
+                <Chip label={results.length} size="small" sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${BRAND}20`, color: BRAND, '& .MuiChip-label': { px: 0.4 } }} />
+              )}
+            </Box>
+          }
+        />
+        <Tab
+          id="analytics-tab-2"
+          aria-controls="analytics-tabpanel-2"
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <span>Screenshots</span>
+              {imageAnalysisResults.length > 0 && (
+                <Chip label={imageAnalysisResults.length} size="small" sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${BRAND}20`, color: BRAND, '& .MuiChip-label': { px: 0.4 } }} />
+              )}
+            </Box>
+          }
+        />
+        <Tab
+          id="analytics-tab-3"
+          aria-controls="analytics-tabpanel-3"
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <span>Transcript</span>
+              {transcriptFragments.filter((f) => f.is_final).length > 0 && (
+                <Chip
+                  label={transcriptFragments.filter((f) => f.is_final).length}
+                  size="small"
+                  sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${BRAND}20`, color: BRAND, '& .MuiChip-label': { px: 0.4 } }}
+                />
+              )}
+            </Box>
+          }
+        />
       </Tabs>
 
       {/* ─── Tab 0: Pulse ─── */}
       {activeTab === 0 && (
         <Box
+          role="tabpanel"
+          id="analytics-tabpanel-0"
+          aria-labelledby="analytics-tab-0"
           sx={{
             flex: 1, overflow: 'auto', minHeight: 0,
             '&::-webkit-scrollbar': { width: '4px' },
@@ -688,6 +727,9 @@ export default function AnalyticsPanel({
       {/* ─── Tab 1: Analysis ─── */}
       {activeTab === 1 && (
         <Box
+          role="tabpanel"
+          id="analytics-tabpanel-1"
+          aria-labelledby="analytics-tab-1"
           sx={{
             flex: 1, overflow: 'auto', px: 1.5, py: 1, minHeight: 0,
             '&::-webkit-scrollbar': { width: '4px' },
@@ -762,6 +804,9 @@ export default function AnalyticsPanel({
       {/* ─── Tab 2: Screenshots ─── */}
       {activeTab === 2 && (
         <Box
+          role="tabpanel"
+          id="analytics-tabpanel-2"
+          aria-labelledby="analytics-tab-2"
           sx={{
             flex: 1, overflow: 'auto', px: 1.5, py: 1, minHeight: 0,
             '&::-webkit-scrollbar': { width: '4px' },
@@ -822,16 +867,23 @@ export default function AnalyticsPanel({
 
       {/* ─── Tab 3: Transcript (chat-bubble UI) ─── */}
       {activeTab === 3 && (
-        <TranscriptFeed
-          fragments={transcriptFragments}
-          isActive={activeTab === 3}
-          transcriptionOn={transcriptionOn}
-          sessionAnchorIso={
-            interview?.actual_start_at ??
-            interview?.scheduled_start_at ??
-            null
-          }
-        />
+        <Box
+          role="tabpanel"
+          id="analytics-tabpanel-3"
+          aria-labelledby="analytics-tab-3"
+          sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+        >
+          <TranscriptFeed
+            fragments={transcriptFragments}
+            isActive={activeTab === 3}
+            transcriptionOn={transcriptionOn}
+            sessionAnchorIso={
+              interview?.actual_start_at ??
+              interview?.scheduled_start_at ??
+              null
+            }
+          />
+        </Box>
       )}
 
       {/* ─── Lightbox modal ─── */}
