@@ -55,7 +55,9 @@ export default function OnboardingWorkspace() {
     <AuthCard maxWidth={420}>
       <Box sx={{ mb: 2.5 }}>
         <Box
+          component="h1"
           sx={{
+            m: 0,
             fontSize: '1.375rem',
             fontWeight: 700,
             color: TOKENS.textPrimary,

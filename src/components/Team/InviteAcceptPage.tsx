@@ -124,7 +124,9 @@ export default function InviteAcceptPage() {
     return (
       <AuthCard maxWidth={420}>
         <Box
+          component="h1"
           sx={{
+            m: 0,
             fontSize: '1.125rem',
             fontWeight: 700,
             color: TOKENS.textPrimary,
@@ -167,7 +169,9 @@ export default function InviteAcceptPage() {
     <AuthCard maxWidth={420}>
       <Box sx={{ textAlign: { xs: 'center', md: 'left' }, mb: 2.5 }}>
         <Box
+          component="h1"
           sx={{
+            m: 0,
             fontSize: '1.375rem',
             fontWeight: 700,
             color: TOKENS.textPrimary,
@@ -248,7 +252,10 @@ export default function InviteAcceptPage() {
                       size="small"
                       onClick={() => setShowPassword((v) => !v)}
                       edge="end"
-                      tabIndex={-1}
+                      // Was tabIndex={-1} → keyboard users couldn't toggle.
+                      // Match the Login/Signup/Reset eye-toggle pattern.
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
                       sx={{ color: TOKENS.textSecondary }}
                     >
                       {showPassword ? (

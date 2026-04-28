@@ -72,6 +72,21 @@ export default function ResetPassword() {
     !passwordError &&
     !confirmError;
 
+  // Live password-strength score (mirror of Signup). 0..4 — uses the same
+  // four heuristics the validation rules already check (length, mixed
+  // case, digit, symbol bonus). Drives the colored bar below the field.
+  const passwordScore = ((pw: string) => {
+    if (!pw) return 0;
+    let s = 0;
+    if (pw.length >= 8) s += 1;
+    if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s += 1;
+    if (/\d/.test(pw)) s += 1;
+    if (/[^A-Za-z0-9]/.test(pw)) s += 1;
+    return s;
+  })(password);
+  const STRENGTH_LABELS = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+  const STRENGTH_COLORS = ['transparent', '#EF4444', '#F59E0B', '#10B981', TOKENS.brand];
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -96,7 +111,7 @@ export default function ResetPassword() {
     return (
       <AuthCard maxWidth={420}>
         <Box sx={{ textAlign: { xs: 'center', md: 'left' }, mb: 2.5 }}>
-          <Box sx={{ fontSize: '1.375rem', fontWeight: 700, color: TOKENS.textPrimary, letterSpacing: '-0.01em', lineHeight: 1.25, mb: 0.5 }}>
+          <Box component="h1" sx={{ m: 0, fontSize: '1.375rem', fontWeight: 700, color: TOKENS.textPrimary, letterSpacing: '-0.01em', lineHeight: 1.25, mb: 0.5 }}>
             Reset link invalid
           </Box>
           <Box sx={{ fontSize: '0.875rem', color: TOKENS.textSecondary, lineHeight: 1.5 }}>
@@ -120,7 +135,7 @@ export default function ResetPassword() {
   return (
     <AuthCard maxWidth={420}>
       <Box sx={{ textAlign: { xs: 'center', md: 'left' }, mb: 2.5 }}>
-        <Box sx={{ fontSize: '1.375rem', fontWeight: 700, color: TOKENS.textPrimary, letterSpacing: '-0.01em', lineHeight: 1.25, mb: 0.5 }}>
+        <Box component="h1" sx={{ m: 0, fontSize: '1.375rem', fontWeight: 700, color: TOKENS.textPrimary, letterSpacing: '-0.01em', lineHeight: 1.25, mb: 0.5 }}>
           Set a new password
         </Box>
         <Box sx={{ fontSize: '0.875rem', color: TOKENS.textSecondary, lineHeight: 1.5 }}>
@@ -161,7 +176,10 @@ export default function ResetPassword() {
                   size="small"
                   onClick={() => setShowPassword((v) => !v)}
                   edge="end"
-                  tabIndex={-1}
+                  // Keyboard-accessible toggle (was tabIndex={-1}); aria
+                  // attributes match the Login/Signup pattern.
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
                   sx={{ color: TOKENS.textSecondary }}
                 >
                   {showPassword ? (
@@ -174,6 +192,47 @@ export default function ResetPassword() {
             ),
           }}
         />
+
+        {/* Live password-strength meter — same component as Signup so
+            both flows give identical feedback. Only renders once the
+            user has typed something. */}
+        {password && (
+          <Box sx={{ mt: -1.25 }}>
+            <Box
+              sx={{
+                height: 4,
+                borderRadius: 999,
+                bgcolor: TOKENS.borderLight,
+                overflow: 'hidden',
+              }}
+            >
+              <Box
+                sx={{
+                  height: '100%',
+                  width: `${(passwordScore / 4) * 100}%`,
+                  bgcolor: STRENGTH_COLORS[passwordScore],
+                  transition: 'width 180ms ease, background-color 180ms ease',
+                }}
+              />
+            </Box>
+            <Box
+              aria-live="polite"
+              sx={{
+                mt: 0.5,
+                fontSize: '0.688rem',
+                color: TOKENS.textSecondary,
+              }}
+            >
+              Strength:{' '}
+              <Box
+                component="span"
+                sx={{ color: STRENGTH_COLORS[passwordScore], fontWeight: 600 }}
+              >
+                {STRENGTH_LABELS[passwordScore] || '—'}
+              </Box>
+            </Box>
+          </Box>
+        )}
 
         <FormField
           label="Confirm new password"
@@ -214,7 +273,7 @@ export default function ResetPassword() {
             color: TOKENS.brand,
             textDecoration: 'none',
             fontWeight: 600,
-            '&:hover': { opacity: 0.75 },
+            '&:hover': { textDecoration: 'underline' },
           }}
         >
           sign in

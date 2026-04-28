@@ -76,6 +76,28 @@ export default function Signup() {
     return Object.keys(newErrors).length === 0;
   };
 
+  // Form-validity check used to gate the submit button. Mirrors the
+  // submit-time validateForm() rules but doesn't write to error state —
+  // we don't want to show red borders before the user has touched a
+  // field. Returns true when the form is structurally OK to submit.
+  const isFormValid = (() => {
+    if (!formData.firstName.trim()) return false;
+    if (!formData.lastName.trim()) return false;
+    if (!formData.companyName.trim()) return false;
+    if (!formData.email.trim() || !isValidEmail(formData.email)) return false;
+    if (!formData.password || !isStrongPassword(formData.password)) return false;
+    if (!formData.confirmPassword || formData.password !== formData.confirmPassword) return false;
+    return true;
+  })();
+
+  // Live "passwords match" hint shown under the confirm field. Empty
+  // string while the field is empty (no point shouting before they've
+  // typed). Different from the submit-time error so we don't double-up.
+  const matchHint =
+    formData.confirmPassword && formData.password !== formData.confirmPassword
+      ? "Passwords don't match"
+      : '';
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -137,7 +159,11 @@ export default function Signup() {
           size="small"
           onClick={toggle}
           edge="end"
-          tabIndex={-1}
+          // Was tabIndex={-1} → keyboard users couldn't toggle visibility.
+          // aria-label is what screen readers announce; aria-pressed
+          // exposes the toggled state.
+          aria-label={shown ? 'Hide password' : 'Show password'}
+          aria-pressed={shown}
           sx={{ color: TOKENS.textSecondary }}
         >
           {shown ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
@@ -145,6 +171,25 @@ export default function Signup() {
       </InputAdornment>
     ),
   });
+
+  // ── Live password strength meter ───────────────────────────────────
+  // Maps the password against the same rules as `isStrongPassword`
+  // (≥ 8 chars, lower, upper, digit) plus a bonus for symbols. Score is
+  // 0..4 → mapped to a label + bar fill width + colour. The exact rule
+  // wording lives in `validation.ts` so users see the same language at
+  // submit-time as while typing.
+  const passwordScore = (pw: string): number => {
+    if (!pw) return 0;
+    let score = 0;
+    if (pw.length >= 8) score += 1;
+    if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score += 1;
+    if (/\d/.test(pw)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pw)) score += 1;
+    return score;
+  };
+  const score = passwordScore(formData.password);
+  const STRENGTH_LABELS = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+  const STRENGTH_COLORS = ['transparent', '#EF4444', '#F59E0B', '#10B981', TOKENS.brand];
 
   // Consolidate form errors into a single banner message. We deliberately
   // DON'T render per-field helper text for validation errors — the red
@@ -157,7 +202,9 @@ export default function Signup() {
     <AuthCard maxWidth={420}>
       <Box sx={{ textAlign: { xs: 'center', md: 'left' }, mb: 2.5 }}>
         <Box
+          component="h1"
           sx={{
+            m: 0,
             fontSize: '1.375rem',
             fontWeight: 700,
             color: TOKENS.textPrimary,
@@ -254,6 +301,58 @@ export default function Signup() {
           InputProps={passwordAdornment(showPassword, () => setShowPassword((v) => !v))}
         />
 
+        {/* Live password strength meter — only renders once the user has
+            typed something so we don't pre-shame an empty field. The bar
+            steps from 1/4 to 4/4 width as the rules are met (length,
+            mixed case, digit, symbol). Label is announced via aria-live
+            so screen readers hear "Strong" without the user re-focusing
+            the field. */}
+        {formData.password && (
+          <Box sx={{ mt: -0.5 }}>
+            <Box
+              sx={{
+                height: 4,
+                borderRadius: 999,
+                bgcolor: TOKENS.borderLight,
+                overflow: 'hidden',
+              }}
+            >
+              <Box
+                sx={{
+                  height: '100%',
+                  width: `${(score / 4) * 100}%`,
+                  bgcolor: STRENGTH_COLORS[score],
+                  transition: 'width 180ms ease, background-color 180ms ease',
+                }}
+              />
+            </Box>
+            <Box
+              aria-live="polite"
+              sx={{
+                mt: 0.5,
+                fontSize: '0.688rem',
+                color: TOKENS.textSecondary,
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 1,
+              }}
+            >
+              <Box component="span">
+                Strength:{' '}
+                <Box
+                  component="span"
+                  sx={{ color: STRENGTH_COLORS[score], fontWeight: 600 }}
+                >
+                  {STRENGTH_LABELS[score] || '—'}
+                </Box>
+              </Box>
+              <Box component="span" sx={{ color: TOKENS.textMuted }}>
+                8+ chars · upper · lower · number
+              </Box>
+            </Box>
+          </Box>
+        )}
+
         <FormField
           label="Confirm password"
           required
@@ -262,7 +361,12 @@ export default function Signup() {
           value={formData.confirmPassword}
           onChange={handleChange}
           disabled={loading}
-          error={!!errors.confirmPassword}
+          // Live mismatch feedback uses the same red border as the
+          // submit-time error state so the user gets one consistent
+          // signal: red = fix me. We only flag mismatch when the field
+          // has content (avoids flashing red as the user types).
+          error={!!errors.confirmPassword || !!matchHint}
+          helperText={matchHint || undefined}
           autoComplete="new-password"
           InputProps={passwordAdornment(showConfirmPassword, () => setShowConfirmPassword((v) => !v))}
         />
@@ -270,7 +374,11 @@ export default function Signup() {
         <ActionButton
           type="submit"
           loading={loading}
-          disabled={loading}
+          // Disable until every field is valid — matches the Sign-in
+          // button behaviour. Previously this was always enabled, so
+          // users could click Sign up with an empty form and only then
+          // see the validation banner.
+          disabled={loading || !isFormValid}
           fullWidth
           sx={{ mt: 0.75 }}
         >
@@ -289,10 +397,10 @@ export default function Signup() {
           component={RouterLink}
           to="/login"
           sx={{
-            color: TOKENS.brand,
+            color: TOKENS.brandText,
             textDecoration: 'none',
             fontWeight: 600,
-            '&:hover': { opacity: 0.75 },
+            '&:hover': { textDecoration: 'underline' },
           }}
         >
           Sign in

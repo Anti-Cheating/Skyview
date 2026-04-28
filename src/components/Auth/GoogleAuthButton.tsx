@@ -104,7 +104,10 @@ export function GoogleAuthButton({ mode, onError }: GoogleAuthButtonProps) {
   return (
     <Box>
       {/* "OR" divider — same shape regardless of GOOGLE_CLIENT_ID
-          presence above (component already early-returns null). */}
+          presence above (component already early-returns null). The
+          divider hairline uses rgba(black,0.12) instead of TOKENS.border
+          (#E5E7EB) — at 1px on white the named token nearly disappears,
+          so we step it up to read clearly without becoming heavy. */}
       <Box
         sx={{
           display: 'flex',
@@ -117,9 +120,9 @@ export function GoogleAuthButton({ mode, onError }: GoogleAuthButtonProps) {
           letterSpacing: '0.04em',
         }}
       >
-        <Box sx={{ flex: 1, height: '1px', bgcolor: TOKENS.border }} />
+        <Box sx={{ flex: 1, height: '1px', bgcolor: 'rgba(0, 0, 0, 0.12)' }} />
         or
-        <Box sx={{ flex: 1, height: '1px', bgcolor: TOKENS.border }} />
+        <Box sx={{ flex: 1, height: '1px', bgcolor: 'rgba(0, 0, 0, 0.12)' }} />
       </Box>
 
       {localError && (

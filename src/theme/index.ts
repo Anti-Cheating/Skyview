@@ -23,6 +23,12 @@ export const TOKENS = {
   brandHover: '#3CB853',
   brandLight: '#6DE884',
   brandBg: 'rgba(76, 217, 100, 0.12)',
+  // brandText: legacy alias retained so existing imports don't break.
+  // Per design direction, inline links should match the button green
+  // (#4CD964) rather than a darkened variant — keep the alias mapped to
+  // TOKENS.brand and rely on `text-decoration: underline` for the
+  // accessibility hook on links.
+  brandText: '#4CD964',
 
   // Sidebar / dark chrome
   sidebar: '#0B1A10',

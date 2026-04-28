@@ -56,7 +56,10 @@ const SUBLINE =
 export function AuthCard({
   children,
   maxWidth = 440,
-  hideLogo = false,
+  // hideLogo retained on the public type for API compatibility — the
+  // logo now lives in the BrandMobileBanner / BrandSidebar siblings,
+  // never inside the card itself, so the prop is a no-op.
+  hideLogo: _hideLogo = false,
   cardSx,
 }: AuthCardProps) {
   const { pathname } = useLocation();
@@ -87,17 +90,26 @@ export function AuthCard({
     : null;
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', bgcolor: TOKENS.bg }}>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: { xs: 'column', md: 'row' },
+        bgcolor: TOKENS.bg,
+      }}
+    >
       <BrandSidebar />
+      {/* No mobile brand banner — the form is the hero on phones.
+          Logo lives inside the card on mobile (re-added below). */}
 
       <Box
         sx={{
-          flex: { xs: '1 1 100%', md: '1 1 55%' },
+          flex: { xs: '1 1 auto', md: '1 1 55%' },
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           p: 2,
-          py: 5,
+          py: { xs: 3, md: 5 },
           // 3D context needed only when the flip is active — harmless to
           // leave on always, but it documents the intent.
           perspective: shouldFlip ? '1400px' : undefined,
@@ -119,10 +131,10 @@ export function AuthCard({
             ...(Array.isArray(cardSx) ? cardSx : cardSx ? [cardSx] : []),
           ]}
         >
-          {!hideLogo && (
-            // Desktop: sidebar already shows the logo — don't duplicate.
-            // Mobile: sidebar is hidden, so surface the logo inside the
-            // card so the brand is never absent.
+          {!_hideLogo && (
+            // Mobile: surface the logo inside the card so the brand is
+            // present without spending a dark hero strip on it. Desktop
+            // hides this because BrandSidebar already shows it.
             <Box
               sx={{
                 display: { xs: 'flex', md: 'none' },
@@ -172,6 +184,16 @@ function BrandSidebar() {
         '@keyframes authHaloBreathe': {
           '0%, 100%': { opacity: 0.45, transform: 'translate(-50%, -50%) scale(1)' },
           '50%':      { opacity: 0.75, transform: 'translate(-50%, -50%) scale(1.12)' },
+        },
+
+        // Honour OS-level "Reduce motion" — kill drifts, halos, and
+        // word-rotator animations for vestibular-sensitive users.
+        '@media (prefers-reduced-motion: reduce)': {
+          animation: 'none',
+          '& *, & *::before, & *::after': {
+            animation: 'none !important',
+            transition: 'none !important',
+          },
         },
       }}
     >
@@ -288,6 +310,15 @@ function RotatingAccent() {
               '18%':  { opacity: 1, transform: 'translateY(0)' },
               '22%':  { opacity: 0, transform: 'translateY(-6px)' },
               '100%': { opacity: 0, transform: 'translateY(-6px)' },
+            },
+            // Reduced-motion fallback: the first word stays visible, the
+            // rest are hidden. No fades, no transforms — but the brand
+            // panel still reads as "Interviews you can trust."
+            '@media (prefers-reduced-motion: reduce)': {
+              animation: 'none',
+              opacity: i === 0 ? 1 : 0,
+              transform: 'none',
+              display: i === 0 ? 'inline' : 'none',
             },
           }}
         >

@@ -102,7 +102,9 @@ export default function Login() {
     <AuthCard maxWidth={420}>
       <Box sx={{ textAlign: { xs: 'center', md: 'left' }, mb: 2.5 }}>
         <Box
+          component="h1"
           sx={{
+            m: 0,
             fontSize: '1.375rem',
             fontWeight: 700,
             color: TOKENS.textPrimary,
@@ -175,7 +177,12 @@ export default function Login() {
                   size="small"
                   onClick={() => setShowPassword((v) => !v)}
                   edge="end"
-                  tabIndex={-1}
+                  // Was tabIndex={-1} which made keyboard users skip the
+                  // toggle entirely — they couldn't reveal the password
+                  // without a mouse. aria-label is announced by screen
+                  // readers; the icon alone is silent.
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
                   sx={{ color: TOKENS.textSecondary }}
                 >
                   {showPassword ? (
@@ -189,20 +196,21 @@ export default function Login() {
           }}
         />
 
-        {/* Right-aligned "Forgot password?" tucked directly under the
-            password field. Styled identically to the "Sign up" link in
-            the footer — brand green, fontWeight 600, underline on
-            hover — so all inline auth links on this page read the same. */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -0.5 }}>
+        {/* Right-aligned "Forgot password?" tucked under the password
+            field. mt: 0.5 gives the link a touch of breathing room from
+            the input below it (was -0.5, which collided visually with
+            the field border). Uses TOKENS.brandText — a darker green
+            that meets WCAG AA contrast on white. */}
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 0.5 }}>
           <Link
             component={RouterLink}
             to="/forgot-password"
             sx={{
               fontSize: '0.813rem',
-              color: TOKENS.brand,
+              color: TOKENS.brandText,
               textDecoration: 'none',
               fontWeight: 600,
-              '&:hover': { opacity: 0.75 },
+              '&:hover': { textDecoration: 'underline' },
             }}
           >
             Forgot password?
@@ -230,10 +238,10 @@ export default function Login() {
           component={RouterLink}
           to="/signup"
           sx={{
-            color: TOKENS.brand,
+            color: TOKENS.brandText,
             textDecoration: 'none',
             fontWeight: 600,
-            '&:hover': { opacity: 0.75 },
+            '&:hover': { textDecoration: 'underline' },
           }}
         >
           Sign up

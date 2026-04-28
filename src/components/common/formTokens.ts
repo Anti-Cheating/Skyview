@@ -74,6 +74,20 @@ export const INPUT_SX: SxProps<Theme> = {
   '& .MuiInputLabel-root': {
     display: 'none',
   },
+  // Chrome/Safari paint autofilled inputs with a hard-coded lavender
+  // (rgb(232,240,254)). That ignores our card styling and looks like an
+  // unstyled state. The 5000s `transition-delay` trick keeps the swatch
+  // overridden indefinitely. `-webkit-text-fill-color` is required because
+  // autofill ignores `color`. We also clamp the caret colour back to
+  // textPrimary so the cursor stays visible.
+  '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus, & input:-webkit-autofill:active':
+    {
+      WebkitBoxShadow: '0 0 0 1000px #FFFFFF inset !important',
+      WebkitTextFillColor: `${TOKENS.textPrimary} !important`,
+      caretColor: `${TOKENS.textPrimary} !important`,
+      transition: 'background-color 5000s ease-in-out 0s',
+      borderRadius: '10px',
+    },
   // Helper text — tighten to 11px and kill the big default margin/reserved
   // space so it doesn't pad the form vertically when present.
   '& .MuiFormHelperText-root': {
@@ -113,18 +127,34 @@ export const LABEL_SX: SxProps<Theme> = {
   lineHeight: 1.4,
 };
 
-// Primary CTA (green fill). Baked-in sizing from CreateInterview footer.
-export const PRIMARY_BUTTON_SX: SxProps<Theme> = {
-  textTransform: 'none',
+// Shared height + focus ring so primary and secondary CTAs line up exactly
+// on auth screens (Sign in vs Sign in with Google). Pinning minHeight beats
+// matching px/py because `:has(svg)` from the Google icon wrapper otherwise
+// nudges the secondary button taller by ~2px.
+const BUTTON_BASE = {
+  textTransform: 'none' as const,
   fontWeight: 600,
   borderRadius: '8px',
   px: 2.5,
   py: 0.75,
+  minHeight: 40,
   fontSize: '0.8rem',
+  whiteSpace: 'nowrap' as const,
+  // Default-removes the dotted outline, then re-adds a clear keyboard ring
+  // via :focus-visible only (mouse clicks stay clean). 3px ring matches
+  // the input focus ring above so the visual language is consistent.
+  outline: 'none',
+  '&:focus-visible': {
+    boxShadow: '0 0 0 3px rgba(76, 217, 100, 0.35)',
+  },
+};
+
+// Primary CTA (green fill). Baked-in sizing from CreateInterview footer.
+export const PRIMARY_BUTTON_SX: SxProps<Theme> = {
+  ...BUTTON_BASE,
   bgcolor: TOKENS.brand,
   color: '#FFFFFF',
   boxShadow: 'none',
-  whiteSpace: 'nowrap',
   '&:hover': {
     bgcolor: TOKENS.brandHover,
     boxShadow: '0 4px 12px rgba(76, 217, 100, 0.3)',
@@ -137,12 +167,8 @@ export const PRIMARY_BUTTON_SX: SxProps<Theme> = {
 
 // Secondary (outlined neutral). For Cancel-style actions.
 export const SECONDARY_BUTTON_SX: SxProps<Theme> = {
-  textTransform: 'none',
-  fontWeight: 600,
-  borderRadius: '8px',
+  ...BUTTON_BASE,
   px: 2,
-  py: 0.75,
-  fontSize: '0.8rem',
   color: TOKENS.textSecondary,
   border: `1px solid ${TOKENS.border}`,
   bgcolor: 'transparent',

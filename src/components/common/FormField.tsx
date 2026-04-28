@@ -17,7 +17,7 @@
  *     for "this was set by the invite, you can't change it" fields.
  */
 
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 import { Box, TextField } from '@mui/material';
 import type { TextFieldProps } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
@@ -51,6 +51,9 @@ export const FormField = forwardRef<HTMLDivElement, FormFieldProps>(function For
     size = 'small',
     fullWidth = true,
     InputProps,
+    inputProps,
+    id: idProp,
+    error,
     disabled,
     sx,
     ...rest
@@ -59,13 +62,24 @@ export const FormField = forwardRef<HTMLDivElement, FormFieldProps>(function For
 ) {
   const inputSx = locked ? LOCKED_INPUT_SX : INPUT_SX;
 
+  // Stable id used to wire <label htmlFor> to the input + an aria-describedby
+  // pointer to the helper text. useId() is SSR-safe and unique per instance.
+  const reactId = useId();
+  const id = idProp ?? `ff-${reactId}`;
+  const helperId = `${id}-help`;
+  const helperContent = hint ?? helperText;
+
   return (
     <Box ref={ref} sx={wrapperSx}>
       {label && (
-        <Box sx={LABEL_SX}>
+        <Box component="label" htmlFor={id} sx={LABEL_SX}>
           <span>{label}</span>
           {required && (
-            <Box component="span" sx={{ color: TOKENS.errorLight, fontWeight: 700 }}>
+            <Box
+              component="span"
+              aria-hidden="true"
+              sx={{ color: TOKENS.errorLight, fontWeight: 700 }}
+            >
               *
             </Box>
           )}
@@ -84,15 +98,29 @@ export const FormField = forwardRef<HTMLDivElement, FormFieldProps>(function For
         </Box>
       )}
       <TextField
+        id={id}
         variant="outlined"
         size={size}
         fullWidth={fullWidth}
+        error={error}
         disabled={locked || disabled}
+        // Mirror visual `required` into the form contract so screen readers
+        // and the browser announce/validate the field. We don't use the
+        // native `required` attribute because we own the validation flow
+        // (would otherwise show the browser's "Please fill out this field"
+        // tooltip on top of our Alert banner).
+        inputProps={{
+          'aria-required': required ? true : undefined,
+          'aria-invalid': error ? true : undefined,
+          'aria-describedby': helperContent ? helperId : undefined,
+          ...inputProps,
+        }}
         InputProps={{
           ...(locked ? { readOnly: true } : null),
           ...InputProps,
         }}
-        helperText={hint ?? helperText}
+        FormHelperTextProps={{ id: helperId }}
+        helperText={helperContent}
         sx={[inputSx, ...(Array.isArray(sx) ? sx : sx ? [sx] : [])] as SxProps<Theme>}
         {...rest}
       />

@@ -63,7 +63,7 @@ export default function CheckInbox() {
         >
           <MarkEmailReadIcon sx={{ fontSize: 36, color: TOKENS.brand }} />
         </Box>
-        <Box sx={{ fontSize: '1.375rem', fontWeight: 700, color: TOKENS.textPrimary, letterSpacing: '-0.01em', lineHeight: 1.25, mb: 0.75 }}>
+        <Box component="h1" sx={{ m: 0, fontSize: '1.375rem', fontWeight: 700, color: TOKENS.textPrimary, letterSpacing: '-0.01em', lineHeight: 1.25, mb: 0.75 }}>
           Verify your email
         </Box>
         <Box sx={{ fontSize: '0.875rem', color: TOKENS.textSecondary, lineHeight: 1.5 }}>
@@ -108,7 +108,7 @@ export default function CheckInbox() {
             color: TOKENS.brand,
             textDecoration: 'none',
             fontWeight: 600,
-            '&:hover': { opacity: 0.75 },
+            '&:hover': { textDecoration: 'underline' },
           }}
         >
           Sign up again

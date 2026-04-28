@@ -58,7 +58,9 @@ export default function NotFoundPage() {
       </Box>
 
       <Typography
+        component="h1"
         sx={{
+          m: 0,
           fontSize: { xs: '2.5rem', md: '3rem' },
           fontWeight: 700,
           color: TOKENS.textPrimary,
@@ -71,7 +73,9 @@ export default function NotFoundPage() {
       </Typography>
 
       <Typography
+        component="h2"
         sx={{
+          m: 0,
           fontSize: { xs: '1.125rem', md: '1.25rem' },
           fontWeight: 600,
           color: TOKENS.textPrimary,
