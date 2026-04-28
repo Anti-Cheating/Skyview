@@ -201,7 +201,10 @@ export default function CompanyTab({ companyId }: CompanyTabProps) {
         p: { xs: 2, md: 3 },
       }}
     >
-      <Typography sx={{ fontSize: '1rem', fontWeight: 600, color: TOKENS.textPrimary, mb: 2.5 }}>
+      <Typography
+        component="h2"
+        sx={{ m: 0, fontSize: '1rem', fontWeight: 600, color: TOKENS.textPrimary, mb: 2.5 }}
+      >
         Company details
       </Typography>
 
@@ -413,6 +416,16 @@ export default function CompanyTab({ companyId }: CompanyTabProps) {
             value={description}
             onChange={(e) => setDescription(e.target.value.slice(0, DESCRIPTION_MAX))}
             disabled={saving}
+            // helperText goes through MUI's <FormHelperText>, which is
+            // not announced as the user types. Render the count in a
+            // separate aria-live="polite" region instead so screen
+            // readers hear "245 / 280" updates without re-focusing the
+            // textarea. Visual position matches what the helperText
+            // produced (right-aligned underneath, 11px muted).
+            FormHelperTextProps={{
+              'aria-live': 'polite',
+              sx: { textAlign: 'right' },
+            } as any}
             helperText={`${description.length}/${DESCRIPTION_MAX}`}
           />
 

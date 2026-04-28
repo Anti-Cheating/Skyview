@@ -68,10 +68,11 @@ export default function AppInterviewList() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const useTableView = isInterviewer && !isMobile;
 
-  // Pill defaults to "scheduled" — the typical "what's coming up" view.
-  // Candidates skip the pill row entirely (volume too low) but still
-  // benefit from the same server endpoint.
-  const [pill, setPill] = useState<InterviewListPill>('scheduled');
+  // Default to "All" so a user landing on /interviews always sees their
+  // data on first paint. Was "scheduled", which on accounts with only
+  // completed interviews surfaced an empty state and forced an extra
+  // click to discover that the records actually existed.
+  const [pill, setPill] = useState<InterviewListPill>('all');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState(''); // debounced
   const [page, setPage] = useState(1);
@@ -231,10 +232,35 @@ export default function AppInterviewList() {
           {PILLS.map((p) => {
             const selected = pill === p.value;
             const count = counts[p.value];
+            // Match the Users tab style: label + a small count chip
+            // inline. Was `Label (n)` parens text — different visual
+            // language from the Users page. Now both use the same
+            // tab-with-pill-badge pattern.
             return (
               <Chip
                 key={p.value}
-                label={`${p.label} (${count})`}
+                label={
+                  <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                    <Box component="span">{p.label}</Box>
+                    <Box
+                      component="span"
+                      sx={{
+                        minWidth: 20,
+                        px: 0.625,
+                        py: '1px',
+                        borderRadius: '999px',
+                        bgcolor: selected ? 'rgba(4, 120, 87, 0.18)' : 'rgba(107, 114, 128, 0.14)',
+                        color: 'inherit',
+                        fontSize: '0.6875rem',
+                        fontWeight: 600,
+                        textAlign: 'center',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {count}
+                    </Box>
+                  </Box>
+                }
                 onClick={() => setPill(p.value)}
                 size="small"
                 sx={{
@@ -249,6 +275,7 @@ export default function AppInterviewList() {
                   '&:hover': {
                     bgcolor: selected ? 'rgba(76, 217, 100, 0.20)' : '#F9FAFB',
                   },
+                  '& .MuiChip-label': { px: 1 },
                 }}
               />
             );

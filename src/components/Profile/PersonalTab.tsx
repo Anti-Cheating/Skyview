@@ -164,7 +164,10 @@ export default function PersonalTab() {
         p: { xs: 2, md: 3 },
       }}
     >
-      <Typography sx={{ fontSize: '1rem', fontWeight: 600, color: TOKENS.textPrimary, mb: 2.5 }}>
+      <Typography
+        component="h2"
+        sx={{ m: 0, fontSize: '1rem', fontWeight: 600, color: TOKENS.textPrimary, mb: 2.5 }}
+      >
         Personal information
       </Typography>
 

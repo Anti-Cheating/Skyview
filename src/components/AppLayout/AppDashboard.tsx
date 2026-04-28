@@ -82,7 +82,22 @@ function StatCard({ title, value, icon, bgColor, onClick }: StatCardProps) {
             {icon}
           </Box>
         </Box>
-        <Typography variant="h1" sx={{ color: '#1F2937', mb: 0.5 }}>
+        {/* `variant="h1"` previously made every stat card render an actual
+            <h1>, so the page had four — the title plus three numbers.
+            Render as <p> with explicit size; the page-level <h1> is now
+            the only one. Bumped to 36px so the number is the visual
+            anchor instead of the icon (was 24px, dominated by 56px tile). */}
+        <Typography
+          component="p"
+          sx={{
+            color: '#1F2937',
+            mb: 0.5,
+            fontSize: { xs: '1.75rem', md: '2.25rem' },
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            lineHeight: 1.1,
+          }}
+        >
           {value}
         </Typography>
         <Typography variant="caption" sx={{ display: 'block', color: '#6B7280', fontWeight: 500 }}>
@@ -215,11 +230,14 @@ export default function AppDashboard() {
           background: 'linear-gradient(135deg, rgba(76, 217, 100, 0.1) 0%, rgba(76, 217, 100, 0.05) 100%)',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: { xs: 1.5, md: 2 } }}>
           <Box
             sx={{
-              width: 56,
-              height: 56,
+              // Was a fixed 56px square — on a 320px iPhone SE that's
+              // ~25% of the viewport just for decoration. Shrink to
+              // 44px on xs so the welcome message has more room.
+              width: { xs: 44, md: 56 },
+              height: { xs: 44, md: 56 },
               borderRadius: '14px',
               bgcolor: 'rgba(76, 217, 100, 0.2)',
               display: 'flex',
@@ -228,7 +246,7 @@ export default function AppDashboard() {
               flexShrink: 0,
             }}
           >
-            <TrendingUpIcon sx={{ fontSize: 28, color: theme.palette.primary.main }} />
+            <TrendingUpIcon sx={{ fontSize: { xs: 22, md: 28 }, color: theme.palette.primary.main }} />
           </Box>
           <Box sx={{ flex: 1 }}>
             <Typography variant="h2" sx={{ color: '#1F2937', mb: 1 }}>
@@ -305,7 +323,12 @@ export default function AppDashboard() {
         </Box>
       )}
 
-      {/* Stat Cards */}
+      {/* Stat Cards — semantic icon palette:
+          • Upcoming = brand green   (positive, in-flight)
+          • Past     = neutral slate (history, no urgency)
+          • Total    = info blue     (sum / aggregate)
+          Was three different uncoordinated colours (#4CD964 / #4CAF50 /
+          #FF9800) which read as accidental. */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 3 }}>
         <StatCard
           title="Upcoming Interviews"
@@ -317,15 +340,15 @@ export default function AppDashboard() {
         <StatCard
           title="Past Interviews"
           value={pastCount}
-          icon={<HistoryIcon sx={{ fontSize: 28, color: '#4CAF50' }} />}
-          bgColor="rgba(76, 175, 80, 0.15)"
+          icon={<HistoryIcon sx={{ fontSize: 28, color: '#6B7280' }} />}
+          bgColor="rgba(107, 114, 128, 0.12)"
           onClick={() => navigate('/interviews')}
         />
         <StatCard
           title="Total Interviews"
           value={upcomingCount + pastCount}
-          icon={<EventIcon sx={{ fontSize: 28, color: '#FF9800' }} />}
-          bgColor="rgba(255, 152, 0, 0.15)"
+          icon={<EventIcon sx={{ fontSize: 28, color: '#3B82F6' }} />}
+          bgColor="rgba(59, 130, 246, 0.12)"
           onClick={() => navigate('/interviews')}
         />
       </Box>

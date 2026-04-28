@@ -79,6 +79,38 @@ export default function AppLayout() {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
+      {/* Skip-to-content link — invisible until keyboard-focused, then
+          jumps the user past the entire sidebar. Saves screen-reader and
+          keyboard-only users from tabbing through ~6 nav items on every
+          route change. Position: fixed pulls it out of layout flow. */}
+      <Box
+        component="a"
+        href="#main-content"
+        sx={{
+          position: 'fixed',
+          top: 8,
+          left: 8,
+          zIndex: 2000,
+          px: 2,
+          py: 1,
+          bgcolor: TOKENS.brand,
+          color: '#FFFFFF',
+          fontSize: '0.875rem',
+          fontWeight: 600,
+          borderRadius: '8px',
+          textDecoration: 'none',
+          transform: 'translateY(-200%)',
+          transition: 'transform 120ms ease',
+          '&:focus': {
+            transform: 'translateY(0)',
+            outline: '2px solid #FFFFFF',
+            outlineOffset: 2,
+          },
+        }}
+      >
+        Skip to content
+      </Box>
+
       <Sidebar
         logo={sidebarLogo}
         items={sidebarItems}
@@ -94,6 +126,11 @@ export default function AppLayout() {
 
       <Box
         component="main"
+        id="main-content"
+        // tabIndex=-1 makes the skip-link target focusable so the focus
+        // ring lands inside main on activation; -1 keeps it out of the
+        // normal tab order otherwise.
+        tabIndex={-1}
         sx={{
           flexGrow: 1,
           bgcolor: 'background.default',
@@ -101,6 +138,7 @@ export default function AppLayout() {
           height: '100vh',
           overflow: 'auto',
           position: 'relative',
+          '&:focus': { outline: 'none' },
         }}
       >
         {/* Mobile header — hamburger opens the overlay sidebar */}

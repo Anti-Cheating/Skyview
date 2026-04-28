@@ -212,7 +212,10 @@ export function DataTable<TRow>({
           flexWrap: 'wrap',
         }}
       >
-        <Caption sx={{ color: '#6B7280', fontSize: '0.8125rem' }}>
+        {/* Was #6B7280 on white = 4.5:1 (AA pass for body, fails AAA).
+            Bumped to #4B5563 (~7:1) so the count + page indicator stay
+            legible at the small 13px size used here. */}
+        <Caption sx={{ color: '#4B5563', fontSize: '0.8125rem' }}>
           {total === 0 ? 'No items' : `${startItem}-${endItem} of ${total} items`}
         </Caption>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
@@ -245,7 +248,12 @@ export function DataTable<TRow>({
           <Box
             sx={{
               fontSize: '0.8125rem',
-              color: '#374151',
+              // Was #374151; #1F2937 (textPrimary) bumps the contrast on
+              // the page indicator to ~12:1 since this is the navigation
+              // anchor between the prev/next buttons and should read as
+              // the primary control, not muted helper text.
+              color: '#1F2937',
+              fontWeight: 500,
               minWidth: 70,
               textAlign: 'center',
             }}

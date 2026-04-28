@@ -192,6 +192,27 @@ export default function CreateInterviewPage() {
     interviewerUserId,
   ]);
 
+  // Live form-validity check used to gate the submit button. Mirrors the
+  // submit-time guards in handleSubmit but doesn't write to error state —
+  // we want the button to enable/disable as the user types, without
+  // flashing red copy before they've had a chance to fill the form.
+  const isFormValid = (() => {
+    if (!title.trim() || title.trim().length > 255) return false;
+    if (!isEditMode) {
+      if (!candidateFirstName.trim()) return false;
+      if (!candidateLastName.trim()) return false;
+      if (!candidateEmail.trim() || !candidateEmail.includes('@')) return false;
+    }
+    if (!interviewerUserId) return false;
+    if (!startDateTime || !startDateTime.isValid()) return false;
+    if (startDateTime.isBefore(dayjs())) return false;
+    if (interviewType === 'extension') {
+      if (!meetingLink.trim()) return false;
+      try { new URL(meetingLink.trim()); } catch { return false; }
+    }
+    return true;
+  })();
+
   const handleSubmit = async () => {
     if (!title.trim()) { setError('Interview title is required'); return; }
     if (title.trim().length > 255) { setError('Title must be 255 characters or less'); return; }
@@ -311,9 +332,15 @@ export default function CreateInterviewPage() {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
           <Box>
             <Typography
+              // Was variant="h5" rendered as a styled <h5>; the page had
+              // no <h1> at all. Render as a real <h1> so screen readers
+              // and SEO get one canonical page heading per the rest of
+              // the app's auth/dashboard pattern.
+              component="h1"
               variant="h5"
               fontWeight={700}
               sx={{
+                m: 0,
                 fontSize: { xs: '1.2rem', md: '1.5rem' },
                 color: '#1F2937',
                 letterSpacing: '-0.01em',
@@ -328,28 +355,37 @@ export default function CreateInterviewPage() {
           </Box>
         </Box>
 
-        <Breadcrumbs
-          separator={<BreadcrumbIcon sx={{ fontSize: 16, color: '#D1D5DB' }} />}
-          sx={{ borderBottom: 1, borderColor: '#E5E7EB', pb: 1.5 }}
-        >
-          <Link
-            component="button"
-            underline="hover"
-            onClick={() => navigate('/interviews')}
-            sx={{
-              fontSize: '0.938rem',
-              fontWeight: 500,
-              color: '#6B7280',
-              cursor: 'pointer',
-              '&:hover': { color: '#4CD964' },
-            }}
+        {/* Breadcrumb wrapped in a <nav aria-label="Breadcrumb"> so AT
+            announces it as a breadcrumb landmark instead of a generic
+            link list. The MUI <Breadcrumbs> still emits its own <ol>
+            internally — the wrapping <nav> is what was missing. */}
+        <Box component="nav" aria-label="Breadcrumb">
+          <Breadcrumbs
+            separator={<BreadcrumbIcon sx={{ fontSize: 16, color: '#D1D5DB' }} />}
+            sx={{ borderBottom: 1, borderColor: '#E5E7EB', pb: 1.5 }}
           >
-            Interviews
-          </Link>
-          <Typography sx={{ fontSize: '0.938rem', fontWeight: 600, color: '#4CD964' }}>
-            New Interview
-          </Typography>
-        </Breadcrumbs>
+            <Link
+              component="button"
+              underline="hover"
+              onClick={() => navigate('/interviews')}
+              sx={{
+                fontSize: '0.938rem',
+                fontWeight: 500,
+                color: '#6B7280',
+                cursor: 'pointer',
+                '&:hover': { color: '#4CD964' },
+              }}
+            >
+              Interviews
+            </Link>
+            <Typography
+              aria-current="page"
+              sx={{ fontSize: '0.938rem', fontWeight: 600, color: '#4CD964' }}
+            >
+              {isEditMode ? 'Edit Interview' : 'New Interview'}
+            </Typography>
+          </Breadcrumbs>
+        </Box>
       </Box>
 
       {/* Form Card */}
@@ -602,9 +638,15 @@ export default function CreateInterviewPage() {
               px: { xs: 2, md: 4 }, py: 2,
               borderTop: '1px solid #F3F4F6',
               display: 'flex',
-              justifyContent: 'flex-end',
+              // On xs, stack buttons full-width with primary on top so a
+              // thumb can hit either without precision. flex-end on md+
+              // keeps the desktop right-aligned pair we had before.
+              flexDirection: { xs: 'column-reverse', sm: 'row' },
+              justifyContent: { xs: 'stretch', sm: 'flex-end' },
+              alignItems: 'stretch',
               gap: 1,
               bgcolor: '#FAFAFA',
+              '& > button': { width: { xs: '100%', sm: 'auto' } },
             }}
           >
             <ActionButton
@@ -617,7 +659,10 @@ export default function CreateInterviewPage() {
             <ActionButton
               onClick={handleSubmit}
               loading={loading}
-              disabled={success}
+              // Was always enabled — clicking it on an empty form
+              // surfaced an error banner instead of preventing the
+              // attempt. Now matches the Sign in / Sign up pattern.
+              disabled={success || !isFormValid}
             >
               {loading
                 ? (isEditMode ? 'Saving...' : 'Creating...')

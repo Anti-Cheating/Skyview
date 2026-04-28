@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Drawer,
   List,
@@ -10,6 +11,12 @@ import {
   Badge,
   Tooltip,
   Box,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
@@ -82,6 +89,10 @@ export function Sidebar({
   const { logout } = useAuth();
   const { company } = useCompany();
   const listRef = useRef<HTMLUListElement>(null);
+  // Logout confirm dialog — prevents an accidental click from blowing
+  // away unsaved Profile/Create form work. The previous `onClick={logout}`
+  // logged the user out instantly with no recovery path.
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   const flatItems = useMemo(
     () => [...(items || []), ...(secondary || [])],
@@ -178,9 +189,22 @@ export function Sidebar({
       <ListItemButton
         key={item.id}
         data-nav-index={index}
-        onClick={() => handleItemClick(item.route)}
+        // Render as a real <a href="..."> so right-click → Open in New
+        // Tab, middle-click, copy-link, and the URL hover preview all
+        // work. Using react-router's Link keeps SPA navigation (no full
+        // reload) — onClick still fires before the Link's navigation,
+        // so the mobile drawer-close runs as before.
+        component={RouterLink}
+        to={item.route}
+        onClick={(e: React.MouseEvent) => {
+          // Let modifier-clicks (cmd, ctrl, shift, middle) hit the
+          // anchor's default behaviour (new tab/window). Plain clicks
+          // run our handler so the mobile drawer closes.
+          if (e.metaKey || e.ctrlKey || e.shiftKey || (e as any).button === 1) return;
+          e.preventDefault();
+          handleItemClick(item.route);
+        }}
         onKeyDown={(e) => handleKeyDown(e, item.route, index)}
-        role="link"
         aria-current={isActive ? 'page' : undefined}
         sx={rowSx(isActive)}
       >
@@ -236,17 +260,31 @@ export function Sidebar({
           minHeight: 64,
         }}
       >
+        {/* Logo wrapped in a real <a> so it behaves like a clickable
+            home link (right-click, middle-click, copy-link). aria-label
+            disambiguates from the workspace logo below. */}
         <Box
-          onClick={() => handleItemClick(logo?.route || '/')}
-          role="link"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              handleItemClick(logo?.route || '/');
-            }
+          component={RouterLink}
+          to={logo?.route || '/'}
+          aria-label="Trueyy home"
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+            e.preventDefault();
+            handleItemClick(logo?.route || '/');
           }}
-          sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center', minWidth: 0 }}
+          sx={{
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            minWidth: 0,
+            textDecoration: 'none',
+            color: 'inherit',
+            '&:focus-visible': {
+              outline: `2px solid ${theme.palette.primary.main}`,
+              outlineOffset: 4,
+              borderRadius: '8px',
+            },
+          }}
         >
           <TruoyyLogo collapsed={false} size="large" />
         </Box>
@@ -261,14 +299,13 @@ export function Sidebar({
       {company && (
         <Box sx={{ px: padding, pb: 1.25 }}>
           <Box
-            onClick={() => handleItemClick('/profile')}
-            role="link"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                handleItemClick('/profile');
-              }
+            component={RouterLink}
+            to="/profile"
+            aria-label={`${company.name} workspace settings`}
+            onClick={(e) => {
+              if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+              e.preventDefault();
+              handleItemClick('/profile');
             }}
             sx={{
               display: 'flex',
@@ -277,12 +314,18 @@ export function Sidebar({
               p: 1,
               borderRadius: '10px',
               cursor: 'pointer',
+              textDecoration: 'none',
+              color: 'inherit',
               bgcolor: 'rgba(255,255,255,0.04)',
               border: '1px solid rgba(255,255,255,0.06)',
               transition: 'background-color 120ms ease, border-color 120ms ease',
               '&:hover': {
                 bgcolor: 'rgba(255,255,255,0.08)',
                 borderColor: 'rgba(255,255,255,0.12)',
+              },
+              '&:focus-visible': {
+                outline: `2px solid ${theme.palette.primary.main}`,
+                outlineOffset: 2,
               },
               minWidth: 0,
             }}
@@ -416,7 +459,7 @@ export function Sidebar({
 
           <Tooltip title="Logout" placement="top" arrow enterDelay={300}>
             <IconButton
-              onClick={logout}
+              onClick={() => setLogoutOpen(true)}
               size="small"
               aria-label="Logout"
               sx={{
@@ -432,6 +475,53 @@ export function Sidebar({
           </Tooltip>
         </Box>
       </Box>
+
+      {/* Logout confirmation. Without this, a single accidental click on
+          the sidebar exit icon (one row away from Profile) signs the user
+          out and discards any unsaved Profile/Create Interview form. */}
+      <Dialog
+        open={logoutOpen}
+        onClose={() => setLogoutOpen(false)}
+        aria-labelledby="logout-dialog-title"
+        // fullWidth + maxWidth="xs" makes the dialog hug a sensible
+        // width on mobile (was a tight ~280px card centred in viewport,
+        // with the destructive Sign-out button feeling cramped).
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle id="logout-dialog-title">Sign out of Trueyy?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Any unsaved work on the current page will be lost.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setLogoutOpen(false)} sx={{ textTransform: 'none' }}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              setLogoutOpen(false);
+              logout();
+            }}
+            variant="contained"
+            color="error"
+            // The global MuiButton.contained styleOverride hardcodes
+            // `backgroundColor: TOKENS.brand` for every contained button,
+            // which means `color="error"` alone still paints the brand
+            // green. Force red here so the destructive action reads as
+            // destructive — matches the snackbar/alert error palette.
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              bgcolor: TOKENS.error,
+              '&:hover': { bgcolor: '#B91C1C' },
+            }}
+          >
+            Sign out
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 
