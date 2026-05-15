@@ -212,11 +212,12 @@ export default function AppInterviewList() {
     </Box>
   ), [pill, search, isInterviewer]);
 
-  // Toolbar — staff-only. Pills with counts on the left, search input
-  // on the right. Hidden on candidate side because the volume there
-  // doesn't justify chrome.
+  // Toolbar — shown for everyone now. Was staff-only because the
+  // candidate's volume was small, but candidates with completed
+  // interviews had no way to surface them past page 1 of the
+  // newest-first list. Now matches the interviewer experience: same
+  // pill set, same search field, same behaviour.
   const renderToolbar = () => {
-    if (!isInterviewer) return null;
     return (
       <Box
         sx={{
@@ -342,6 +343,14 @@ export default function AppInterviewList() {
         </Box>
       </Box>
 
+      {/* Toolbar renders unconditionally so pills + search stay put
+          while the content below transitions to the shimmer. Was
+          inside the shimmer-else branch: clicking a pill cleared
+          `items`, which flipped showShimmer true, which hid the entire
+          toolbar mid-interaction — felt like the page was reloading
+          every time the user filtered or typed. */}
+      {renderToolbar()}
+
       {/* Desktop staff get the InterviewTable's built-in skeleton rows
           via DataTable's loading prop — no need for a top-level shimmer
           there. The card-form shimmer is only useful in the mobile /
@@ -351,7 +360,6 @@ export default function AppInterviewList() {
         <Box sx={{ py: 2 }}><InterviewListShimmer count={3} /></Box>
       ) : (
         <>
-          {renderToolbar()}
           {/* Pill change = wholesale slide-up + fade on the content
               region below. Keyed only by `pill` (not `search`) so
               typing in the search box doesn't trigger a full unmount —
