@@ -129,6 +129,34 @@ export async function leaveSession(): Promise<void> {
 }
 
 /**
+ * Tell the helper "the candidate just clicked Open Meeting." The helper
+ * latches `joined=true` on its SessionManager and pushes the updated
+ * candidate-status over the live Cortex socket, which flips the final
+ * pill on the interviewer's CandidateSetupCard.
+ *
+ * Called from CandidateJoinPage right after `window.open(meetingUrl)`.
+ * Fire-and-forget — the page navigates away to the meeting tab anyway,
+ * so failures here just mean the interviewer's checklist stays at 3/4
+ * until the candidate's next status push. Returns ok=false in that
+ * case so the caller can decide whether to retry (currently no-op).
+ */
+export async function notifyMeetingJoined(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const resp = await fetch(`${HELPER_BASE}/session/joined-meeting`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (!resp.ok) {
+      return { ok: false, error: `helper returned ${resp.status}` };
+    }
+    return (await resp.json()) as { ok: boolean; error?: string };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'network error' };
+  }
+}
+
+/**
  * Opens macOS System Settings → Privacy → {Microphone | Screen Recording}
  * via the helper. Browsers can't reliably open x-apple.systempreferences:
  * URLs, but `open` on the daemon side always works.

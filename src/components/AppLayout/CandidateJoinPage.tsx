@@ -41,6 +41,7 @@ import {
   openSettingsPane,
   requestHelperPermission,
   detectHelperPlatform,
+  notifyMeetingJoined,
 } from '../../services/helperBridge';
 import { USER_ROLES, STORAGE_KEYS, isStaffRole } from '../../config/constants';
 import { ENV } from '../../config/env';
@@ -147,6 +148,12 @@ export default function CandidateJoinPage() {
     if (!url) return;
     window.open(url, '_blank', 'noopener,noreferrer');
     setMeetingOpened(true);
+    // Tell the helper the candidate just joined. Helper emits
+    // candidate-status.joined=true on its live Cortex socket so the
+    // interviewer's "Joined" pill flips green. Fire-and-forget — the
+    // candidate is about to navigate away to the meeting tab anyway,
+    // and if this drops we'll still update on the next status push.
+    void notifyMeetingJoined();
   }, [interview]);
 
   // ── Permission request buttons — route through the helper daemon ──
