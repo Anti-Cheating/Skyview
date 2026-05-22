@@ -33,7 +33,7 @@ import {
   UnfoldMore as UnfoldMoreIcon,
 } from '@mui/icons-material';
 import { TOKENS } from '../../theme';
-import type { WindowResult, ModalityRisk, Correlation, UseRiskSocketReturn, TranscriptFragment } from '../../hooks/useRiskSocket';
+import type { WindowResult, ModalityRisk, Correlation, UseRiskSocketReturn, TranscriptFragment, StableTranscriptFragment } from '../../hooks/useRiskSocket';
 // CortexService import removed — capture button disabled (interviewer has no local Sentinel)
 import PulseAlertBanner from './PulseAlertBanner';
 import { ResponsiveContainer, LineChart, Line, Tooltip as RechartsTooltip, ReferenceArea, YAxis } from 'recharts';
@@ -431,7 +431,7 @@ export default function AnalyticsPanel({
   participantId: _participantId,
   interview,
 }: AnalyticsPanelProps) {
-  const { results, latestResult, averageScore, recentScore, highestRisk, isConnected, pulseAlerts, imageAnalysisResults, transcriptFragments } = riskData;
+  const { results, latestResult, averageScore, recentScore, highestRisk, isConnected, pulseAlerts, imageAnalysisResults, transcriptFragments, stableTranscripts } = riskData;
   const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
 
   // Lightbox state
@@ -875,6 +875,7 @@ export default function AnalyticsPanel({
         >
           <TranscriptFeed
             fragments={transcriptFragments}
+            stableFragments={stableTranscripts}
             isActive={activeTab === 3}
             transcriptionOn={transcriptionOn}
             sessionAnchorIso={
@@ -908,16 +909,36 @@ export default function AnalyticsPanel({
 
 function TranscriptFeed({
   fragments,
+  stableFragments,
   isActive,
   transcriptionOn,
   sessionAnchorIso,
 }: {
   fragments: TranscriptFragment[];
+  stableFragments: StableTranscriptFragment[];
   isActive: boolean;
   transcriptionOn: boolean;
   sessionAnchorIso: string | null;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Live vs Clean toggle. Clean = dedup'd stable feed (matches the post-call
+  // transcript byte-for-byte). Live = raw per-speaker stream including
+  // interim + any cross-stream echoes that VPIO didn't catch. Default to
+  // Clean once we have any stable fragments — that's the canonical record.
+  const [feedMode, setFeedMode] = useState<'live' | 'clean'>('clean');
+  useEffect(() => {
+    if (stableFragments.length > 0 && feedMode === 'live') return;
+    if (stableFragments.length === 0 && feedMode === 'clean') {
+      // No dedup'd fragments yet — fall back to live so user sees something.
+      setFeedMode('live');
+    }
+  }, [stableFragments.length, feedMode]);
+
+  // The Clean feed renders StableTranscriptFragment[] which is structurally
+  // a superset of TranscriptFragment, so we widen here without copying.
+  const displayedFragments: TranscriptFragment[] =
+    feedMode === 'clean' ? stableFragments : fragments;
 
   // Anchor = when the session began. Used to format each bubble's
   // timestamp as "[mm:ss] elapsed since session start". Falls back when
@@ -952,16 +973,17 @@ function TranscriptFeed({
     [anchorMs]
   );
 
-  // Stick to the bottom whenever fragments update OR the tab becomes
-  // active (so switching in mid-session lands on the latest message).
+  // Stick to the bottom whenever displayed fragments update OR the tab
+  // becomes active OR the user toggles the feed mode (so the switch lands
+  // on the latest message in the new view).
   useLayoutEffect(() => {
     if (!isActive) return;
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [fragments.length, isActive, fragments[fragments.length - 1]?.text]);
+  }, [displayedFragments.length, isActive, displayedFragments[displayedFragments.length - 1]?.text, feedMode]);
 
-  if (fragments.length === 0) {
+  if (fragments.length === 0 && stableFragments.length === 0) {
     return (
       <Box
         sx={{
@@ -1025,11 +1047,76 @@ function TranscriptFeed({
         },
       }}
     >
-      {/* Preview banner */}
-      {fragments.map((f, i) => {
+      {/* Live ↔ Clean toggle. "Clean" renders the cross-stream dedup'd
+          stable feed (matches the post-call transcript byte-for-byte).
+          "Live" renders the raw per-speaker stream including interim and
+          any echo that VPIO didn't catch. Only rendered when we actually
+          have stable fragments — otherwise toggle would be a no-op. */}
+      {stableFragments.length > 0 && (
+        <Box
+          sx={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            mb: 1,
+            px: 0.25,
+            // Slight backdrop so toggle stays readable as bubbles scroll past.
+            bgcolor: CHAT_BG,
+            pt: 0.25,
+            pb: 0.5,
+          }}
+        >
+          {(['clean', 'live'] as const).map((mode) => {
+            const active = feedMode === mode;
+            return (
+              <Box
+                key={mode}
+                role="button"
+                tabIndex={0}
+                onClick={() => setFeedMode(mode)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') setFeedMode(mode);
+                }}
+                sx={{
+                  px: 0.9,
+                  py: 0.25,
+                  borderRadius: '999px',
+                  cursor: 'pointer',
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  color: active ? '#fff' : DARK_TEXT_SECONDARY,
+                  bgcolor: active ? BRAND : 'rgba(0,0,0,0.05)',
+                  userSelect: 'none',
+                  transition: 'background-color 120ms ease, color 120ms ease',
+                }}
+              >
+                {mode === 'clean' ? 'Clean' : 'Live'}
+              </Box>
+            );
+          })}
+          <Typography
+            sx={{
+              ml: 'auto',
+              fontSize: '0.6rem',
+              color: DARK_TEXT_MUTED,
+              fontStyle: 'italic',
+            }}
+          >
+            {feedMode === 'clean'
+              ? 'Cross-stream dedup’d. Matches post-call transcript.'
+              : 'Raw stream. May briefly show echo before fusion settles.'}
+          </Typography>
+        </Box>
+      )}
+      {displayedFragments.map((f, i) => {
         const isInterviewer = f.speaker_role === 'interviewer';
-        const prev = fragments[i - 1];
-        const next = fragments[i + 1];
+        const prev = displayedFragments[i - 1];
+        const next = displayedFragments[i + 1];
         const isNewSpeaker = !prev || prev.speaker_role !== f.speaker_role;
         const isLastOfRun = !next || next.speaker_role !== f.speaker_role;
         const bubbleBg = isInterviewer ? ME_BG : OTHER_BG;

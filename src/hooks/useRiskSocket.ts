@@ -74,6 +74,15 @@ export interface TranscriptFragment {
   end_ms?: number;
 }
 
+// Stable-transcript = Deepgram finals that survived cross-stream dedup.
+// Same shape as TranscriptFragment plus the persisted row id so the UI can
+// correlate against the post-call GET /interview-sessions/:id/transcript
+// response.
+export interface StableTranscriptFragment extends TranscriptFragment {
+  transcript_id: string;
+  is_final: true;
+}
+
 export interface CandidateStatus {
   extension_installed: boolean;
   screen_recording: boolean;
@@ -109,6 +118,11 @@ export interface UseRiskSocketReturn {
   isConnected: boolean;
   pulseAlerts: PulseAlert[];
   transcriptFragments: TranscriptFragment[];
+  // Dedup'd finals from Cortex's transcriptFusion service. Subset of
+  // transcriptFragments — echoes from the other role are filtered out.
+  // Identical to what GET /interview-sessions/:id/transcript returns
+  // post-call, so the live "Clean" view matches the post-call record.
+  stableTranscripts: StableTranscriptFragment[];
   imageAnalysisResults: ImageAnalysisResult[];
   latestImageAnalysis: ImageAnalysisResult | null;
   isImageAnalysisProcessing: boolean;
@@ -150,6 +164,7 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
   const [results, setResults] = useState<WindowResult[]>([]);
   const [pulseAlerts, setPulseAlerts] = useState<PulseAlert[]>([]);
   const [transcriptFragments, setTranscriptFragments] = useState<TranscriptFragment[]>([]);
+  const [stableTranscripts, setStableTranscripts] = useState<StableTranscriptFragment[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [imageAnalysisResults, setImageAnalysisResults] = useState<ImageAnalysisResult[]>([]);
   const [pendingImageAnalysisCount, setPendingImageAnalysisCount] = useState(0);
@@ -324,6 +339,24 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
       });
     });
 
+    // Cortex emits stable-transcript only for speech_final fragments that
+    // survived cross-stream dedup. This feed is what the "Clean" toggle in
+    // LiveTranscriptFeed renders, and what GET /interview-sessions/:id/
+    // transcript returns post-call — by design they're byte-identical.
+    socket.on('stable-transcript', (data: StableTranscriptFragment) => {
+      const incoming: StableTranscriptFragment = {
+        ...data,
+        speaker_role: data.speaker_role ?? 'candidate',
+        is_final: true,
+      };
+      // Cap at the last 200 stable utterances. Old conversation tail still
+      // lives in session_transcripts; this is just the live view.
+      setStableTranscripts(prev => {
+        const next = [...prev, incoming];
+        return next.length > 200 ? next.slice(next.length - 200) : next;
+      });
+    });
+
     return () => {
       socket.emit('leave-session', sessionId);
       socket.disconnect();
@@ -341,6 +374,7 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     isConnected,
     pulseAlerts,
     transcriptFragments,
+    stableTranscripts,
     imageAnalysisResults,
     latestImageAnalysis,
     isImageAnalysisProcessing,
