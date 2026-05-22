@@ -82,11 +82,10 @@ export interface CandidateStatus {
   updated_at: string | null;
 }
 
-export interface InterviewerStatus {
-  extension_installed: boolean;
-  mic_granted: boolean;
-  updated_at: string | null;
-}
+// InterviewerStatus removed: the interviewer no longer runs a local
+// helper for the dual-transcription flow (their voice arrives via the
+// candidate-side SystemAudioCapture stream), so the interviewer-status
+// socket event has no UI consumer.
 
 /**
  * Canonical modality state for the current session, as reported by
@@ -132,8 +131,6 @@ export interface UseRiskSocketReturn {
   // for this session, or it's an application-type interview).
   candidateStatus: CandidateStatus | null;
   setInitialCandidateStatus: (status: CandidateStatus | null) => void;
-  interviewerStatus: InterviewerStatus | null;
-  setInitialInterviewerStatus: (status: InterviewerStatus | null) => void;
 }
 
 function getRiskPriority(risk: string): number {
@@ -154,16 +151,11 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
   const [imageAnalysisResults, setImageAnalysisResults] = useState<ImageAnalysisResult[]>([]);
   const [pendingImageAnalysisCount, setPendingImageAnalysisCount] = useState(0);
   const [candidateStatus, setCandidateStatus] = useState<CandidateStatus | null>(null);
-  const [interviewerStatus, setInterviewerStatus] = useState<InterviewerStatus | null>(null);
   const [modalityState, setModalityState] = useState<ModalityState | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   const setInitialCandidateStatus = useCallback((status: CandidateStatus | null) => {
     setCandidateStatus((prev) => prev ?? status);
-  }, []);
-
-  const setInitialInterviewerStatus = useCallback((status: InterviewerStatus | null) => {
-    setInterviewerStatus((prev) => prev ?? status);
   }, []);
 
   const isImageAnalysisProcessing = pendingImageAnalysisCount > 0;
@@ -279,14 +271,9 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
       });
     });
 
-    socket.on('interviewer-status', (data: { sessionId: string; extension_installed?: boolean; mic_granted?: boolean; updated_at?: string }) => {
-      console.log('[RiskSocket] interviewer-status received:', data);
-      setInterviewerStatus({
-        extension_installed: !!data.extension_installed,
-        mic_granted: !!data.mic_granted,
-        updated_at: data.updated_at ?? new Date().toISOString(),
-      });
-    });
+    // interviewer-status subscription removed — see comment near the top
+    // of the file. Cortex may still emit this event for legacy clients,
+    // but Skyview ignores it.
 
     socket.on(
       'modality-state',
@@ -354,7 +341,5 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     modalityState,
     candidateStatus,
     setInitialCandidateStatus,
-    interviewerStatus,
-    setInitialInterviewerStatus,
   };
 }

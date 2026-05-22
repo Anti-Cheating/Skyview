@@ -24,17 +24,14 @@ import {
 } from '@mui/icons-material';
 import { useRiskSocket } from '../../hooks/useRiskSocket';
 import { useHelper } from '../../hooks/useHelper';
-import { openSettingsPane, requestHelperPermission } from '../../services/helperBridge';
 import { InterviewService } from '../../services/interview.service';
 import { ENV } from '../../config/env';
 import { STORAGE_KEYS } from '../../config/constants';
-import HelperDownloadCard from './HelperDownloadCard';
 import type { InterviewSession } from '../../types/interview.types';
 import { USER_ROLES, isStaffRole } from '../../config/constants';
 import { useAuth } from '../../contexts/AuthContext';
 import AnalyticsPanel from './AnalyticsPanel';
 import CandidateSetupCard from './CandidateSetupCard';
-import InterviewerSetupCard from './InterviewerSetupCard';
 import FalconDownloadCard from '../common/FalconDownloadCard';
 import { TOKENS } from '../../theme';
 
@@ -389,9 +386,7 @@ export default function MonitoringView() {
             {interview.title}
           </Typography>
           <Typography variant="caption" sx={{ display: { xs: 'none', sm: 'block' }, color: '#6B7280' }}>
-            {helper.installed && helper.status?.microphone_ok
-              ? `${candidateName} · ${interview.interview_type === 'extension' ? 'Trueyy Helper' : 'Falcon App'}`
-              : 'Setup your monitoring before joining'}
+            {`${candidateName} · ${interview.interview_type === 'extension' ? 'Trueyy Helper' : 'Falcon App'}`}
           </Typography>
         </Box>
 
@@ -462,45 +457,26 @@ export default function MonitoringView() {
               : null
           }
 
-          {/* Interviewer helper setup — show download card until the
-              local Trueyy Helper daemon is reachable + mic permission
-              is granted. Once ready, hide the card and render Risk
-              Analytics below. */}
-          {!helper.installed ? (
-            <HelperDownloadCard checking={helper.checking} onRetry={() => helper.refresh()} />
-          ) : !helper.status?.microphone_ok ? (
-            <InterviewerSetupCard
-              installed={helper.installed}
-              micGranted={!!helper.status?.microphone_ok}
-              checking={helper.checking}
-              // Same auto-flow the candidate side uses: register the
-              // helper with TCC + open System Settings → Microphone in
-              // one click. Falls back to plain "open settings" if the
-              // request endpoint isn't available (older helper builds).
-              onEnableMic={async () => {
-                const ok = await requestHelperPermission('microphone');
-                if (!ok) await openSettingsPane('microphone');
-                helper.refresh();
-              }}
-              onRetryMic={() => helper.refresh()}
+          {/* Interviewer setup gate removed. Their voice now reaches Cortex
+              via the candidate-side SystemAudioCapture (SCStream of system
+              audio output), so they don't need to install Trueyy Helper or
+              grant mic permission on their own machine. AnalyticsPanel
+              renders unconditionally. The useHelper hook + helper.join
+              call above stay in case a helper IS installed (it'll bind to
+              the session and add a redundant interviewer-side mic stream
+              that Cortex's transcriptFusion dedup will merge). */}
+          <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            <AnalyticsPanel
+              interview={interview}
+              riskData={riskData}
+              isMonitoring={isMonitoring}
+              transcriptionOn={transcriptionOn}
+              analysisOn={analysisOn}
+              onToggleTranscription={handleToggleTranscription}
+              onToggleAnalysis={handleToggleAnalysis}
+              onClose={handleExit}
             />
-          ) : null}
-
-          {/* AnalyticsPanel — shown once the helper reports mic granted. */}
-          {helper.installed && helper.status?.microphone_ok && (
-            <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-              <AnalyticsPanel
-                interview={interview}
-                riskData={riskData}
-                isMonitoring={isMonitoring}
-                transcriptionOn={transcriptionOn}
-                analysisOn={analysisOn}
-                onToggleTranscription={handleToggleTranscription}
-                onToggleAnalysis={handleToggleAnalysis}
-                onClose={handleExit}
-              />
-            </Box>
-          )}
+          </Box>
         </>
       )}
     </Box>
