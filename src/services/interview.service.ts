@@ -185,4 +185,27 @@ export class InterviewService {
     );
     return { success: response.success, data: response.data, message: response.message };
   }
+
+  /** Trigger post-interview analysis (async on Cortex). */
+  static async triggerPostAnalysis(
+    sessionId: string
+  ): Promise<ApiResponse<{ status: string; message?: string }>> {
+    const response = await ApiService.post<{ status: string; message?: string }>(
+      `/interviews/${sessionId}/analyze`,
+      {},
+      undefined,
+      'auth'
+    );
+    return { success: response.success, data: response.data, message: response.message };
+  }
+
+  /** Fetch stored post-interview report from interview_analysis. */
+  static async getPostAnalysis(sessionId: string): Promise<ApiResponse<Record<string, unknown>>> {
+    const response = await ApiService.get<Record<string, unknown>>(
+      `/interviews/${sessionId}/analysis`,
+      undefined,
+      'auth'
+    );
+    return { success: response.success, data: response.data, message: response.message };
+  }
 }
