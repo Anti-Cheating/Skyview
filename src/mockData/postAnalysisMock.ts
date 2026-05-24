@@ -16,11 +16,9 @@ export const MOCK_ANALYSIS_CLEAN = {
     "Interview IDE (VSCode) remained the primary focus window throughout. Only legitimate code editor windows and documentation tabs were visible. No external applications or suspicious websites detected.",
   full_transcript:
     "[0:00] Interviewer: Welcome! Let's start with a warm-up problem. Can you explain what a binary search tree is?\n[0:45] Candidate: Sure! A binary search tree is a data structure where each node has at most two children, left and right. The left subtree contains values smaller than the node, and the right subtree contains values greater than the node.\n[2:30] Interviewer: Great! Now let's code this. Can you implement a BST insert function?\n[3:15] Candidate: Absolutely. I'll write the code now...\n[8:20] Interviewer: Perfect! Your implementation looks good. Let's discuss the time complexity.\n[9:15] Candidate: The insert operation has O(log n) average time complexity in a balanced BST, but O(n) in the worst case if the tree becomes skewed.",
-  keystroke_breakdown: {
-    normal: 96,
-    suspicious: 2,
-    auto_complete: 2,
-  },
+  keystroke_score: 12,
+  voice_score: 10,
+  app_score: 8,
   risk_score: 11,
   final_summary:
     "Candidate demonstrated excellent interview performance with consistent behavior throughout. No red flags detected. Strong technical knowledge, clear communication, and legitimate problem-solving approach. Highly recommended.",
@@ -41,11 +39,9 @@ export const MOCK_ANALYSIS_RESEARCH = {
     "VSCode IDE was primary window with multiple Stack Overflow and LeetCode tabs open during the interview. Candidate referenced external documentation and code examples while solving problems.",
   full_transcript:
     "[0:00] Interviewer: Let's solve a medium-level graph problem.\n[2:15] Candidate: I need to think about the best approach. Let me check some references...\n[5:45] Candidate: Okay, I think I should use BFS with a queue for this problem.\n[7:30] Interviewer: Good, go ahead and code it.\n[12:20] Candidate: Done! Let me trace through with an example.",
-  keystroke_breakdown: {
-    normal: 85,
-    suspicious: 12,
-    auto_complete: 3,
-  },
+  keystroke_score: 52,
+  voice_score: 48,
+  app_score: 65,
   risk_score: 55,
   final_summary:
     "Candidate used external resources during the interview, which is concerning for proctored assessments. While technical solutions were correct, reliance on external references suggests weaker foundational knowledge. Recommend further evaluation.",
@@ -81,11 +77,9 @@ export const MOCK_ANALYSIS_CRITICAL = {
     "Multiple suspicious windows detected including screen sharing utilities and remote desktop applications. External chat windows and answer platforms visible. Frequent window switching between coding and messaging apps.",
   full_transcript:
     "[0:00] Interviewer: Start coding the solution.\n[0:30] Candidate: (silence)\n[2:45] Candidate: Yeah, I'm thinking about it.\n[5:15] (long silence)\n[8:30] Candidate: Got it, pasting the solution.",
-  keystroke_breakdown: {
-    normal: 25,
-    suspicious: 68,
-    auto_complete: 7,
-  },
+  keystroke_score: 88,
+  voice_score: 72,
+  app_score: 95,
   risk_score: 89,
   final_summary:
     "CRITICAL: Significant evidence of academic dishonesty detected. Multiple suspicious behaviors including potential screen sharing with external parties, use of copy-paste from answer platforms, and lack of genuine engagement. Recommend disqualification.",
@@ -135,11 +129,9 @@ export const MOCK_ANALYSIS_MODERATE = {
     "Primary coding window with secondary browser window showing chat application. Chat application was minimized most of the time but showed brief periods of activity.",
   full_transcript:
     "[0:00] Interviewer: Let's build a system to handle concurrent requests.\n[2:30] Candidate: I'll use a queue-based approach with worker threads.\n[5:45] Candidate: Let me code this solution.\n[10:15] Interviewer: Good implementation. How would you handle timeout scenarios?\n[12:00] Candidate: We could implement exponential backoff retry logic.",
-  keystroke_breakdown: {
-    normal: 88,
-    suspicious: 8,
-    auto_complete: 4,
-  },
+  keystroke_score: 68,
+  voice_score: 45,
+  app_score: 55,
   risk_score: 70,
   final_summary:
     "Candidate showed good technical skills with some minor concerning behaviors. Communication was clear and solutions were mostly correct. Minor red flags regarding potential external communication during interview. Recommend interview with closer monitoring.",

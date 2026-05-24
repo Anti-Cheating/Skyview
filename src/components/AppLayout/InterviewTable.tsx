@@ -10,8 +10,8 @@
  *
  * Row actions live in a single trailing cell — Edit / Delete only, no
  * 3-dot menu yet (we have <3 actions). The title cell doubles as the
- * primary affordance: clicking it goes straight to /:id/monitor for
- * staff, matching the card's "Open Monitoring" button intent.
+ * primary affordance: clicking it opens the interview detail page
+ * (/interviews/:id). Monitoring is started from there.
  */
 
 import {
@@ -76,7 +76,7 @@ export default function InterviewTable({
       render: (row) => (
         <Box
           component="button"
-          onClick={() => navigate(`/interviews/${row.id}/monitor`)}
+          onClick={() => navigate(`/interviews/${row.id}`)}
           sx={{
             background: 'none',
             border: 0,

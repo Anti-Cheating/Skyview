@@ -183,7 +183,7 @@ export default function AppLayout() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
-          style={{ height: '100%' }}
+          style={{ minHeight: '100%' }}
         >
           <Outlet />
         </motion.div>

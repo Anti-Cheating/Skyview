@@ -24,6 +24,7 @@ import {
 } from '@mui/icons-material';
 import { InterviewService } from '../../services/interview.service';
 import type { InterviewSession } from '../../types/interview.types';
+import { useSnackbar } from '../../contexts/SnackbarContext';
 
 function getInitials(first: string, last: string): string {
   return `${first?.[0] ?? ''}${last?.[0] ?? ''}`.toUpperCase();
@@ -350,6 +351,7 @@ function CandidateCard({ session }: { session: InterviewSession }) {
 export default function InterviewDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { showError } = useSnackbar();
   const [session, setSession] = useState<InterviewSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -402,17 +404,16 @@ export default function InterviewDetailPage() {
 
   const handleAnalyse = async () => {
     setAnalysing(true);
-    setError(null);
     try {
       const res = await InterviewService.triggerPostAnalysis(session.id);
       if (!res.success) {
-        setError(res.message || 'Failed to start analysis');
+        showError(res.message || 'Failed to start analysis');
         return;
       }
       navigate(`/interviews/${session.id}/analysis?pending=1`);
     } catch (err: unknown) {
       const e = err as { message?: string; data?: { error?: string } };
-      setError(e?.data?.error || e?.message || 'Failed to start analysis');
+      showError(e?.data?.error || e?.message || 'Failed to start analysis');
     } finally {
       setAnalysing(false);
     }
@@ -483,19 +484,29 @@ export default function InterviewDetailPage() {
         }}
       >
         <Button
-          variant="text"
+          variant={canStart ? 'contained' : 'text'}
           disabled={!canStart}
           onClick={() => navigate(`/interviews/${session.id}/monitor`)}
           startIcon={<StartIcon sx={{ fontSize: 18 }} />}
           sx={{
-            fontWeight: 600,
+            fontWeight: 700,
             fontSize: '0.875rem',
             textTransform: 'none',
-            color: '#9CA3AF',
-            px: 2,
+            px: 2.5,
+            py: 1,
             borderRadius: '8px',
-            '&:hover': { bgcolor: 'transparent' },
-            '&.Mui-disabled': { color: '#9CA3AF' },
+            boxShadow: 'none',
+            ...(canStart
+              ? {
+                  bgcolor: '#4CD964',
+                  color: '#065F46',
+                  '&:hover': { bgcolor: '#3CC954', boxShadow: 'none' },
+                }
+              : {
+                  color: '#9CA3AF',
+                  '&:hover': { bgcolor: 'transparent' },
+                }),
+            '&.Mui-disabled': { bgcolor: '#F3F4F6', color: '#9CA3AF' },
           }}
         >
           Start Interview
