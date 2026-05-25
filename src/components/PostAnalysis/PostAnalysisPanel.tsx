@@ -186,79 +186,74 @@ const RiskGauge: React.FC<{ score: number; level: string; riskColor: string }> =
   );
 };
 
-// ── Modern donut chart (pure SVG) ─────────────────────────────────────────────
-const DonutChart: React.FC<{ data: Array<{ label: string; value: number; color: string; desc: string }> }> = ({ data }) => {
-  const [active, setActive] = useState<number | null>(null);
-  const [_animated, setAnimated] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setAnimated(true), 300); return () => clearTimeout(t); }, []);
+// ── Score breakdown cards (each modality independent 0-100) ──────────────────
+interface ModalityRow {
+  label: string;
+  score: number | null;
+  color: string;
+  summary: string;
+}
 
-  const total = data.reduce((s, d) => s + d.value, 0);
-  const cx = 110, cy = 110, R = 90, ir = 60;
-  const gap = 0.02; // gap in radians between segments
+const scoreColor = (s: number) => {
+  const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
+  const rgb = (r: number, g: number, b: number) => `rgb(${r},${g},${b})`;
+  if (s >= 70) {
+    const t = Math.min((s - 70) / 30, 1);
+    return rgb(lerp(248, 153, t), lerp(113, 27, t), lerp(113, 27, t));
+  }
+  if (s >= 45) {
+    const t = (s - 45) / 24;
+    return rgb(lerp(253, 249, t), lerp(186, 115, t), lerp(116, 22, t));
+  }
+  if (s >= 20) {
+    const t = (s - 20) / 24;
+    return rgb(lerp(254, 234, t), lerp(240, 179, t), lerp(138, 8, t));
+  }
+  const t = Math.min(s / 19, 1);
+  return rgb(lerp(134, 22, t), lerp(239, 163, t), lerp(172, 74, t));
+};
 
-  let cumAngle = -Math.PI / 2;
-  const segments = data.map((d) => {
-    const angle = (d.value / total) * 2 * Math.PI;
-    const start = cumAngle + gap / 2;
-    const end = cumAngle + angle - gap / 2;
-    cumAngle += angle;
-    const x1 = cx + R * Math.cos(start), y1 = cy + R * Math.sin(start);
-    const x2 = cx + R * Math.cos(end),   y2 = cy + R * Math.sin(end);
-    const x3 = cx + ir * Math.cos(end),  y3 = cy + ir * Math.sin(end);
-    const x4 = cx + ir * Math.cos(start),y4 = cy + ir * Math.sin(start);
-    const largeArc = angle - gap > Math.PI ? 1 : 0;
-    return { ...d, path: `M${x1},${y1} A${R},${R} 0 ${largeArc},1 ${x2},${y2} L${x3},${y3} A${ir},${ir} 0 ${largeArc},0 ${x4},${y4}Z`, midAngle: start + (angle / 2) };
-  });
-
-  const dominant = data.reduce((best, d) => d.value > best.value ? d : best, data[0]);
+const ScoreBreakdown: React.FC<{ rows: ModalityRow[] }> = ({ rows }) => {
+  const [animated, setAnimated] = useState(false);
+  const [hovered, setHovered] = useState<string | null>(null);
+  useEffect(() => { const t = setTimeout(() => setAnimated(true), 150); return () => clearTimeout(t); }, []);
 
   return (
-    <div className="donut-wrap">
-      <svg viewBox="0 0 220 220" width="220" height="220">
-        {segments.map((seg, i) => {
-          const isActive = active === i;
-          const scale = isActive ? 1.04 : 1;
-          return (
-            <path key={seg.label} d={seg.path} fill={seg.color}
-              style={{
-                transform: `scale(${scale})`,
-                transformOrigin: `${cx}px ${cy}px`,
-                transition: "transform 0.2s ease, opacity 0.2s",
-                opacity: active === null || isActive ? 1 : 0.45,
-                cursor: "default",
-              }}
-              onMouseEnter={() => setActive(i)}
-              onMouseLeave={() => setActive(null)}
-            />
-          );
-        })}
-        {/* Center label */}
-        <text x={cx} y={cy - 8} textAnchor="middle" fontSize="22" fontWeight="700" fill="#111827">
-          {active !== null ? data[active].value : dominant.value}/100
-        </text>
-        <text x={cx} y={cy + 10} textAnchor="middle" fontSize="10" fontWeight="600" fill="#6B7280"
-          style={{ textTransform: "uppercase", letterSpacing: "1px" }}>
-          {active !== null ? data[active].label.split(" ")[0] : dominant.label.split(" ")[0]}
-        </text>
-      </svg>
-
-      {/* Legend */}
-      <div className="donut-legend">
-        {data.map((d, i) => (
-          <div key={d.label} className="donut-legend-item"
-            style={{ opacity: active === null || active === i ? 1 : 0.4, transition: "opacity 0.2s" }}
-            onMouseEnter={() => setActive(i)} onMouseLeave={() => setActive(null)}>
-            <div className="donut-dot" style={{ background: d.color }} />
-            <div className="donut-legend-text">
-              <div className="donut-legend-row">
-                <span className="donut-legend-label">{d.label}</span>
-                <span className="donut-legend-pct">{d.value}/100</span>
-              </div>
-              <p className="donut-legend-desc">{d.desc}</p>
+    <div className="sb-grid">
+      {rows.map(({ label, score, color, summary }) => {
+        const val = score ?? 0;
+        const barColor = score !== null ? scoreColor(val) : "#D1D5DB";
+        const isHovered = hovered === label;
+        return (
+          <div
+            key={label}
+            className={`sb-card ${isHovered ? "sb-card-hovered" : ""}`}
+            style={{ borderTopColor: color }}
+            onMouseEnter={() => setHovered(label)}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <div className="sb-card-header">
+              <span className="sb-label">{label}</span>
+              <span className="sb-score" style={{ color: barColor }}>
+                {score !== null ? val : "—"}
+              </span>
             </div>
+            <div className="sb-track">
+              <div
+                className="sb-fill"
+                style={{
+                  width: animated ? `${val}%` : "0%",
+                  background: barColor,
+                  transition: animated ? "width 0.9s cubic-bezier(0.34,1.1,0.64,1)" : "none",
+                }}
+              />
+            </div>
+            {isHovered && summary && (
+              <div className="sb-tooltip">{summary}</div>
+            )}
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 };
@@ -274,7 +269,8 @@ interface PostAnalysis {
   keystroke_summary: string; voice_summary: string;
   app_summary?: string; image_summary: string;
   full_transcript: string;
-  keystroke_score: number | null; voice_score: number | null; app_score: number | null;
+  keystroke_score: number | null; voice_score: number | null;
+  image_score: number | null; app_score: number | null;
   risk_score: number; final_summary: string;
   detected_app_categories: DetectedAppCategory[];
   created_at: string; status?: string;
@@ -297,6 +293,7 @@ function normalizeAnalysis(raw: Record<string, unknown>): PostAnalysis {
     full_transcript: String(raw.full_transcript ?? ""),
     keystroke_score: toScore(raw.keystroke_score),
     voice_score: toScore(raw.voice_score),
+    image_score: toScore(raw.image_score),
     app_score: toScore(raw.app_score),
     final_summary: String(raw.final_summary ?? ""),
     detected_app_categories: Array.isArray(raw.detected_app_categories)
@@ -447,18 +444,13 @@ export const PostAnalysisPanel: React.FC = () => {
   };
   const riskColor = getRiskColor(analysis.risk_level);
 
-  const hasModalityScores =
-    analysis.keystroke_score !== null ||
-    analysis.voice_score !== null ||
-    analysis.app_score !== null;
-
-  const donutData = hasModalityScores
-    ? [
-        { label: "KEYSTROKE", value: analysis.keystroke_score ?? 0, color: "#F59E0B", desc: "Average keystroke risk score across session windows" },
-        { label: "VOICE", value: analysis.voice_score ?? 0, color: "#6366F1", desc: "Average voice behaviour risk score across session windows" },
-        { label: "APP USAGE", value: analysis.app_score ?? 0, color: "#3B82F6", desc: "Average app & window activity risk score across session windows" },
-      ].filter(d => d.value > 0)
-    : [];
+  const modalityRows: ModalityRow[] = [
+    { label: "Keystroke", score: analysis.keystroke_score, color: "#F59E0B", summary: analysis.keystroke_summary },
+    { label: "Voice",     score: analysis.voice_score,     color: "#6366F1", summary: analysis.voice_summary },
+    { label: "Image",     score: analysis.image_score,     color: "#EC4899", summary: analysis.image_summary },
+    { label: "App Usage", score: analysis.app_score,       color: "#3B82F6", summary: analysis.app_summary ?? "" },
+  ];
+  const hasModalityScores = modalityRows.some(r => r.score !== null);
 
   const candidateP = session?.interview_session_participants?.find(p => p.candidate_id && p.candidate);
   const interviewerP = session?.interview_session_participants?.find(p => p.interviewer_id && p.interviewer);
@@ -545,9 +537,9 @@ export const PostAnalysisPanel: React.FC = () => {
         </section>
 
         <section className="pa-card pa-donut-card">
-          <h3 className="pa-card-title">Risk Score Breakdown</h3>
-          {donutData.length > 0
-            ? <DonutChart data={donutData} />
+          <h3 className="pa-card-title">Score Breakdown</h3>
+          {hasModalityScores
+            ? <ScoreBreakdown rows={modalityRows} />
             : <p className="pa-body pa-body-sm" style={{ textAlign: "center", paddingTop: "2rem" }}>No modality score data available.</p>
           }
         </section>

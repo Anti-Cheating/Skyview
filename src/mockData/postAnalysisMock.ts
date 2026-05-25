@@ -18,6 +18,7 @@ export const MOCK_ANALYSIS_CLEAN = {
     "[0:00] Interviewer: Welcome! Let's start with a warm-up problem. Can you explain what a binary search tree is?\n[0:45] Candidate: Sure! A binary search tree is a data structure where each node has at most two children, left and right. The left subtree contains values smaller than the node, and the right subtree contains values greater than the node.\n[2:30] Interviewer: Great! Now let's code this. Can you implement a BST insert function?\n[3:15] Candidate: Absolutely. I'll write the code now...\n[8:20] Interviewer: Perfect! Your implementation looks good. Let's discuss the time complexity.\n[9:15] Candidate: The insert operation has O(log n) average time complexity in a balanced BST, but O(n) in the worst case if the tree becomes skewed.",
   keystroke_score: 12,
   voice_score: 10,
+  image_score: 9,
   app_score: 8,
   risk_score: 11,
   final_summary:
@@ -41,6 +42,7 @@ export const MOCK_ANALYSIS_RESEARCH = {
     "[0:00] Interviewer: Let's solve a medium-level graph problem.\n[2:15] Candidate: I need to think about the best approach. Let me check some references...\n[5:45] Candidate: Okay, I think I should use BFS with a queue for this problem.\n[7:30] Interviewer: Good, go ahead and code it.\n[12:20] Candidate: Done! Let me trace through with an example.",
   keystroke_score: 52,
   voice_score: 48,
+  image_score: 60,
   app_score: 65,
   risk_score: 55,
   final_summary:
@@ -79,6 +81,7 @@ export const MOCK_ANALYSIS_CRITICAL = {
     "[0:00] Interviewer: Start coding the solution.\n[0:30] Candidate: (silence)\n[2:45] Candidate: Yeah, I'm thinking about it.\n[5:15] (long silence)\n[8:30] Candidate: Got it, pasting the solution.",
   keystroke_score: 88,
   voice_score: 72,
+  image_score: 91,
   app_score: 95,
   risk_score: 89,
   final_summary:
@@ -131,6 +134,7 @@ export const MOCK_ANALYSIS_MODERATE = {
     "[0:00] Interviewer: Let's build a system to handle concurrent requests.\n[2:30] Candidate: I'll use a queue-based approach with worker threads.\n[5:45] Candidate: Let me code this solution.\n[10:15] Interviewer: Good implementation. How would you handle timeout scenarios?\n[12:00] Candidate: We could implement exponential backoff retry logic.",
   keystroke_score: 68,
   voice_score: 45,
+  image_score: 72,
   app_score: 55,
   risk_score: 70,
   final_summary:
