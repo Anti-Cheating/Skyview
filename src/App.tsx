@@ -23,6 +23,11 @@ import InviteAcceptPage from './components/Team/InviteAcceptPage';
 import CheckInbox from './components/Auth/CheckInbox';
 import VerifyEmail from './components/Auth/VerifyEmail';
 import OnboardingWorkspace from './components/Auth/OnboardingWorkspace';
+import SettingsLayout from './components/Settings/SettingsLayout';
+import ApiTokensPage from './components/Settings/ApiTokensPage';
+import WebhooksPage from './components/Settings/WebhooksPage';
+import BrandingPage from './components/Settings/BrandingPage';
+import RetentionPage from './components/Settings/RetentionPage';
 import { isCompanyManagerRole } from './config/constants';
 
 /**
@@ -179,6 +184,14 @@ function AppRoutes() {
           <Route path="interviews/:id/monitor" element={<MonitoringView />} />
           <Route path="users" element={<CompanyManagerRoute><TeamPage /></CompanyManagerRoute>} />
           <Route path="profile" element={<ProfilePage />} />
+          {/* Settings — V1 SDK platform admin pages. */}
+          <Route path="settings" element={<CompanyManagerRoute><SettingsLayout /></CompanyManagerRoute>}>
+            <Route index element={<Navigate to="tokens" replace />} />
+            <Route path="tokens" element={<ApiTokensPage />} />
+            <Route path="webhooks" element={<WebhooksPage />} />
+            <Route path="branding" element={<BrandingPage />} />
+            <Route path="retention" element={<RetentionPage />} />
+          </Route>
           {/* Authenticated 404 — renders inside AppLayout so the user
               keeps the sidebar and can navigate out. */}
           <Route path="*" element={<NotFoundPage />} />
