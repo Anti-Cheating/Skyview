@@ -4,3 +4,6 @@ dist
 .env.local
 .DS_Store
 *.log
+e2e/.state/
+test-results/
+playwright-report/
