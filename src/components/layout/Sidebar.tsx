@@ -28,6 +28,7 @@ import {
   People as PeopleIcon,
   ExitToApp as ExitIcon,
   VideoCall as VideoCallIcon,
+  Business as CompaniesIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { SidebarProps } from './sidebar.types';
@@ -42,6 +43,7 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   Interviews: VideoCallIcon,
   VideoCall: VideoCallIcon,
   Settings: SettingsIcon,
+  Companies: CompaniesIcon,
   HelpOutline: HelpOutlineIcon,
   Person: PersonIcon,
   People: PeopleIcon,

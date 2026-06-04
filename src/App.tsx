@@ -26,6 +26,10 @@ import OnboardingWorkspace from './components/Auth/OnboardingWorkspace';
 import SettingsLayout from './components/Settings/SettingsLayout';
 import ApiTokensPage from './components/Settings/ApiTokensPage';
 import WebhooksPage from './components/Settings/WebhooksPage';
+import DatabasePage from './components/Settings/DatabasePage';
+import BillingPage from './components/Settings/BillingPage';
+import TenantList from './components/Admin/TenantList';
+import TenantDetail from './components/Admin/TenantDetail';
 import BrandingPage from './components/Settings/BrandingPage';
 import RetentionPage from './components/Settings/RetentionPage';
 import { isCompanyManagerRole } from './config/constants';
@@ -67,9 +71,11 @@ function getReturnTo(): string | null {
  * Candidates are global identities with no workspace concept, so
  * they're explicitly excluded.
  */
-function userNeedsOnboarding(user: { role?: string; company_id?: string | null } | null): boolean {
+function userNeedsOnboarding(user: { role?: string; company_id?: string | null; is_super_admin?: boolean } | null): boolean {
   if (!user) return false;
   if (user.role === 'Candidate') return false;
+  // SuperAdmin is a Trueyy back-office identity — no company, no onboarding.
+  if (user.is_super_admin || user.role === 'SuperAdmin') return false;
   return !user.company_id;
 }
 
@@ -189,9 +195,14 @@ function AppRoutes() {
             <Route index element={<Navigate to="tokens" replace />} />
             <Route path="tokens" element={<ApiTokensPage />} />
             <Route path="webhooks" element={<WebhooksPage />} />
+            <Route path="database" element={<DatabasePage />} />
+            <Route path="billing" element={<BillingPage />} />
             <Route path="branding" element={<BrandingPage />} />
             <Route path="retention" element={<RetentionPage />} />
           </Route>
+          {/* Super-admin (Trueyy employees only — gated server-side by SuperAdmin role) */}
+          <Route path="admin/tenants" element={<TenantList />} />
+          <Route path="admin/tenants/:id" element={<TenantDetail />} />
           {/* Authenticated 404 — renders inside AppLayout so the user
               keeps the sidebar and can navigate out. */}
           <Route path="*" element={<NotFoundPage />} />

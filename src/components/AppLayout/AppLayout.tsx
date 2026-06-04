@@ -44,7 +44,14 @@ export default function AppLayout() {
       { id: 'interviews', label: 'Interviews', iconName: 'Interviews', route: '/interviews', badge: null },
     ];
     if (isCompanyManagerRole(userRole)) {
-      shared.push({ id: 'users', label: 'Users', iconName: 'People', route: '/users', badge: null });
+      shared.push({ id: 'users',    label: 'Users',    iconName: 'People',   route: '/users',            badge: null });
+      shared.push({ id: 'settings', label: 'Settings', iconName: 'Settings', route: '/settings/tokens',  badge: null });
+    }
+    // SuperAdmin (Trueyy employees with the global SuperAdmin role,
+    // metadata_user_roles.company_id IS NULL) sees the Admin entry. The
+    // is_super_admin flag is set server-side in /auth/me.
+    if (user?.is_super_admin) {
+      shared.push({ id: 'admin', label: 'Companies', iconName: 'Companies', route: '/admin/tenants', badge: null });
     }
     // Profile is available to every authenticated user — the page itself
     // gates the Owner-only Company tab inside.
@@ -65,6 +72,8 @@ export default function AppLayout() {
   const getActiveId = (): string => {
     if (location.pathname.startsWith('/interviews')) return 'interviews';
     if (location.pathname.startsWith('/users')) return 'users';
+    if (location.pathname.startsWith('/settings')) return 'settings';
+    if (location.pathname.startsWith('/admin')) return 'admin';
     if (location.pathname.startsWith('/profile')) return 'profile';
     return 'dashboard';
   };

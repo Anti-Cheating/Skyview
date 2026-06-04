@@ -18,6 +18,13 @@ export interface User {
    * invites to manage.
    */
   company_id?: string | null;
+  /**
+   * True if the user holds the global SuperAdmin role
+   * (metadata_user_roles.name='SuperAdmin' AND company_id IS NULL).
+   * Returned by Cortex /auth/me. Used to gate the Admin sidebar entry
+   * and any super-admin-only UI.
+   */
+  is_super_admin?: boolean;
   created_at: string;
 }
 
