@@ -83,13 +83,16 @@ function parseTranscript(raw: string): ChatEntry[] {
   return entries;
 }
 
+// Mirrors the live-monitoring Transcript tab (AnalyticsPanel TranscriptFeed):
+// interviewer bubbles on the right in brand green, candidate on the left in
+// neutral grey, WhatsApp-style run grouping — the speaker label only appears
+// on the first bubble of each run, but shows the actual participant name
+// instead of the generic "Interviewer"/"Candidate" role.
 const TranscriptChat: React.FC<{
   transcript: string;
   candidateName: string;
-  candidateInitials: string;
   interviewerName: string;
-  interviewerInitials: string;
-}> = ({ transcript, candidateName, candidateInitials, interviewerName, interviewerInitials }) => {
+}> = ({ transcript, candidateName, interviewerName }) => {
   const entries = parseTranscript(transcript);
 
   if (entries.length === 0) {
@@ -108,22 +111,26 @@ const TranscriptChat: React.FC<{
         }
 
         const isInterviewer = entry.role === "interviewer";
+        // First bubble of a run — look back past dividers for the previous speaker.
+        let prevRole: ChatRole | null = null;
+        for (let j = idx - 1; j >= 0; j--) {
+          if (entries[j].role !== "divider") { prevRole = entries[j].role; break; }
+        }
+        const isNewSpeaker = prevRole !== entry.role;
+        const side = isInterviewer ? "interviewer" : "candidate";
+
         return (
-          <div key={idx} className={`tc-row ${isInterviewer ? "tc-row-left" : "tc-row-right"}`}>
-            {isInterviewer && (
-              <div className="tc-avatar tc-avatar-interviewer" title={interviewerName}>
-                {interviewerInitials}
-              </div>
-            )}
-            <div className={`tc-bubble ${isInterviewer ? "tc-bubble-left" : "tc-bubble-right"}`}>
-              <span className="tc-role-label">{isInterviewer ? interviewerName : candidateName}</span>
-              <p className="tc-text">{entry.text}</p>
+          <div key={idx} className={`tc-msg-row tc-msg-row-${side}${isNewSpeaker ? " tc-msg-row-new" : ""}`}>
+            <div className="tc-msg-col">
+              {isNewSpeaker && (
+                <span className={`tc-msg-label tc-msg-label-${side}`}>
+                  {isInterviewer ? interviewerName : candidateName}
+                </span>
+              )}
+              <p className={`tc-msg-bubble tc-msg-bubble-${side}${isNewSpeaker ? " tc-msg-bubble-first" : ""}`}>
+                {entry.text}
+              </p>
             </div>
-            {!isInterviewer && (
-              <div className="tc-avatar tc-avatar-candidate" title={candidateName}>
-                {candidateInitials}
-              </div>
-            )}
           </div>
         );
       })}
@@ -166,7 +173,7 @@ const RiskGauge: React.FC<{ score: number; level: string; riskColor: string }> =
           return <line key={v} x1={ox} y1={oy} x2={ix} y2={iy} stroke="#D1D5DB" strokeWidth="1.5" strokeLinecap="round" />;
         })}
         <text x={cx} y={cy - 20} textAnchor="middle" fontSize="54" fontWeight="700"
-          fill="#111827" fontFamily="'Playfair Display', Georgia, serif" letterSpacing="-2">
+          fill="#111827" fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" letterSpacing="-1">
           {score}
         </text>
         <g style={{
@@ -190,7 +197,6 @@ const RiskGauge: React.FC<{ score: number; level: string; riskColor: string }> =
 interface ModalityRow {
   label: string;
   score: number | null;
-  color: string;
   summary: string;
 }
 
@@ -220,15 +226,14 @@ const ScoreBreakdown: React.FC<{ rows: ModalityRow[] }> = ({ rows }) => {
 
   return (
     <div className="sb-grid">
-      {rows.map(({ label, score, color, summary }) => {
+      {rows.map(({ label, score, summary }) => {
         const val = score ?? 0;
         const barColor = score !== null ? scoreColor(val) : "#D1D5DB";
         const isHovered = hovered === label;
         return (
           <div
             key={label}
-            className={`sb-card ${isHovered ? "sb-card-hovered" : ""}`}
-            style={{ borderTopColor: color }}
+            className="sb-card"
             onMouseEnter={() => setHovered(label)}
             onMouseLeave={() => setHovered(null)}
           >
@@ -471,10 +476,10 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   const riskColor = getRiskColor(analysis.risk_level);
 
   const modalityRows: ModalityRow[] = [
-    { label: "Keystroke", score: analysis.keystroke_score, color: "#F59E0B", summary: analysis.keystroke_summary },
-    { label: "Voice",     score: analysis.voice_score,     color: "#6366F1", summary: analysis.voice_summary },
-    { label: "Image",     score: analysis.image_score,     color: "#EC4899", summary: analysis.image_summary },
-    { label: "App Usage", score: analysis.app_score,       color: "#3B82F6", summary: analysis.app_summary ?? "" },
+    { label: "Keystroke", score: analysis.keystroke_score, summary: analysis.keystroke_summary },
+    { label: "Voice",     score: analysis.voice_score,     summary: analysis.voice_summary },
+    { label: "Image",     score: analysis.image_score,     summary: analysis.image_summary },
+    { label: "App Usage", score: analysis.app_score,       summary: analysis.app_summary ?? "" },
   ];
   const hasModalityScores = modalityRows.some(r => r.score !== null);
 
@@ -487,7 +492,7 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   const candidateName = candidate ? `${candidate.first_name} ${candidate.last_name}`.trim() : "Candidate";
 
   return (
-    <div className="pa-root" ref={printRef}>
+    <div className={`pa-root${embedded ? " pa-embedded" : ""}`} ref={printRef}>
 
       {/* ── Nav ─────────────────────────────────────────────────────────── */}
       <nav className="pa-nav no-print">
@@ -506,15 +511,25 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
         </div>
       </nav>
 
-      {/* ── Hero ────────────────────────────────────────────────────────── */}
+      {/* ── Hero — document masthead: identity row, then one meta line ──── */}
       <header className="pa-hero">
-        <div className="pa-hero-left">
-          <div className="pa-avatar">{getInitials(candidate?.first_name, candidate?.last_name)}</div>
-          <div>
-            <p className="pa-eyebrow">Interview Assessment Report</p>
-            <h1 className="pa-candidate-name">{candidateName}</h1>
-            {candidate?.email && <p className="pa-candidate-email">{candidate.email}</p>}
+        <div className="pa-hero-top">
+          <div className="pa-hero-left">
+            <div className="pa-avatar">{getInitials(candidate?.first_name, candidate?.last_name)}</div>
+            <div>
+              <h1 className="pa-candidate-name">{candidateName}</h1>
+              {candidate?.email && <p className="pa-candidate-email">{candidate.email}</p>}
+            </div>
           </div>
+          {/* Risk badge intentionally omitted — the gauge already shows the
+              risk level, no need to say it twice. */}
+          {analysis.confidence && (
+            <div className="pa-hero-badges">
+              <span className="pa-conf-badge">
+                {analysis.confidence} CONFIDENCE
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="pa-hero-meta">
@@ -541,17 +556,6 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
               <span className="pa-meta-label">Role</span>
               <span className="pa-meta-val">{session.title}</span>
             </div>
-          )}
-        </div>
-
-        <div className="pa-hero-badges">
-          <span className="pa-risk-badge" style={{ background: `${riskColor}15`, color: riskColor, borderColor: `${riskColor}35` }}>
-            {analysis.risk_level} RISK
-          </span>
-          {analysis.confidence && (
-            <span className="pa-conf-badge">
-              {analysis.confidence} CONFIDENCE
-            </span>
           )}
         </div>
       </header>
@@ -581,15 +585,15 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
 
       {/* ── Signal cards ─────────────────────────────────────────────────── */}
       <div className="pa-signals">
-        <section className="pa-card pa-signal-card" style={{ "--accent": "#6366F1" } as React.CSSProperties}>
+        <section className="pa-card pa-signal-card">
           <h3 className="pa-card-title">Voice Analysis</h3>
           <p className="pa-body pa-body-sm">{analysis.voice_summary || "No voice data recorded."}</p>
         </section>
-        <section className="pa-card pa-signal-card" style={{ "--accent": "#F59E0B" } as React.CSSProperties}>
+        <section className="pa-card pa-signal-card">
           <h3 className="pa-card-title">Keystroke Analysis</h3>
           <p className="pa-body pa-body-sm">{analysis.keystroke_summary || "No keystroke data recorded."}</p>
         </section>
-        <section className="pa-card pa-signal-card" style={{ "--accent": "#3B82F6" } as React.CSSProperties}>
+        <section className="pa-card pa-signal-card">
           <h3 className="pa-card-title">App Usage</h3>
           <p className="pa-body pa-body-sm">{analysis.app_summary || "No app usage data recorded."}</p>
         </section>
@@ -625,9 +629,7 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
         <TranscriptChat
           transcript={analysis.full_transcript}
           candidateName={candidateName}
-          candidateInitials={getInitials(candidate?.first_name, candidate?.last_name)}
           interviewerName={interviewer ? `${interviewer.first_name} ${interviewer.last_name}`.trim() : "Interviewer"}
-          interviewerInitials={getInitials(interviewer?.first_name, interviewer?.last_name)}
         />
       </section>
 

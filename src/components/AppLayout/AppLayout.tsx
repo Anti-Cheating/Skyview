@@ -183,7 +183,11 @@ export default function AppLayout() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
-          style={{ minHeight: '100%' }}
+          // height (not just minHeight) so pages that pin their own header
+          // and scroll internally (e.g. InterviewDetailPage tabs) can resolve
+          // height:100%. Taller pages still overflow visibly and scroll via
+          // the main container, so content-driven routes are unaffected.
+          style={{ height: '100%' }}
         >
           <Outlet />
         </motion.div>

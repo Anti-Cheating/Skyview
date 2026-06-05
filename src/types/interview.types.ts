@@ -66,6 +66,10 @@ export interface InterviewSession {
   status: string;
   duration_minutes?: number;
   timezone?: string;
+  // True when a post-interview analysis already exists for the candidate
+  // (populated by GET /interviews/:id only). The detail page uses it to
+  // auto-open the analysis panel and hide the "Analyse Interview" button.
+  has_analysis?: boolean;
   interview_session_participants: InterviewParticipant[];
   // Scheduler info — populated by the backend so the list card can show
   // "Scheduled by Sarah" without an extra round-trip.

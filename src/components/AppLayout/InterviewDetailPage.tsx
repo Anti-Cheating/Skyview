@@ -8,6 +8,8 @@ import {
   Avatar,
   CircularProgress,
   Alert,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -291,7 +293,7 @@ function CandidateCard({ session }: { session: InterviewSession }) {
                 width: 52,
                 height: 52,
                 bgcolor: '#4CD964',
-                color: '#065F46',
+                color: '#FFFFFF',
                 fontSize: '1.125rem',
                 fontWeight: 700,
                 flexShrink: 0,
@@ -358,6 +360,21 @@ export default function InterviewDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [analysing, setAnalysing] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
+  // True when a completed analysis already exists (from the session payload,
+  // or after a freshly-triggered run reports ready). When true the panel is
+  // shown automatically and the "Analyse Interview" button is hidden.
+  const [hasAnalysis, setHasAnalysis] = useState(false);
+  // True only when the panel was opened by clicking Analyse — tells the
+  // panel to poll for the in-flight result instead of fetching once.
+  const [panelPending, setPanelPending] = useState(false);
+  // Page tabs: Basic Info (interview + candidate cards) / Analysis (report).
+  const [tab, setTab] = useState<'info' | 'analysis'>('info');
+  // The analysis panel mounts (and fetches) only after the Analysis tab is
+  // first opened — data loads per tab selection, not eagerly on page load.
+  const [analysisMounted, setAnalysisMounted] = useState(false);
+  // Last status the embedded panel reported — drives the tab's loader and
+  // when to reveal the report container.
+  const [panelStatus, setPanelStatus] = useState<'loading' | 'ready' | 'error' | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -370,6 +387,12 @@ export default function InterviewDetailPage() {
         if (cancelled) return;
         if (resp.success && resp.data) {
           setSession(resp.data);
+          // Analysis already ran for this session — render it straight away
+          // instead of making the user click Analyse again.
+          if (resp.data.has_analysis) {
+            setHasAnalysis(true);
+            setShowAnalysis(true);
+          }
         } else {
           setError(resp.message || 'Failed to load interview');
         }
@@ -409,25 +432,41 @@ export default function InterviewDetailPage() {
     // PostAnalysisPanel polls for the result and reports back via
     // onStatusChange, which flips the button loader off once it's ready.
     setAnalysing(true);
+    setPanelPending(true);
     setShowAnalysis(true);
     try {
       const res = await InterviewService.triggerPostAnalysis(session.id);
       if (!res.success) {
         showError(res.message || 'Failed to start analysis');
         setAnalysing(false);
+        setPanelPending(false);
         setShowAnalysis(false);
       }
     } catch (err: unknown) {
       const e = err as { message?: string; data?: { error?: string } };
       showError(e?.data?.error || e?.message || 'Failed to start analysis');
       setAnalysing(false);
+      setPanelPending(false);
       setShowAnalysis(false);
     }
   };
   const createdLabel = session.created_at ? formatCreatedAt(session.created_at) : null;
 
   return (
-    <Box sx={{ width: '100%', p: { xs: 2, md: 3 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
+    // Fills the AppLayout main area; back-link + heading + tabs stay pinned
+    // and only the tab content below scrolls.
+    <Box
+      sx={{
+        width: '100%',
+        height: '100%',
+        p: { xs: 2, md: 3 },
+        pb: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 3,
+        overflow: 'hidden',
+      }}
+    >
       {/* Back nav */}
       <Box
         component={Link}
@@ -447,126 +486,196 @@ export default function InterviewDetailPage() {
         Interviews
       </Box>
 
-      {/* Header */}
-      <Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-          <Typography sx={{ fontSize: '1.75rem', fontWeight: 700, color: '#111827', lineHeight: 1.2 }}>
-            {session.title || 'Untitled Interview'}
-          </Typography>
-          <StatusBadge status={session.status} />
+      {/* Header — title on the left, session actions on the right (the old
+          standalone action bar card is gone). */}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 2,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            <Typography sx={{ fontSize: '1.75rem', fontWeight: 700, color: '#111827', lineHeight: 1.2 }}>
+              {session.title || 'Untitled Interview'}
+            </Typography>
+            <StatusBadge status={session.status} />
+          </Box>
+          {(createdLabel || shortId) && (
+            <Typography sx={{ fontSize: '0.8125rem', color: '#9CA3AF', mt: 0.5 }}>
+              {createdLabel ? `Created ${createdLabel}` : ''}
+              {createdLabel && shortId ? ' · ' : ''}
+              {shortId ? `ID #${shortId}` : ''}
+            </Typography>
+          )}
         </Box>
-        {(createdLabel || shortId) && (
-          <Typography sx={{ fontSize: '0.8125rem', color: '#9CA3AF', mt: 0.5 }}>
-            {createdLabel ? `Created ${createdLabel}` : ''}
-            {createdLabel && shortId ? ' · ' : ''}
-            {shortId ? `ID #${shortId}` : ''}
-          </Typography>
+
+        {/* Disabled Start is hidden — in the heading it would just be
+            noise; the status badge already says the session ended. */}
+        {canStart && (
+          <Button
+            variant="contained"
+            onClick={() => navigate(`/interviews/${session.id}/monitor`)}
+            startIcon={<StartIcon sx={{ fontSize: 18 }} />}
+            sx={{
+              fontWeight: 700,
+              fontSize: '0.875rem',
+              textTransform: 'none',
+              px: 2.5,
+              py: 1,
+              borderRadius: '8px',
+              boxShadow: 'none',
+              flexShrink: 0,
+              bgcolor: '#4CD964',
+              color: '#FFFFFF',
+              '&:hover': { bgcolor: '#3CC954', boxShadow: 'none' },
+            }}
+          >
+            Start Interview
+          </Button>
         )}
       </Box>
 
-      {/* Split cards */}
-      <Box
+      {/* Tabs — content loads per selection */}
+      <Tabs
+        value={tab}
+        onChange={(_, v: 'info' | 'analysis') => {
+          setTab(v);
+          if (v === 'analysis') setAnalysisMounted(true);
+        }}
         sx={{
-          display: 'flex',
-          gap: 2,
-          flexDirection: { xs: 'column', md: 'row' },
-          alignItems: 'stretch',
+          borderBottom: '1px solid #E5E7EB',
+          minHeight: 40,
+          '& .MuiTab-root': {
+            textTransform: 'none',
+            fontWeight: 600,
+            fontSize: '0.875rem',
+            minHeight: 40,
+            color: '#6B7280',
+          },
+          '& .Mui-selected': { color: '#111827 !important' },
+          '& .MuiTabs-indicator': { bgcolor: '#4CD964', height: 2.5, borderRadius: '2px 2px 0 0' },
         }}
       >
-        <InterviewCard session={session} />
-        <CandidateCard session={session} />
-      </Box>
+        <Tab value="info" label="Basic Info" disableRipple />
+        <Tab value="analysis" label="Analysis" disableRipple />
+      </Tabs>
 
-      {/* Action bar */}
+      {/* Scrollable tab content — everything above stays pinned */}
       <Box
         sx={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 3,
+          pb: 3,
+        }}
+      >
+
+      {/* ── Tab: Basic Info ── */}
+      {tab === 'info' && (
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 2,
+            flexDirection: { xs: 'column', md: 'row' },
+            alignItems: 'stretch',
+          }}
+        >
+          <InterviewCard session={session} />
+          <CandidateCard session={session} />
+        </Box>
+      )}
+
+      {/* ── Tab: Analysis ── */}
+      {/* No analysis yet: the Analyse button sits where Copy Transcript /
+          Export PDF live once the report exists (top-right of the panel). */}
+      {tab === 'analysis' && !hasAnalysis && (
+        <Box sx={{ bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '12px', p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              variant="contained"
+              disabled={!canAnalyse}
+              onClick={() => void handleAnalyse()}
+              startIcon={
+                analysing ? (
+                  <CircularProgress size={18} sx={{ color: '#FFFFFF' }} />
+                ) : (
+                  <AnalyseIcon sx={{ fontSize: 18 }} />
+                )
+              }
+              sx={{
+                bgcolor: '#4CD964',
+                color: '#FFFFFF',
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                textTransform: 'none',
+                borderRadius: '8px',
+                boxShadow: 'none',
+                px: 2.5,
+                py: 1,
+                '&:hover': { bgcolor: '#3CC954', boxShadow: 'none' },
+                '&.Mui-disabled': { bgcolor: '#F3F4F6', color: '#9CA3AF' },
+              }}
+            >
+              Analyse Interview
+            </Button>
+          </Box>
+          <Box sx={{ py: 6, textAlign: 'center' }}>
+            <AnalyseIcon sx={{ fontSize: 48, color: '#E5E7EB', mb: 1 }} />
+            <Typography sx={{ fontSize: '0.875rem', color: '#9CA3AF' }}>
+              {analysing
+                ? 'Analysis is running — this may take a moment.'
+                : isCompleted
+                  ? 'No analysis generated yet. Click "Analyse Interview" to run it.'
+                  : 'Analysis becomes available once the interview is completed.'}
+            </Typography>
+          </Box>
+        </Box>
+      )}
+
+      {/* Loader while a stored analysis is being fetched for the tab */}
+      {tab === 'analysis' && hasAnalysis && panelStatus !== 'ready' && panelStatus !== 'error' && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+          <CircularProgress size={28} sx={{ color: '#4CD964' }} />
+        </Box>
+      )}
+
+      {/* Report container — kept mounted after first load so switching
+          tabs doesn't refetch; hidden via display when on Basic Info. */}
+      <Box
+        sx={{
+          display:
+            tab === 'analysis' && (panelStatus === 'ready' || panelStatus === 'error')
+              ? 'block'
+              : 'none',
           bgcolor: '#FFFFFF',
           border: '1px solid #E5E7EB',
           borderRadius: '12px',
-          p: 3,
-          display: 'flex',
-          justifyContent: 'flex-end',
-          gap: 1.5,
+          p: { xs: 2, md: 3 },
         }}
       >
-        <Button
-          variant={canStart ? 'contained' : 'text'}
-          disabled={!canStart}
-          onClick={() => navigate(`/interviews/${session.id}/monitor`)}
-          startIcon={<StartIcon sx={{ fontSize: 18 }} />}
-          sx={{
-            fontWeight: 700,
-            fontSize: '0.875rem',
-            textTransform: 'none',
-            px: 2.5,
-            py: 1,
-            borderRadius: '8px',
-            boxShadow: 'none',
-            ...(canStart
-              ? {
-                  bgcolor: '#4CD964',
-                  color: '#065F46',
-                  '&:hover': { bgcolor: '#3CC954', boxShadow: 'none' },
-                }
-              : {
-                  color: '#9CA3AF',
-                  '&:hover': { bgcolor: 'transparent' },
-                }),
-            '&.Mui-disabled': { bgcolor: '#F3F4F6', color: '#9CA3AF' },
-          }}
-        >
-          Start Interview
-        </Button>
-        <Button
-          variant="contained"
-          disabled={!canAnalyse}
-          onClick={() => void handleAnalyse()}
-          startIcon={
-            analysing ? (
-              <CircularProgress size={18} sx={{ color: '#065F46' }} />
-            ) : (
-              <AnalyseIcon sx={{ fontSize: 18 }} />
-            )
-          }
-          sx={{
-            bgcolor: '#4CD964',
-            color: '#065F46',
-            fontWeight: 700,
-            fontSize: '0.875rem',
-            textTransform: 'none',
-            borderRadius: '8px',
-            boxShadow: 'none',
-            px: 2.5,
-            py: 1,
-            '&:hover': { bgcolor: '#3CC954', boxShadow: 'none' },
-            '&.Mui-disabled': { bgcolor: '#F3F4F6', color: '#9CA3AF' },
-          }}
-        >
-          Analyse Interview
-        </Button>
-      </Box>
-
-      {/* Inline post-analysis — rendered on the same page below the action bar.
-          The button above holds the loader until the panel reports ready. */}
-      {showAnalysis && (
-        <Box
-          sx={{
-            bgcolor: '#FFFFFF',
-            border: '1px solid #E5E7EB',
-            borderRadius: '12px',
-            p: { xs: 2, md: 3 },
-          }}
-        >
+        {analysisMounted && showAnalysis && (
           <PostAnalysisPanel
             sessionId={session.id}
-            pending
+            pending={panelPending}
             embedded
             onStatusChange={(status) => {
+              setPanelStatus(status);
               if (status === 'ready' || status === 'error') setAnalysing(false);
+              // A freshly-triggered run just finished — retire the button.
+              if (status === 'ready') setHasAnalysis(true);
             }}
           />
-        </Box>
-      )}
+        )}
+      </Box>
+
+      </Box>{/* /scrollable tab content */}
     </Box>
   );
 }
