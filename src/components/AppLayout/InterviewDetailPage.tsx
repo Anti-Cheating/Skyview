@@ -25,6 +25,7 @@ import {
 import { InterviewService } from '../../services/interview.service';
 import type { InterviewSession } from '../../types/interview.types';
 import { useSnackbar } from '../../contexts/SnackbarContext';
+import { PostAnalysisPanel } from '../PostAnalysis';
 
 function getInitials(first: string, last: string): string {
   return `${first?.[0] ?? ''}${last?.[0] ?? ''}`.toUpperCase();
@@ -356,6 +357,7 @@ export default function InterviewDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [analysing, setAnalysing] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -403,19 +405,23 @@ export default function InterviewDetailPage() {
   const shortId = session.id.replace(/-/g, '').slice(0, 8).toUpperCase();
 
   const handleAnalyse = async () => {
+    // Reveal the inline panel and keep the button loader on. The embedded
+    // PostAnalysisPanel polls for the result and reports back via
+    // onStatusChange, which flips the button loader off once it's ready.
     setAnalysing(true);
+    setShowAnalysis(true);
     try {
       const res = await InterviewService.triggerPostAnalysis(session.id);
       if (!res.success) {
         showError(res.message || 'Failed to start analysis');
-        return;
+        setAnalysing(false);
+        setShowAnalysis(false);
       }
-      navigate(`/interviews/${session.id}/analysis?pending=1`);
     } catch (err: unknown) {
       const e = err as { message?: string; data?: { error?: string } };
       showError(e?.data?.error || e?.message || 'Failed to start analysis');
-    } finally {
       setAnalysing(false);
+      setShowAnalysis(false);
     }
   };
   const createdLabel = session.created_at ? formatCreatedAt(session.created_at) : null;
@@ -539,6 +545,28 @@ export default function InterviewDetailPage() {
           Analyse Interview
         </Button>
       </Box>
+
+      {/* Inline post-analysis — rendered on the same page below the action bar.
+          The button above holds the loader until the panel reports ready. */}
+      {showAnalysis && (
+        <Box
+          sx={{
+            bgcolor: '#FFFFFF',
+            border: '1px solid #E5E7EB',
+            borderRadius: '12px',
+            p: { xs: 2, md: 3 },
+          }}
+        >
+          <PostAnalysisPanel
+            sessionId={session.id}
+            pending
+            embedded
+            onStatusChange={(status) => {
+              if (status === 'ready' || status === 'error') setAnalysing(false);
+            }}
+          />
+        </Box>
+      )}
     </Box>
   );
 }

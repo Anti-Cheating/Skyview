@@ -133,6 +133,40 @@ export interface UseRiskSocketReturn {
   setInitialCandidateStatus: (status: CandidateStatus | null) => void;
 }
 
+// ── Merge helpers: combine fetched history with live socket data, dedup, sort ──
+const byTime = (a: string, b: string) => new Date(a).getTime() - new Date(b).getTime();
+
+function mergeResults(a: WindowResult[], b: WindowResult[]): WindowResult[] {
+  const map = new Map<string, WindowResult>();
+  // Live entries (added later) win over historical ones for the same window.
+  for (const r of [...a, ...b]) map.set(r.window_id, r);
+  return [...map.values()].sort((x, y) => byTime(x.processed_at, y.processed_at));
+}
+
+function mergeImageResults(a: ImageAnalysisResult[], b: ImageAnalysisResult[]): ImageAnalysisResult[] {
+  const map = new Map<string, ImageAnalysisResult>();
+  for (const r of [...a, ...b]) map.set(r.analysis_id, r);
+  return [...map.values()].sort((x, y) => byTime(x.processed_at, y.processed_at));
+}
+
+function mergePulse(a: PulseAlert[], b: PulseAlert[]): PulseAlert[] {
+  const seen = new Set<string>();
+  const out: PulseAlert[] = [];
+  for (const p of [...a, ...b].sort((x, y) => byTime(x.timestamp, y.timestamp))) {
+    if (seen.has(p.timestamp)) continue;
+    seen.add(p.timestamp);
+    out.push(p);
+  }
+  return out;
+}
+
+function mergeTranscript(history: TranscriptFragment[], current: TranscriptFragment[]): TranscriptFragment[] {
+  const key = (f: TranscriptFragment) => `${f.speaker_role}|${f.timestamp}|${f.text}`;
+  const have = new Set(current.filter(f => f.is_final).map(key));
+  const fresh = history.filter(h => !have.has(key(h)));
+  return [...fresh, ...current].sort((x, y) => byTime(x.timestamp, y.timestamp));
+}
+
 function getRiskPriority(risk: string): number {
   switch (risk.toLowerCase()) {
     case 'critical': return 4;
@@ -211,12 +245,12 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
 
   const handleWindowResult = useCallback((result: WindowResult) => {
     console.log('[RiskSocket] Window result received:', result);
-    setResults(prev => [...prev, result]);
+    setResults(prev => mergeResults(prev, [result]));
   }, []);
 
   const handleImageAnalysisResult = useCallback((result: ImageAnalysisResult) => {
     console.log('[RiskSocket] Image analysis result received:', result);
-    setImageAnalysisResults(prev => [...prev, result]);
+    setImageAnalysisResults(prev => mergeImageResults(prev, [result]));
     setPendingImageAnalysisCount(prev => Math.max(0, prev - 1));
   }, []);
 
@@ -254,7 +288,7 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
 
     socket.on('risk-pulse', (data: PulseAlert) => {
       console.log('[RiskSocket] Pulse alert received:', data);
-      setPulseAlerts(prev => [...prev, data]);
+      setPulseAlerts(prev => mergePulse(prev, [data]));
     });
 
     // Pre-join setup state from candidate's extension. Cortex broadcasts
@@ -318,6 +352,60 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
       setIsConnected(false);
     };
   }, [sessionId, handleWindowResult, handleImageAnalysisResult]);
+
+  // Rehydrate all four live-monitoring tabs from Cortex on mount / session
+  // change. Without this, a page refresh wipes the socket-only state and the
+  // panels go empty mid-interview. We merge (not replace) so any live event
+  // that lands while these fetches are in flight is preserved, and everything
+  // stays deduped + chronological.
+  useEffect(() => {
+    if (!sessionId) return;
+    let cancelled = false;
+
+    const base = `${ENV.AUTH_API_URL}/interview-sessions/${sessionId}`;
+    const token = localStorage.getItem('auth_access_token') || '';
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    const getJson = (url: string) =>
+      fetch(url, { headers }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+
+    // Window analysis tab
+    getJson(`${base}/windows`).then(json => {
+      if (cancelled || !json?.data?.results) return;
+      setResults(prev => mergeResults(json.data.results as WindowResult[], prev));
+    });
+
+    // Image analysis tab
+    getJson(`${base}/image-analysis`).then(json => {
+      if (cancelled || !json?.data?.results) return;
+      setImageAnalysisResults(prev => mergeImageResults(json.data.results as ImageAnalysisResult[], prev));
+    });
+
+    // Pulse tab
+    getJson(`${base}/pulse-events`).then(json => {
+      if (cancelled || !json?.data?.results) return;
+      setPulseAlerts(prev => mergePulse(json.data.results as PulseAlert[], prev));
+    });
+
+    // Transcription tab
+    getJson(`${base}/transcript`).then(json => {
+      if (cancelled || !json?.data?.utterances) return;
+      const history: TranscriptFragment[] = (json.data.utterances as Array<{
+        text: string; speaker_role: string; participant_id?: string;
+        start_ms?: number | null; end_ms?: number | null; captured_at: string;
+      }>).map(u => ({
+        text: u.text,
+        is_final: true,
+        timestamp: u.captured_at,
+        speaker_role: u.speaker_role === 'interviewer' ? 'interviewer' : 'candidate',
+        participant_id: u.participant_id,
+        start_ms: u.start_ms ?? undefined,
+        end_ms: u.end_ms ?? undefined,
+      }));
+      setTranscriptFragments(prev => mergeTranscript(history, prev));
+    });
+
+    return () => { cancelled = true; };
+  }, [sessionId]);
 
   return {
     results,

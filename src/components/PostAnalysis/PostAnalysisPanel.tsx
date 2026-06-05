@@ -305,12 +305,28 @@ function normalizeAnalysis(raw: Record<string, unknown>): PostAnalysis {
 }
 
 // ── Main Panel ────────────────────────────────────────────────────────────────
-export const PostAnalysisPanel: React.FC = () => {
+interface PostAnalysisPanelProps {
+  /** Override the route param — lets the panel be embedded on another page. */
+  sessionId?: string;
+  /** Override the ?pending=1 search param when embedded. */
+  pending?: boolean;
+  /** When embedded, suppress the full-page loading placeholder (the host shows
+   *  its own loader, e.g. on a button) and report status up via onStatusChange. */
+  embedded?: boolean;
+  onStatusChange?: (status: "loading" | "ready" | "error") => void;
+}
+
+export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
+  sessionId: sessionIdProp,
+  pending: pendingProp,
+  embedded = false,
+  onStatusChange,
+}) => {
   const { id, sessionId: sessionIdLegacy } = useParams<{ id?: string; sessionId?: string }>();
-  const sessionId = id ?? sessionIdLegacy;
+  const sessionId = sessionIdProp ?? id ?? sessionIdLegacy;
   const [searchParams] = useSearchParams();
   const mockScenario = searchParams.get("mock") as MockScenario | null;
-  const pendingPoll = searchParams.get("pending") === "1";
+  const pendingPoll = pendingProp ?? searchParams.get("pending") === "1";
   const printRef = useRef<HTMLDivElement>(null);
 
   const [analysis, setAnalysis] = useState<PostAnalysis | null>(null);
@@ -411,7 +427,17 @@ export const PostAnalysisPanel: React.FC = () => {
     }
   };
 
+  // Report load status to an embedding host (e.g. so a button can hold the loader).
+  useEffect(() => {
+    if (!onStatusChange) return;
+    if (loading) onStatusChange("loading");
+    else if (error) onStatusChange("error");
+    else if (analysis) onStatusChange("ready");
+  }, [loading, error, analysis, onStatusChange]);
+
   if (loading) {
+    // Embedded: stay invisible — the host shows its own loader (button spinner).
+    if (embedded) return null;
     return (
       <div className="pa-state">
         <div className="pa-spinner" />
@@ -423,7 +449,7 @@ export const PostAnalysisPanel: React.FC = () => {
     return (
       <div className="pa-state pa-state-error">
         <p>{error}</p>
-        {sessionId && <Link to={`/interviews/${sessionId}`} className="pa-back-link">Back to interview</Link>}
+        {!embedded && sessionId && <Link to={`/interviews/${sessionId}`} className="pa-back-link">Back to interview</Link>}
       </div>
     );
   }
@@ -465,9 +491,11 @@ export const PostAnalysisPanel: React.FC = () => {
 
       {/* ── Nav ─────────────────────────────────────────────────────────── */}
       <nav className="pa-nav no-print">
-        <Link to={`/interviews/${sessionId}`} className="pa-nav-back">
-          <BackIcon sx={{ fontSize: 15 }} /> Back to Interview
-        </Link>
+        {!embedded ? (
+          <Link to={`/interviews/${sessionId}`} className="pa-nav-back">
+            <BackIcon sx={{ fontSize: 15 }} /> Back to Interview
+          </Link>
+        ) : <span />}
         <div className="pa-nav-actions">
           <button className="pa-copy-btn" onClick={handleCopyTranscript} title="Copy full transcript">
             <CopyIcon sx={{ fontSize: 15 }} /> {copied ? "Copied!" : "Copy Transcript"}
