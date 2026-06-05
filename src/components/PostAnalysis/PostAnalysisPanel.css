@@ -1,0 +1,696 @@
+/* ─── Design tokens ──────────────────────────────────────────────────── */
+:root {
+  --pa-bg:       #F5F5F3;
+  --pa-card:     #FFFFFF;
+  --pa-border:   #E8E8E4;
+  --pa-border-2: #F0F0EC;
+  --pa-text:     #0A0A0A;
+  --pa-body:     #1A1A1A;
+  --pa-muted:    #3D3D3D;
+  --pa-faint:    #5A5A58;
+  --pa-green:    #16A34A;
+  --pa-green-lt: #4CD964;
+  --pa-radius:   12px;
+  --pa-shadow:   0 1px 2px rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.04);
+  --pa-shadow-md:0 4px 16px rgba(0,0,0,0.07);
+  /* Same system stack as the rest of Skyview (theme/index.ts typography). */
+  --font-sans:   -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* ─── Root ───────────────────────────────────────────────────────────── */
+/* One-surface document: the report is a single white sheet with flat,
+   hairline-separated sections — no nested card chrome. Standalone gets
+   its own sheet; embedded inherits the host card's. */
+.pa-root {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 36px 48px;
+  background: #FFFFFF;
+  border: 1px solid var(--pa-border);
+  border-radius: var(--pa-radius);
+  font-family: var(--font-sans);
+  color: var(--pa-text);
+}
+/* Embedded on the interview detail page — the host card already provides
+   the sheet (bg, border, padding), so don't double it up. */
+.pa-root.pa-embedded {
+  padding: 0;
+  max-width: none;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+/* ─── State screens ──────────────────────────────────────────────────── */
+.pa-state {
+  min-height: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--pa-muted);
+}
+.pa-state-error { color: #B91C1C; }
+.pa-back-link { font-size: 13px; color: var(--pa-green); font-weight: 700; text-decoration: none; }
+.pa-back-link:hover { text-decoration: underline; }
+
+.pa-spinner {
+  width: 32px; height: 32px;
+  border: 2.5px solid var(--pa-border);
+  border-top-color: var(--pa-green-lt);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Nav ────────────────────────────────────────────────────────────── */
+.pa-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.pa-nav-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--pa-muted);
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  transition: color 0.15s;
+}
+.pa-nav-back:hover { color: var(--pa-text); }
+
+.pa-nav-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pa-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: transparent;
+  color: var(--pa-muted);
+  border: 1.5px solid var(--pa-border);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.pa-copy-btn:hover {
+  color: var(--pa-text);
+  border-color: #C0C0BB;
+  background: rgba(0,0,0,0.03);
+}
+
+.pa-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: var(--pa-text);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s, opacity 0.15s;
+}
+.pa-export-btn:hover:not(:disabled) { background: #333; transform: translateY(-1px); }
+.pa-export-btn:active:not(:disabled) { transform: none; }
+.pa-export-btn:disabled { opacity: 0.6; cursor: wait; }
+
+/* ─── Hero header ────────────────────────────────────────────────────── */
+/* Document masthead: identity + badges on one row, then a single compact
+   meta line underneath — no floating middle column. */
+.pa-hero {
+  padding: 4px 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.pa-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.pa-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 0 0 auto;
+}
+/* Same design as the candidate card avatar: plain green circle, white
+   bold initials, no halo ring. */
+.pa-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #4CD964;
+  color: #FFFFFF;
+  font-family: var(--font-sans);
+  font-size: 1.375rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: -0.02em;
+}
+/* Matches the app theme's h1 (1.5rem / 700 / -0.01em). */
+.pa-candidate-name {
+  font-family: var(--font-sans);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--pa-text);
+  margin: 0 0 3px;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.pa-candidate-email {
+  font-size: 12px;
+  color: var(--pa-faint);
+  margin: 0;
+}
+
+.pa-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 56px;
+}
+.pa-meta-item { display: flex; flex-direction: column; gap: 1px; }
+.pa-meta-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pa-faint);
+}
+.pa-meta-val {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--pa-text);
+}
+
+.pa-hero-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.pa-conf-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  border: 1px solid;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+}
+.pa-conf-badge {
+  background: rgba(99,102,241,0.07);
+  color: #4F46E5;
+  border-color: rgba(99,102,241,0.2);
+}
+
+/* ─── Section base (formerly cards) ──────────────────────────────────── */
+/* Flat sections — no borders, shadows or fills. Major bands are separated
+   by a single hairline (see the band rules below) and whitespace. */
+.pa-card {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+}
+/* Major bands: one continuous document — whitespace alone separates
+   sections, no divider lines. */
+.pa-root > .pa-card,
+.pa-charts-row,
+.pa-signals {
+  margin-bottom: 44px;
+}
+/* Matches the app theme's h2 (1.25rem-ish / 600). */
+.pa-card-title {
+  font-family: var(--font-sans);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--pa-text);
+  margin: 0 0 14px;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pa-card-icon {
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.pa-card-note {
+  font-size: 11.5px;
+  color: var(--pa-faint);
+  text-align: center;
+  margin: 10px 0 0;
+  line-height: 1.5;
+  max-width: 220px;
+}
+
+/* ─── Charts row ─────────────────────────────────────────────────────── */
+.pa-charts-row {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 40px;
+}
+
+.pa-gauge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gauge-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.gauge-risk-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.pa-donut-card { display: flex; flex-direction: column; }
+
+/* ─── Score breakdown cards ──────────────────────────────────────────── */
+.sb-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 32px;
+}
+/* Flat rows — label, score and bar carry the color; no boxes. */
+.sb-card {
+  position: relative;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  cursor: default;
+}
+.sb-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+.sb-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pa-muted, #6B7280);
+}
+.sb-score {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.sb-track {
+  height: 6px;
+  background: var(--pa-border, #E5E7EB);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.sb-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+.sb-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 240px;
+  background: #1F2937;
+  color: #F9FAFB;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  border-radius: 8px;
+  z-index: 10;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+}
+.sb-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #1F2937;
+}
+
+/* ─── Donut chart ────────────────────────────────────────────────────── */
+.donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.donut-legend {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.donut-legend-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: default;
+}
+.donut-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.donut-legend-text { flex: 1; }
+.donut-legend-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.donut-legend-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--pa-text);
+  letter-spacing: 0.02em;
+}
+.donut-legend-pct {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--pa-muted);
+}
+.donut-legend-desc {
+  font-size: 12px;
+  color: var(--pa-faint);
+  margin: 2px 0 0;
+  line-height: 1.45;
+}
+
+/* ─── Signal sections ────────────────────────────────────────────────── */
+/* Stacked one per row — the summaries are long-form prose and read far
+   better full-width than squeezed into three narrow columns. Flat: the
+   section titles provide enough separation. */
+.pa-signals {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 28px;
+}
+
+/* ─── Body text ──────────────────────────────────────────────────────── */
+.pa-body {
+  font-size: 15px;
+  line-height: 1.85;
+  color: var(--pa-body);
+  margin: 0;
+  font-weight: 400;
+}
+.pa-body-sm { font-size: 14px; }
+
+/* ─── App categories ─────────────────────────────────────────────────── */
+.pa-cats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+.pa-cat {
+  border: 1px solid var(--pa-border);
+  border-left: 3px solid;
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: #FFFFFF;
+  transition: background 0.15s;
+}
+.pa-cat:hover { background: #FAFAF9; }
+.pa-cat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.pa-cat-name { font-size: 14px; font-weight: 700; color: var(--pa-text); }
+.pa-cat-risk { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; }
+.pa-cat-score { font-size: 12px; color: var(--pa-muted); margin: 0 0 10px; }
+.pa-cat-apps { display: flex; flex-wrap: wrap; gap: 5px; }
+.pa-app-tag {
+  background: var(--pa-border-2);
+  border: 1px solid var(--pa-border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--pa-body);
+  font-weight: 400;
+}
+
+/* ─── Transcript chat ────────────────────────────────────────────────── */
+/* No inner scrollbox — the transcript flows with the document and the
+   page itself scrolls, consistent with the one-document design. */
+.tc-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 2px;
+}
+
+/* Window divider */
+.tc-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 6px;
+}
+.tc-divider::before,
+.tc-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--pa-border);
+}
+.tc-divider-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pa-faint);
+  white-space: nowrap;
+}
+
+/* Chat bubbles — exact mirror of the live-monitoring Transcript tab
+   (AnalyticsPanel TranscriptFeed): interviewer right in brand green with
+   white text, candidate left in neutral grey, WhatsApp-style run grouping
+   with a tight corner on the first bubble of each run. */
+.tc-msg-row {
+  display: flex;
+  margin-top: 5px;
+}
+.tc-msg-row-new { margin-top: 12px; }
+.tc-msg-row-interviewer { justify-content: flex-end; }
+.tc-msg-row-candidate   { justify-content: flex-start; }
+
+.tc-msg-col {
+  max-width: 65%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tc-msg-row-interviewer .tc-msg-col { align-items: flex-end; }
+.tc-msg-row-candidate   .tc-msg-col { align-items: flex-start; }
+
+/* Sender label — only on the first bubble of a run; shows the actual
+   participant name. Colors match the live tab. */
+.tc-msg-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-bottom: 2px;
+  padding: 0 3px;
+}
+.tc-msg-label-interviewer { color: #4CD964; }
+.tc-msg-label-candidate   { color: #3B82F6; }
+
+.tc-msg-bubble {
+  margin: 0;
+  padding: 5px 10px 6px;
+  border-radius: 10px;
+  font-size: 0.825rem;
+  line-height: 1.45;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  word-break: break-word;
+  white-space: pre-wrap;
+  min-width: 52px;
+}
+.tc-msg-bubble-interviewer {
+  background: #4CD964;
+  color: #FFFFFF;
+  box-shadow: 0 2px 6px rgba(76, 217, 100, 0.25);
+}
+.tc-msg-bubble-candidate {
+  background: #F3F4F6;
+  color: #111B21;
+  box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+}
+/* WhatsApp tail — tight corner on the first bubble of a run only. */
+.tc-msg-bubble-interviewer.tc-msg-bubble-first { border-radius: 10px 4px 10px 10px; }
+.tc-msg-bubble-candidate.tc-msg-bubble-first   { border-radius: 4px 10px 10px 10px; }
+
+/* ─── Print footer ───────────────────────────────────────────────────── */
+.pa-print-footer {
+  display: none;
+  justify-content: space-between;
+  padding-top: 16px;
+  margin-top: 24px;
+  border-top: 1px solid var(--pa-border);
+  font-size: 10.5px;
+  color: var(--pa-faint);
+  font-family: var(--font-sans);
+}
+
+/* ─── Print styles ───────────────────────────────────────────────────── */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 1.4cm 1.6cm;
+  }
+
+  /*
+   * Isolate the report: hide everything, then reveal only .pa-root.
+   * Eliminates the Trueyy sidebar, top nav bar, and all AppLayout chrome.
+   */
+  body * {
+    visibility: hidden !important;
+  }
+  .pa-root,
+  .pa-root * {
+    visibility: visible !important;
+  }
+  .pa-root {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+    border: none !important;
+    overflow: visible !important;
+  }
+
+  /* Hide interactive / screen-only elements */
+  .no-print {
+    display: none !important;
+  }
+
+  /* ── Layout ── */
+  .pa-hero {
+    gap: 16px !important;
+    padding: 0 0 18px !important;
+    break-after: avoid !important;
+  }
+  .pa-hero-top {
+    flex-wrap: nowrap !important;
+  }
+  .pa-hero-badges {
+    flex-direction: column !important;
+    align-items: flex-end !important;
+  }
+
+  .pa-charts-row {
+    display: grid !important;
+    grid-template-columns: 240px 1fr !important;
+    gap: 12px !important;
+    break-inside: avoid !important;
+  }
+
+  .pa-signals {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .pa-cats {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* ── Sections: flat document, respect page breaks ── */
+  .pa-card {
+    box-shadow: none !important;
+    border: none !important;
+    break-inside: avoid !important;
+    margin-bottom: 18px !important;
+    padding: 0 !important;
+  }
+
+  .pa-summary-card {
+    break-before: avoid !important;
+  }
+
+  /* ── Transcript: full height, natural page breaks ── */
+  .tc-feed {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .tc-msg-row {
+    break-inside: avoid !important;
+  }
+
+  /* ── Gauge & donut: keep compact ── */
+  .gauge-wrap svg { width: 220px !important; height: 130px !important; }
+  .donut-wrap svg { width: 160px !important; height: 160px !important; }
+
+  /* ── Footer ── */
+  .pa-print-footer {
+    display: flex !important;
+    visibility: visible !important;
+  }
+  .pa-print-footer * { visibility: visible !important; }
+
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .pa-charts-row { grid-template-columns: 1fr; }
+  .pa-signals { grid-template-columns: 1fr; }
+}
+@media (max-width: 680px) {
+  .pa-root { padding: 14px 14px 40px; }
+  .pa-hero-top { flex-direction: column; align-items: flex-start; }
+  .pa-hero-meta { gap: 12px 32px; }
+  .pa-hero-badges { flex-direction: row; align-items: flex-start; }
+}

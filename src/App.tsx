@@ -14,6 +14,9 @@ import AppLayout from './components/AppLayout/AppLayout';
 import AppDashboard from './components/AppLayout/AppDashboard';
 import AppInterviewList from './components/AppLayout/AppInterviewList';
 import CreateInterviewPage from './components/AppLayout/CreateInterviewPage';
+import InterviewDetailPage from './components/AppLayout/InterviewDetailPage';
+import { PostAnalysisPanel } from './components/PostAnalysis';
+import PreviewPage from './components/PostAnalysis/PreviewPage';
 import MonitoringView from './components/Monitoring/MonitoringView';
 import CandidateJoinPage from './components/AppLayout/CandidateJoinPage';
 import TeamPage from './components/Team/TeamPage';
@@ -174,6 +177,8 @@ function AppRoutes() {
           <Route index element={<AppDashboard />} />
           <Route path="interviews" element={<AppInterviewList />} />
           <Route path="interviews/new" element={<CreateInterviewPage />} />
+          <Route path="interviews/:id" element={<InterviewDetailPage />} />
+          <Route path="interviews/:id/analysis" element={<PostAnalysisPanel />} />
           <Route path="interviews/:id/edit" element={<CreateInterviewPage />} />
           <Route path="interviews/:id/join" element={<CandidateJoinPage />} />
           <Route path="interviews/:id/monitor" element={<MonitoringView />} />
@@ -183,6 +188,10 @@ function AppRoutes() {
               keeps the sidebar and can navigate out. */}
           <Route path="*" element={<NotFoundPage />} />
         </Route>
+        <Route
+          path="/analysis-preview"
+          element={<PrivateRoute><PreviewPage /></PrivateRoute>}
+        />
         {/* Standalone 404 for unauthenticated visitors who hit a
             non-existent path. Replaces the old silent redirect to
             /login (which would loop signed-in users back to /). */}

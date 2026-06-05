@@ -1,6 +1,10 @@
 export const ENV = {
-  // API Endpoints
+  // API Endpoints — Cortex serves auth + interview + post-analysis routes
   AUTH_API_URL: import.meta.env.VITE_AUTH_API_URL || 'http://localhost:4000',
+  CORTEX_API_URL:
+    import.meta.env.VITE_CORTEX_API_URL ||
+    import.meta.env.VITE_AUTH_API_URL ||
+    'http://localhost:4000',
 
   // Jarvis Chrome extension ID — derived from the public key in
   // Jarvis/candidate/manifest.json. Used by Skyview to send messages

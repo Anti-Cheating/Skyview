@@ -1,0 +1,181 @@
+.preview-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  background: #f8f9fa;
+  min-height: 100vh;
+}
+
+.preview-header {
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+.preview-header h1 {
+  font-size: 32px;
+  color: #333;
+  margin: 0 0 15px 0;
+}
+
+.preview-header p {
+  font-size: 16px;
+  color: #666;
+  margin: 0;
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 25px;
+  margin-bottom: 50px;
+}
+
+.preview-card {
+  display: block;
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-top: 4px solid;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.preview-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.preview-card-icon {
+  font-size: 36px;
+  margin-bottom: 15px;
+}
+
+.preview-card h2 {
+  margin: 0 0 10px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.preview-card p {
+  margin: 0 0 20px 0;
+  font-size: 14px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.preview-risk {
+  display: inline-block;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.preview-info {
+  background: white;
+  border-radius: 12px;
+  padding: 40px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.preview-info h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  color: #333;
+  font-weight: 600;
+}
+
+.preview-info ul {
+  margin: 0 0 30px 0;
+  padding-left: 20px;
+  color: #555;
+}
+
+.preview-info li {
+  margin-bottom: 10px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.scenarios-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 30px;
+}
+
+.scenarios-table thead {
+  background: #f5f5f5;
+}
+
+.scenarios-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  font-size: 13px;
+  border-bottom: 2px solid #ddd;
+}
+
+.scenarios-table td {
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+  font-size: 13px;
+  color: #555;
+}
+
+.scenarios-table tr:hover {
+  background: #f9f9f9;
+}
+
+.direct-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.direct-link {
+  display: block;
+  padding: 12px 20px;
+  background: #667eea;
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  transition: background 0.2s ease;
+}
+
+.direct-link:hover {
+  background: #764ba2;
+}
+
+@media (max-width: 768px) {
+  .preview-page {
+    padding: 20px 10px;
+  }
+
+  .preview-header h1 {
+    font-size: 24px;
+  }
+
+  .preview-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .preview-info {
+    padding: 20px;
+  }
+
+  .scenarios-table {
+    font-size: 12px;
+  }
+
+  .scenarios-table th,
+  .scenarios-table td {
+    padding: 8px;
+  }
+}
