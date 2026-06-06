@@ -47,7 +47,6 @@ import { USER_ROLES, STORAGE_KEYS, isStaffRole } from '../../config/constants';
 import { ENV } from '../../config/env';
 import type { InterviewSession } from '../../types/interview.types';
 import { TOKENS } from '../../theme';
-import FalconDownloadCard from '../common/FalconDownloadCard';
 import HelperDownloadCard from '../Monitoring/HelperDownloadCard';
 import StepRow from '../common/StepRow';
 
@@ -209,7 +208,7 @@ export default function CandidateJoinPage() {
   const extensionState = helper.checking
     ? 'checking'
     : helper.installed ? 'done' : 'missing';
-  const screenOk = !!helper.status?.screen_recording_ok || interview.interview_type !== 'extension';
+  const screenOk = !!helper.status?.screen_recording_ok;
   const micOk = !!helper.status?.microphone_ok;
   const monitoringState = !helper.installed
     ? 'pending'
@@ -277,9 +276,7 @@ export default function CandidateJoinPage() {
         </Box>
       </Box>
 
-      {interview.interview_type === 'application' ? (
-        <FalconDownloadCard />
-      ) : !helper.installed && !helper.checking ? (
+      {!helper.installed && !helper.checking ? (
         <HelperDownloadCard checking={helper.checking} onRetry={() => helper.refresh()} />
       ) : (
         <Box sx={{

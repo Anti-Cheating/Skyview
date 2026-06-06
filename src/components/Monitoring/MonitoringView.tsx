@@ -32,7 +32,6 @@ import { USER_ROLES, isStaffRole } from '../../config/constants';
 import { useAuth } from '../../contexts/AuthContext';
 import AnalyticsPanel from './AnalyticsPanel';
 import CandidateSetupCard from './CandidateSetupCard';
-import FalconDownloadCard from '../common/FalconDownloadCard';
 import { TOKENS } from '../../theme';
 
 const LIGHT_BG = TOKENS.bgCard;
@@ -386,7 +385,7 @@ export default function MonitoringView() {
             {interview.title}
           </Typography>
           <Typography variant="caption" sx={{ display: { xs: 'none', sm: 'block' }, color: '#6B7280' }}>
-            {`${candidateName} · ${interview.interview_type === 'extension' ? 'Trueyy Helper' : 'Falcon App'}`}
+            {`${candidateName} · Trueyy Helper`}
           </Typography>
         </Box>
 
@@ -444,11 +443,8 @@ export default function MonitoringView() {
         </Box>
       </Box>
 
-      {interview.interview_type === 'application' ? (
-        <FalconDownloadCard />
-      ) : (
-        /* Extension-type: full monitoring UI */
-        <>
+      {/* Full monitoring UI */}
+      <>
           {/* Pre-join checklists */}
           {!riskData.candidateStatus?.joined
             ? <CandidateSetupCard status={riskData.candidateStatus} />
@@ -477,8 +473,7 @@ export default function MonitoringView() {
               onClose={handleExit}
             />
           </Box>
-        </>
-      )}
+      </>
     </Box>
   );
 }

@@ -11,7 +11,6 @@ export const MOCK_PAST_INTERVIEWS: InterviewSession[] = [
     actual_start_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     actual_end_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 3600000).toISOString(),
     status: 'completed',
-    interview_type: 'extension',
     provider: 'zoom',
     provider_metadata: {
       topic: 'Frontend Engineer Round 1',
@@ -45,7 +44,6 @@ export const MOCK_PAST_INTERVIEWS: InterviewSession[] = [
     actual_start_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
     actual_end_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000 + 3600000).toISOString(),
     status: 'completed',
-    interview_type: 'extension',
     provider: 'zoom',
     provider_metadata: {
       topic: 'Backend Engineer Round 1',

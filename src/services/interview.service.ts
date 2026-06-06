@@ -1,6 +1,6 @@
 import { ApiService } from './api.service';
 import type { ApiResponse } from '../types/api.types';
-import type { InterviewSession, InterviewType } from '../types/interview.types';
+import type { InterviewSession } from '../types/interview.types';
 
 export interface CreateInterviewParticipantInput {
   // Picked from a company-staff dropdown; backend validates the user
@@ -18,11 +18,9 @@ export interface CreateInterviewInput {
   scheduled_end_at: string;
   status?: string;
   timezone: string;
-  interview_type: InterviewType;
-  // Required when interview_type === "application"
-  provider?: string | null;
-  // Required when interview_type === "extension"
-  meeting_link?: string | null;
+  // The interviewer-supplied meeting URL (Zoom / Meet / Teams / …) —
+  // Cortex parses the provider from it.
+  meeting_link: string;
   interview_session_participants: CreateInterviewParticipantInput[];
 }
 
@@ -96,8 +94,6 @@ export class InterviewService {
   static async createInterview(
     input: CreateInterviewInput
   ): Promise<ApiResponse<InterviewSession>> {
-    // Strip fields that don't apply to the chosen interview_type so the
-    // backend's superRefine validation doesn't reject the payload.
     const payload: Record<string, unknown> = {
       title: input.title,
       description: input.description ?? null,
@@ -107,15 +103,9 @@ export class InterviewService {
       // and the session_lifecycle migration (SCHEDULED → ACTIVE → COMPLETED).
       status: input.status ?? 'SCHEDULED',
       timezone: input.timezone,
-      interview_type: input.interview_type,
+      meeting_link: input.meeting_link,
       interview_session_participants: input.interview_session_participants,
     };
-
-    if (input.interview_type === 'extension') {
-      payload.meeting_link = input.meeting_link;
-    } else {
-      payload.provider = input.provider;
-    }
 
     const response = await ApiService.post<InterviewSession>(
       '/interview-sessions',

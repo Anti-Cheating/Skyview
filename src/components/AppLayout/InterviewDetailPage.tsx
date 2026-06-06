@@ -17,7 +17,6 @@ import {
   Schedule as ScheduleIcon,
   AccessTime as DurationIcon,
   PersonOutline as PersonOutlineIcon,
-  Category as TypeIcon,
   EventAvailable as CreatedIcon,
   Email as EmailIcon,
   Person as PersonIcon,
@@ -132,13 +131,6 @@ function InterviewCard({ session }: { session: InterviewSession }) {
     (p) => p.interviewer_id && p.interviewer
   );
   const interviewer = interviewerParticipant?.interviewer;
-  const typeLabel =
-    session.interview_type === 'extension'
-      ? 'Chrome Extension'
-      : session.interview_type === 'application'
-      ? 'Application'
-      : session.interview_type ?? '—';
-  const providerLabel = session.provider ? `· ${session.provider.replace('_', ' ')}` : '';
 
   return (
     <Box
@@ -204,24 +196,6 @@ function InterviewCard({ session }: { session: InterviewSession }) {
                 {interviewer.email}
               </Typography>
             </Box>
-          }
-        />
-      )}
-
-      {session.interview_type && (
-        <FieldRow
-          icon={<TypeIcon sx={{ fontSize: 18 }} />}
-          label="Type"
-          value={
-            <Typography sx={{ fontSize: '0.9375rem', fontWeight: 600, color: '#111827' }}>
-              {typeLabel}
-              {providerLabel && (
-                <Box component="span" sx={{ color: '#6B7280', fontWeight: 400 }}>
-                  {' '}
-                  {providerLabel}
-                </Box>
-              )}
-            </Typography>
           }
         />
       )}

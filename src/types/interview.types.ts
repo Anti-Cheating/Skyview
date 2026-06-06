@@ -27,12 +27,6 @@ export interface ProviderMetadata {
   source?: "extension" | string;
 }
 
-/**
- * "application" → candidate uses Falcon desktop app (default)
- * "extension"   → candidate uses Jarvis Chrome extension; interviewer supplies meeting_link
- */
-export type InterviewType = "application" | "extension";
-
 export interface ExtensionStatus {
   extension_installed: boolean;
   screen_recording: boolean;
@@ -56,7 +50,6 @@ export interface InterviewSession {
   scheduled_end_at: string;
   actual_start_at?: string | null;
   actual_end_at?: string | null;
-  interview_type?: InterviewType;
   provider: string;
   provider_metadata?: ProviderMetadata;
   // Pre-join setup state populated by Jarvis extension via socket events.

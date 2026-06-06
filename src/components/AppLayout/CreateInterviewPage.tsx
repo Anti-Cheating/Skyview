@@ -7,15 +7,8 @@ import {
   MenuItem,
   Breadcrumbs,
   Link,
-  RadioGroup,
-  Radio,
-  FormControlLabel,
 } from '@mui/material';
-import {
-  NavigateNext as BreadcrumbIcon,
-  Computer as AppIcon,
-  Extension as ExtensionIcon,
-} from '@mui/icons-material';
+import { NavigateNext as BreadcrumbIcon } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -28,15 +21,6 @@ import { FormField } from '../common/FormField';
 import { ActionButton } from '../common/ActionButton';
 import { INPUT_SX, LABEL_SX } from '../common/formTokens';
 import { TOKENS } from '../../theme';
-import type { InterviewType } from '../../types/interview.types';
-
-const PROVIDERS = [
-  { value: 'zoom', label: 'Zoom', disabled: false },
-  { value: 'teams', label: 'Microsoft Teams', disabled: true },
-  { value: 'daily', label: 'Daily.co', disabled: false },
-  { value: 'google_meet', label: 'Google Meet', disabled: true },
-  { value: 'other', label: 'Other', disabled: true },
-];
 
 const DURATIONS = [
   { value: 15, label: '15 minutes' },
@@ -65,9 +49,11 @@ export default function CreateInterviewPage() {
     dayjs().add(1, 'hour').startOf('hour')
   );
   const [duration, setDuration] = useState(60);
-  const [interviewType, setInterviewType] = useState<InterviewType>('application');
-  const [provider, setProvider] = useState('zoom');
   const [meetingLink, setMeetingLink] = useState('');
+  // Link at load-time (edit mode) — we only PATCH meeting_link when it
+  // actually changed, otherwise the backend's live/imminent-session guard
+  // would 409 even a plain title edit.
+  const [originalMeetingLink, setOriginalMeetingLink] = useState('');
   // Interviewer is picked from a dropdown of company staff. The HR
   // person scheduling the interview is rarely the actual interviewer,
   // so defaulting to "current user" is wrong as a hard rule — we still
@@ -142,12 +128,12 @@ export default function CreateInterviewPage() {
         if (start.isValid() && end.isValid()) {
           setDuration(Math.max(15, end.diff(start, 'minute')));
         }
-        setInterviewType((s.interview_type as InterviewType) || 'application');
-        if (s.provider) setProvider(s.provider);
         if (s.provider_metadata?.join_url) {
           setMeetingLink(String(s.provider_metadata.join_url));
+          setOriginalMeetingLink(String(s.provider_metadata.join_url));
         } else if ((s as any).meeting_link) {
           setMeetingLink(String((s as any).meeting_link));
+          setOriginalMeetingLink(String((s as any).meeting_link));
         }
         const candidateParticipant = s.interview_session_participants?.find(
           (p) => p.candidate_id && p.candidate
@@ -186,8 +172,6 @@ export default function CreateInterviewPage() {
     candidateEmail,
     startDateTime,
     duration,
-    interviewType,
-    provider,
     meetingLink,
     interviewerUserId,
   ]);
@@ -206,10 +190,8 @@ export default function CreateInterviewPage() {
     if (!interviewerUserId) return false;
     if (!startDateTime || !startDateTime.isValid()) return false;
     if (startDateTime.isBefore(dayjs())) return false;
-    if (interviewType === 'extension') {
-      if (!meetingLink.trim()) return false;
-      try { new URL(meetingLink.trim()); } catch { return false; }
-    }
+    if (!meetingLink.trim()) return false;
+    try { new URL(meetingLink.trim()); } catch { return false; }
     return true;
   })();
 
@@ -234,15 +216,13 @@ export default function CreateInterviewPage() {
     if (startDateTime.isBefore(dayjs())) {
       setError('Start time must be in the future'); return;
     }
-    if (interviewType === 'extension') {
-      if (!meetingLink.trim()) {
-        setError('Meeting link is required for extension-type interviews'); return;
-      }
-      try {
-        new URL(meetingLink.trim());
-      } catch {
-        setError('Meeting link must be a valid URL'); return;
-      }
+    if (!meetingLink.trim()) {
+      setError('Meeting link is required'); return;
+    }
+    try {
+      new URL(meetingLink.trim());
+    } catch {
+      setError('Meeting link must be a valid URL'); return;
     }
 
     setLoading(true);
@@ -252,19 +232,13 @@ export default function CreateInterviewPage() {
       const startAt = startDateTime.toDate();
       const endAt = new Date(startAt.getTime() + duration * 60 * 1000);
 
-      // Edit vs create. In edit mode we skip participant rewrites — those
-      // are out of scope here, and the server superRefine would reject
-      // a PATCH that tries to change identity fields on meeting_link for
-      // an application-type session.
       const basePayload = {
         title: title.trim(),
         description: description.trim() || null,
         scheduled_start_at: startAt.toISOString(),
         scheduled_end_at: endAt.toISOString(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        interview_type: interviewType,
-        provider: interviewType === 'application' ? provider : null,
-        meeting_link: interviewType === 'extension' ? meetingLink.trim() : null,
+        meeting_link: meetingLink.trim(),
       } as const;
 
       // Edit mode: only send participants when the interviewer was
@@ -276,6 +250,11 @@ export default function CreateInterviewPage() {
         isEditMode && interviewerUserId !== originalInterviewerUserId;
 
       const updatePayload: Record<string, unknown> = { ...basePayload };
+      // Unchanged link → omit from the PATCH so the backend's dangerous-
+      // field guard doesn't 409 cosmetic edits on imminent/live sessions.
+      if (isEditMode && meetingLink.trim() === originalMeetingLink) {
+        delete updatePayload.meeting_link;
+      }
       if (interviewerChanged) {
         updatePayload.interview_session_participants = [
           {
@@ -489,116 +468,16 @@ export default function CreateInterviewPage() {
               </FormField>
             </Box>
 
-            {/* Interview Type Selector */}
-            <Box>
-              <Box sx={LABEL_SX}>
-                <span>Interview Type</span>
-                <Box component="span" sx={{ color: TOKENS.errorLight, fontWeight: 700 }}>*</Box>
-              </Box>
-              <RadioGroup
-                value={interviewType}
-                onChange={(e) => setInterviewType(e.target.value as InterviewType)}
-                sx={{ display: 'flex', flexDirection: 'row', gap: 2, mt: 0.5 }}
-              >
-                <Box
-                  sx={{
-                    flex: 1,
-                    border: '1px solid',
-                    borderColor: interviewType === 'application' ? '#4CD964' : '#E5E7EB',
-                    bgcolor: interviewType === 'application' ? 'rgba(76, 217, 100, 0.08)' : '#fff',
-                    borderRadius: '10px',
-                    p: 1.5,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                  }}
-                  onClick={() => !(loading || success) && setInterviewType('application')}
-                >
-                  <FormControlLabel
-                    value="application"
-                    control={<Radio size="small" disabled={loading || success} />}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <AppIcon sx={{ fontSize: 18, color: '#4CD964' }} />
-                        <Box>
-                          <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, color: '#1F2937' }}>
-                            Application
-                          </Typography>
-                          <Typography sx={{ fontSize: '0.688rem', color: '#6B7280' }}>
-                            Candidate uses Falcon desktop app
-                          </Typography>
-                        </Box>
-                      </Box>
-                    }
-                    sx={{ m: 0, width: '100%' }}
-                  />
-                </Box>
-                <Box
-                  sx={{
-                    flex: 1,
-                    border: '1px solid',
-                    borderColor: interviewType === 'extension' ? '#4CD964' : '#E5E7EB',
-                    bgcolor: interviewType === 'extension' ? 'rgba(76, 217, 100, 0.08)' : '#fff',
-                    borderRadius: '10px',
-                    p: 1.5,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                  }}
-                  onClick={() => !(loading || success) && setInterviewType('extension')}
-                >
-                  <FormControlLabel
-                    value="extension"
-                    control={<Radio size="small" disabled={loading || success} />}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ExtensionIcon sx={{ fontSize: 18, color: '#4CD964' }} />
-                        <Box>
-                          <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, color: '#1F2937' }}>
-                            Extension
-                          </Typography>
-                          <Typography sx={{ fontSize: '0.688rem', color: '#6B7280' }}>
-                            Candidate uses Chrome extension
-                          </Typography>
-                        </Box>
-                      </Box>
-                    }
-                    sx={{ m: 0, width: '100%' }}
-                  />
-                </Box>
-              </RadioGroup>
-            </Box>
-
-            {/* Row 3: Provider/Link + Schedule + Duration */}
+            {/* Row 3: Meeting Link + Schedule + Duration */}
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
-              {interviewType === 'application' ? (
-                <FormField
-                  label="Meeting Provider"
-                  required
-                  select
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value)}
-                  disabled={loading || success}
-                >
-                  {PROVIDERS.map((p) => (
-                    <MenuItem key={p.value} value={p.value} disabled={p.disabled}>
-                      {p.label}
-                      {p.disabled && (
-                        <Typography component="span" sx={{ fontSize: '0.688rem', color: '#9CA3AF', ml: 1 }}>
-                          Coming soon
-                        </Typography>
-                      )}
-                    </MenuItem>
-                  ))}
-                </FormField>
-              ) : (
-                <FormField
-                  label="Meeting Link"
-                  required
-                  placeholder="https://meet.google.com/abc-defg-hij"
-                  value={meetingLink}
-                  onChange={(e) => setMeetingLink(e.target.value)}
-                  disabled={loading || success}
-                />
-              )}
+              <FormField
+                label="Meeting Link"
+                required
+                placeholder="https://meet.google.com/abc-defg-hij"
+                value={meetingLink}
+                onChange={(e) => setMeetingLink(e.target.value)}
+                disabled={loading || success}
+              />
               <Box>
                 <Box sx={LABEL_SX}>
                   <span>Schedule</span>
