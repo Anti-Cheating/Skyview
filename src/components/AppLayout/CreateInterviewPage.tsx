@@ -312,13 +312,13 @@ export default function CreateInterviewPage() {
         }
         setTimeout(() => navigate('/interviews'), 1500);
       } else {
+        // Snackbar only — mirroring it into the inline Alert showed the
+        // same message twice on screen.
         const msg = response.message || (isEditMode ? 'Failed to update interview' : 'Failed to create interview');
-        setError(msg);
         showError(msg);
       }
     } catch (err: any) {
       const msg = err.message || (isEditMode ? 'Failed to update interview. Please try again.' : 'Failed to create interview. Please try again.');
-      setError(msg);
       showError(msg);
     } finally {
       setLoading(false);
