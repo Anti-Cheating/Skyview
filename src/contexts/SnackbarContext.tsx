@@ -38,6 +38,9 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
         autoHideDuration={6000}
         onClose={handleClose}
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        // Cap the toast width — long API error messages wrap onto the next
+        // line instead of stretching across the whole screen.
+        sx={{ maxWidth: 480 }}
       >
         {/* Sourced from TOKENS so every success/error surface in the app
             shares the same palette. Text is always white regardless of
@@ -49,6 +52,7 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
           variant="filled"
           sx={{
             width: '100%',
+            alignItems: 'flex-start',
             bgcolor:
               severity === 'error' ? TOKENS.error
               : severity === 'success' ? TOKENS.brand

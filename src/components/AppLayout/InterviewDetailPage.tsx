@@ -10,6 +10,7 @@ import {
   Alert,
   Tabs,
   Tab,
+  Skeleton,
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -17,7 +18,7 @@ import {
   AccessTime as DurationIcon,
   PersonOutline as PersonOutlineIcon,
   Category as TypeIcon,
-  Link as LinkIcon,
+  EventAvailable as CreatedIcon,
   Email as EmailIcon,
   Person as PersonIcon,
   Business as BusinessIcon,
@@ -131,7 +132,6 @@ function InterviewCard({ session }: { session: InterviewSession }) {
     (p) => p.interviewer_id && p.interviewer
   );
   const interviewer = interviewerParticipant?.interviewer;
-  const meetingLink = session.provider_metadata?.join_url || session.provider_metadata?.start_url;
   const typeLabel =
     session.interview_type === 'extension'
       ? 'Chrome Extension'
@@ -226,26 +226,13 @@ function InterviewCard({ session }: { session: InterviewSession }) {
         />
       )}
 
-      {meetingLink && (
+      {session.created_at && (
         <FieldRow
-          icon={<LinkIcon sx={{ fontSize: 18 }} />}
-          label="Meeting Link"
+          icon={<CreatedIcon sx={{ fontSize: 18 }} />}
+          label="Created"
           value={
-            <Typography
-              component="a"
-              href={meetingLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              sx={{
-                fontSize: '0.875rem',
-                color: '#4CD964',
-                fontWeight: 500,
-                textDecoration: 'none',
-                wordBreak: 'break-all',
-                '&:hover': { textDecoration: 'underline' },
-              }}
-            >
-              {meetingLink}
+            <Typography sx={{ fontSize: '0.9375rem', fontWeight: 600, color: '#111827' }}>
+              {formatCreatedAt(session.created_at)}
             </Typography>
           }
         />
@@ -407,9 +394,41 @@ export default function InterviewDetailPage() {
   }, [id]);
 
   if (loading) {
+    // Skeleton mirroring the real layout (back link → heading + action →
+    // tabs → split cards) instead of a blank page with a spinner.
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-        <CircularProgress sx={{ color: '#4CD964' }} />
+      <Box sx={{ width: '100%', p: { xs: 2, md: 3 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Skeleton variant="text" width={90} height={20} />
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Skeleton variant="text" width={220} height={42} />
+            <Skeleton variant="rounded" width={88} height={24} sx={{ borderRadius: '999px' }} />
+          </Box>
+          <Skeleton variant="rounded" width={150} height={38} sx={{ borderRadius: '8px' }} />
+        </Box>
+        <Box sx={{ display: 'flex', gap: 3, borderBottom: '1px solid #E5E7EB', pb: 1 }}>
+          <Skeleton variant="text" width={70} height={24} />
+          <Skeleton variant="text" width={70} height={24} />
+        </Box>
+        <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', md: 'row' }, alignItems: 'stretch' }}>
+          {[0, 1].map((card) => (
+            <Box
+              key={card}
+              sx={{ bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '12px', p: 3, flex: '1 1 0', minWidth: 0 }}
+            >
+              <Skeleton variant="text" width={130} height={16} sx={{ mb: 2.5 }} />
+              {[0, 1, 2, 3].map((row) => (
+                <Box key={row} sx={{ display: 'flex', gap: 1.5, mb: 3, alignItems: 'flex-start' }}>
+                  <Skeleton variant="circular" width={32} height={32} />
+                  <Box sx={{ flex: 1 }}>
+                    <Skeleton variant="text" width={80} height={14} />
+                    <Skeleton variant="text" width="55%" height={22} />
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          ))}
+        </Box>
       </Box>
     );
   }
@@ -425,7 +444,6 @@ export default function InterviewDetailPage() {
   const isCompleted = session.status === 'COMPLETED';
   const canStart = !isCompleted;
   const canAnalyse = isCompleted && !analysing;
-  const shortId = session.id.replace(/-/g, '').slice(0, 8).toUpperCase();
 
   const handleAnalyse = async () => {
     // Reveal the inline panel and keep the button loader on. The embedded
@@ -450,8 +468,6 @@ export default function InterviewDetailPage() {
       setShowAnalysis(false);
     }
   };
-  const createdLabel = session.created_at ? formatCreatedAt(session.created_at) : null;
-
   return (
     // Fills the AppLayout main area; back-link + heading + tabs stay pinned
     // and only the tab content below scrolls.
@@ -497,20 +513,11 @@ export default function InterviewDetailPage() {
           flexWrap: 'wrap',
         }}
       >
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-            <Typography sx={{ fontSize: '1.75rem', fontWeight: 700, color: '#111827', lineHeight: 1.2 }}>
-              {session.title || 'Untitled Interview'}
-            </Typography>
-            <StatusBadge status={session.status} />
-          </Box>
-          {(createdLabel || shortId) && (
-            <Typography sx={{ fontSize: '0.8125rem', color: '#9CA3AF', mt: 0.5 }}>
-              {createdLabel ? `Created ${createdLabel}` : ''}
-              {createdLabel && shortId ? ' · ' : ''}
-              {shortId ? `ID #${shortId}` : ''}
-            </Typography>
-          )}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+          <Typography sx={{ fontSize: '1.75rem', fontWeight: 700, color: '#111827', lineHeight: 1.2 }}>
+            {session.title || 'Untitled Interview'}
+          </Typography>
+          <StatusBadge status={session.status} />
         </Box>
 
         {/* Disabled Start is hidden — in the heading it would just be
@@ -639,10 +646,51 @@ export default function InterviewDetailPage() {
         </Box>
       )}
 
-      {/* Loader while a stored analysis is being fetched for the tab */}
+      {/* Skeleton while a stored analysis is being fetched for the tab —
+          mirrors the report layout (actions → hero → meta → gauge +
+          breakdown → summary) so content settles without a jump. */}
       {tab === 'analysis' && hasAnalysis && panelStatus !== 'ready' && panelStatus !== 'error' && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress size={28} sx={{ color: '#4CD964' }} />
+        <Box sx={{ bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: '12px', p: { xs: 2, md: 3 } }}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+            <Skeleton variant="rounded" width={140} height={32} sx={{ borderRadius: '6px' }} />
+            <Skeleton variant="rounded" width={110} height={32} sx={{ borderRadius: '6px' }} />
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1.5 }}>
+            <Skeleton variant="circular" width={60} height={60} />
+            <Box>
+              <Skeleton variant="text" width={190} height={32} />
+              <Skeleton variant="text" width={150} height={16} />
+            </Box>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 7, mt: 2.5, flexWrap: 'wrap' }}>
+            {[0, 1, 2, 3].map((i) => (
+              <Box key={i}>
+                <Skeleton variant="text" width={72} height={13} />
+                <Skeleton variant="text" width={110} height={20} />
+              </Box>
+            ))}
+          </Box>
+          <Box sx={{ display: 'flex', gap: 6, mt: 4, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
+              <Skeleton variant="text" width={110} height={24} />
+              <Skeleton variant="rounded" width={260} height={140} sx={{ borderRadius: '12px' }} />
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 260 }}>
+              <Skeleton variant="text" width={140} height={24} sx={{ mb: 2 }} />
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px 32px' }}>
+                {[0, 1, 2, 3].map((i) => (
+                  <Box key={i}>
+                    <Skeleton variant="text" width={90} height={16} />
+                    <Skeleton variant="rounded" height={6} sx={{ borderRadius: '999px', mt: 1 }} />
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          </Box>
+          <Skeleton variant="text" width={170} height={26} sx={{ mt: 4 }} />
+          <Skeleton variant="text" height={18} />
+          <Skeleton variant="text" height={18} />
+          <Skeleton variant="text" width="65%" height={18} />
         </Box>
       )}
 
