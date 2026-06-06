@@ -205,8 +205,12 @@ export default function InterviewTable({
       showOnHover: true,
       render: (row) => {
         if (!isInterviewer) return null;
-        const showEdit = !!onEdit && row.status !== 'COMPLETED';
-        const showDelete = canDeleteRows && !!onDelete;
+        // Terminal sessions (COMPLETED / CANCELLED) get no actions — Cortex
+        // 409s both edit and cancel on them, so showing the icons just
+        // invites a guaranteed error toast.
+        const isTerminal = row.status === 'COMPLETED' || row.status === 'CANCELLED';
+        const showEdit = !!onEdit && !isTerminal;
+        const showDelete = canDeleteRows && !!onDelete && !isTerminal;
         if (!showEdit && !showDelete) return null;
         return (
           <Box sx={{ display: 'inline-flex', gap: 0.25 }}>

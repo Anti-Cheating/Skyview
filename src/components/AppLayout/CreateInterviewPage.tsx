@@ -7,6 +7,7 @@ import {
   MenuItem,
   Breadcrumbs,
   Link,
+  Skeleton,
 } from '@mui/material';
 import { NavigateNext as BreadcrumbIcon } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -69,6 +70,9 @@ export default function CreateInterviewPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  // Edit mode starts with a skeleton until the session prefill lands —
+  // otherwise the form flashes empty and then fills in.
+  const [prefilling, setPrefilling] = useState(isEditMode);
 
   // Fetch company members for the interviewer dropdown. Runs once per
   // company; we don't need the snappy invalidation that the Team page
@@ -120,6 +124,15 @@ export default function CreateInterviewPage() {
           return;
         }
         const s = resp.data;
+        // Terminal sessions can't be edited (Cortex 409s the PATCH) —
+        // bounce straight back instead of letting the user fill a form
+        // that's guaranteed to fail on save. Covers direct-URL access;
+        // the table already hides the edit icon for these rows.
+        if (s.status === 'COMPLETED' || s.status === 'CANCELLED') {
+          showError(`This interview is ${s.status.toLowerCase()} and can no longer be edited`);
+          navigate('/interviews');
+          return;
+        }
         setTitle(s.title || '');
         setDescription(s.description || '');
         const start = dayjs(s.scheduled_start_at);
@@ -152,6 +165,8 @@ export default function CreateInterviewPage() {
         }
       } catch (err: any) {
         if (!cancelled) setError(err?.message || 'Failed to load interview');
+      } finally {
+        if (!cancelled) setPrefilling(false);
       }
     })();
     return () => { cancelled = true; };
@@ -378,6 +393,45 @@ export default function CreateInterviewPage() {
             overflow: 'hidden',
           }}
         >
+          {/* Edit-mode prefill skeleton — mirrors the form layout so the
+              real fields settle in without a jump. */}
+          {prefilling ? (
+            <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' }, gap: 3 }}>
+                {[0, 1].map((i) => (
+                  <Box key={i}>
+                    <Skeleton variant="text" width={110} height={16} sx={{ mb: 0.75 }} />
+                    <Skeleton variant="rounded" height={40} sx={{ borderRadius: '8px' }} />
+                  </Box>
+                ))}
+              </Box>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
+                {[0, 1, 2].map((i) => (
+                  <Box key={i}>
+                    <Skeleton variant="text" width={130} height={16} sx={{ mb: 0.75 }} />
+                    <Skeleton variant="rounded" height={40} sx={{ borderRadius: '8px' }} />
+                  </Box>
+                ))}
+              </Box>
+              <Box>
+                <Skeleton variant="text" width={90} height={16} sx={{ mb: 0.75 }} />
+                <Skeleton variant="rounded" height={40} sx={{ borderRadius: '8px' }} />
+              </Box>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
+                {[0, 1, 2].map((i) => (
+                  <Box key={i}>
+                    <Skeleton variant="text" width={100} height={16} sx={{ mb: 0.75 }} />
+                    <Skeleton variant="rounded" height={40} sx={{ borderRadius: '8px' }} />
+                  </Box>
+                ))}
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, pt: 1 }}>
+                <Skeleton variant="rounded" width={92} height={38} sx={{ borderRadius: '8px' }} />
+                <Skeleton variant="rounded" width={140} height={38} sx={{ borderRadius: '8px' }} />
+              </Box>
+            </Box>
+          ) : (
+          <>
           <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* Success goes only to the top-right toast — no inline
                 duplicate. Error stays inline too so a user filling a
@@ -548,6 +602,8 @@ export default function CreateInterviewPage() {
                 : (isEditMode ? 'Save Changes' : 'Create Interview')}
             </ActionButton>
           </Box>
+          </>
+          )}
         </Box>
       </Box>
     </Box>
