@@ -192,6 +192,7 @@ export default function MonitoringView() {
               extension_installed: !!response.data.extension_status.extension_installed,
               screen_recording: !!response.data.extension_status.screen_recording,
               mic_granted: !!response.data.extension_status.mic_granted,
+              keyboard_granted: !!response.data.extension_status.keyboard_granted,
               joined: !!response.data.extension_status.joined,
               updated_at: response.data.extension_status.updated_at ?? null,
             });

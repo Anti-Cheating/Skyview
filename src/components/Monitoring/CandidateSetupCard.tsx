@@ -44,7 +44,7 @@ const ROW_BG_DONE = "rgba(76, 217, 100, 0.08)";
 const ROW_BG_PENDING = "#F9FAFB";
 
 interface CheckRow {
-  key: keyof Pick<CandidateStatus, "extension_installed" | "screen_recording" | "mic_granted" | "joined">;
+  key: keyof Pick<CandidateStatus, "extension_installed" | "screen_recording" | "mic_granted" | "keyboard_granted" | "joined">;
   /** Short label shown inline on the pill. */
   label: string;
   /** Longer description shown in the pill's tooltip. */
@@ -72,6 +72,12 @@ const ROWS: CheckRow[] = [
     pendingText: "Waiting for Microphone permission",
   },
   {
+    key: "keyboard_granted",
+    label: "Keyboard",
+    doneText: "Input Monitoring granted (keystroke capture active)",
+    pendingText: "Waiting for Input Monitoring permission",
+  },
+  {
     key: "joined",
     // Was lowercase "joined" while the other three are Title Case.
     // Match the surrounding labels.
@@ -89,6 +95,7 @@ export default function CandidateSetupCard({ status, revoked }: Props) {
     extension_installed: false,
     screen_recording: false,
     mic_granted: false,
+    keyboard_granted: false,
     joined: false,
     updated_at: null,
   };
