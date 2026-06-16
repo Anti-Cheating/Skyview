@@ -9,6 +9,29 @@ import type { InterviewSession } from "../../types/interview.types";
 import "./PostAnalysisPanel.css";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+/** Render a summary (newline-joined "- bullet" string) as a clean list instead
+ * of one flat paragraph. A short leading "Label:" is shown in bold so sections
+ * read as headings. Same data, nicer layout. */
+function renderBullet(line: string) {
+  const m = line.match(/^([^:]{2,28}):\s+(.+)$/s);
+  return m ? (<><strong>{m[1]}:</strong> {m[2]}</>) : <>{line}</>;
+}
+function Bullets({ text, empty, className }: { text?: string; empty: string; className?: string }) {
+  const lines = String(text ?? "")
+    .split("\n")
+    .map((l) => l.replace(/^\s*[-•*]\s*/, "").trim())
+    .filter(Boolean);
+  if (lines.length === 0) return <p className={className}>{empty}</p>;
+  if (lines.length === 1) return <p className={className}>{renderBullet(lines[0]!)}</p>;
+  return (
+    <ul className={className} style={{ margin: 0, paddingLeft: 18 }}>
+      {lines.map((l, i) => (
+        <li key={i} style={{ margin: "3px 0" }}>{renderBullet(l)}</li>
+      ))}
+    </ul>
+  );
+}
+
 function getInitials(first?: string, last?: string) {
   return `${first?.[0] ?? ""}${last?.[0] ?? ""}`.toUpperCase() || "?";
 }
@@ -580,22 +603,22 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
       {/* ── Summary ──────────────────────────────────────────────────────── */}
       <section className="pa-card pa-summary-card">
         <h3 className="pa-card-title">Interview Summary</h3>
-        <p className="pa-body">{analysis.final_summary}</p>
+        <Bullets className="pa-body" text={analysis.final_summary} empty="No summary available." />
       </section>
 
       {/* ── Signal cards ─────────────────────────────────────────────────── */}
       <div className="pa-signals">
         <section className="pa-card pa-signal-card">
           <h3 className="pa-card-title">Voice Analysis</h3>
-          <p className="pa-body pa-body-sm">{analysis.voice_summary || "No voice data recorded."}</p>
+          <Bullets className="pa-body pa-body-sm" text={analysis.voice_summary} empty="No voice data recorded." />
         </section>
         <section className="pa-card pa-signal-card">
           <h3 className="pa-card-title">Keystroke Analysis</h3>
-          <p className="pa-body pa-body-sm">{analysis.keystroke_summary || "No keystroke data recorded."}</p>
+          <Bullets className="pa-body pa-body-sm" text={analysis.keystroke_summary} empty="No keystroke data recorded." />
         </section>
         <section className="pa-card pa-signal-card">
           <h3 className="pa-card-title">App Usage</h3>
-          <p className="pa-body pa-body-sm">{analysis.app_summary || "No app usage data recorded."}</p>
+          <Bullets className="pa-body pa-body-sm" text={analysis.app_summary} empty="No app usage data recorded." />
         </section>
       </div>
 
