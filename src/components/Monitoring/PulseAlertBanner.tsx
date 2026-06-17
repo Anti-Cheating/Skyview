@@ -31,6 +31,9 @@ import type { PulseAlert, PulseDetection } from '../../hooks/useRiskSocket';
 
 interface PulseAlertBannerProps {
   alerts: PulseAlert[];
+  /** Vertical gap (MUI spacing units) between alert bands. Default 0.5 keeps
+   *  the live monitoring panel tight; the wider Activity Explorer passes more. */
+  gap?: number;
 }
 
 // Light-theme palette. Was authored against a dark surface (300/400-step
@@ -114,7 +117,7 @@ function formatDuration(firstSeenISO: string): string {
   return `${diffHr}h ${diffMin % 60}m`;
 }
 
-export default function PulseAlertBanner({ alerts }: PulseAlertBannerProps) {
+export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBannerProps) {
   const [, setTick] = useState(0);
 
   // Track first-seen timestamp per app (persists across re-renders)
@@ -178,7 +181,7 @@ export default function PulseAlertBanner({ alerts }: PulseAlertBannerProps) {
         py: 1,
         display: 'flex',
         flexDirection: 'column',
-        gap: 0.5,
+        gap,
       }}
     >
       {/* App detections by category — always expanded */}

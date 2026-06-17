@@ -33,7 +33,7 @@ import {
   UnfoldMore as UnfoldMoreIcon,
 } from '@mui/icons-material';
 import { TOKENS } from '../../theme';
-import type { WindowResult, ModalityRisk, Correlation, UseRiskSocketReturn, TranscriptFragment } from '../../hooks/useRiskSocket';
+import type { WindowResult, ModalityRisk, Correlation, UseRiskSocketReturn, TranscriptFragment, ImageAnalysisResult } from '../../hooks/useRiskSocket';
 // CortexService import removed — capture button disabled (interviewer has no local Sentinel)
 import PulseAlertBanner from './PulseAlertBanner';
 import { ResponsiveContainer, LineChart, Line, Tooltip as RechartsTooltip, ReferenceArea, YAxis } from 'recharts';
@@ -193,7 +193,7 @@ function CorrelationCard({ correlation }: { correlation: Correlation }) {
   );
 }
 
-function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScreenshot }: { result: WindowResult; isLatest: boolean; onExpandScreenshot: (urls: string[], startIndex: number) => void }) {
+export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScreenshot }: { result: WindowResult; isLatest: boolean; onExpandScreenshot: (urls: string[], startIndex: number) => void }) {
   const [expanded, setExpanded] = useState(isLatest);
   const color = getRiskColor(result.risk);
   const hasModalities = result.per_modality && (result.per_modality.app_metadata || result.per_modality.keystroke || result.per_modality.voice);
@@ -261,6 +261,42 @@ function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScreenshot 
           )}
         </Box>
       </Collapse>
+    </Box>
+  );
+}
+
+/** Image-analysis card — shared by the live Screenshots tab and the
+ *  post-interview Activity Explorer so both look identical. The lightbox is
+ *  owned by the parent via onExpand(urls, index). */
+export function ImageAnalysisCard({ result: ia, onExpand }: { result: ImageAnalysisResult; onExpand: (urls: string[], index: number) => void }) {
+  const iaColor = getRiskColor(ia.risk);
+  return (
+    <Box sx={{ mb: 0.8, borderRadius: '10px', border: `1px solid ${iaColor}25`, bgcolor: `${iaColor}08`, overflow: 'hidden' }}>
+      <Box sx={{ p: 1.2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <CameraIcon sx={{ fontSize: 14, color: iaColor }} />
+            <Chip label={ia.risk?.toUpperCase()} size="small" sx={{ height: 20, fontSize: '0.6rem', fontWeight: 700, bgcolor: `${iaColor}15`, color: iaColor }} />
+            <Typography sx={{ fontSize: '0.55rem', color: DARK_TEXT_MUTED }}>{ia.image_count} images</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.3 }}>
+            <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: getScoreColor(ia.score), lineHeight: 1 }}>{ia.score}</Typography>
+            <Typography sx={{ fontSize: '0.6rem', color: DARK_TEXT_MUTED }}>/100</Typography>
+            <Typography sx={{ fontSize: '0.65rem', color: DARK_TEXT_MUTED, ml: 0.5 }}>{formatTime(ia.processed_at)}</Typography>
+          </Box>
+        </Box>
+        {ia.summary && <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.5, mb: 0.5 }}>{ia.summary}</Typography>}
+        {ia.thumbnail_urls?.length > 0 && (
+          <ThumbnailCarousel urls={ia.thumbnail_urls} onClickThumb={(i) => onExpand(ia.thumbnail_urls, i)} />
+        )}
+        {ia.image_signals?.length > 0 && (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
+            {ia.image_signals.map((s, i) => (
+              <Chip key={i} label={formatSignal(s)} size="small" sx={{ height: 18, fontSize: '0.55rem', fontWeight: 500, bgcolor: `${iaColor}10`, color: iaColor, border: `1px solid ${iaColor}20`, '& .MuiChip-label': { px: 0.6 } }} />
+            ))}
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 }
@@ -646,52 +682,60 @@ export default function AnalyticsPanel({
           id="analytics-tab-0"
           aria-controls="analytics-tabpanel-0"
           label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <span>Pulse</span>
-              {pulseAlerts.length > 0 && (
-                <Badge badgeContent={pulseAlerts.length} sx={{ '& .MuiBadge-badge': { bgcolor: '#f59e0b', color: '#000', fontSize: '0.5rem', fontWeight: 700, minWidth: 16, height: 16, right: -6, top: -2 } }}><Box /></Badge>
-              )}
-            </Box>
+            <Tooltip title="Risky apps and copy/paste flagged in real time — AI tools, remote access, and VMs." arrow>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <span>Alerts</span>
+                {pulseAlerts.length > 0 && (
+                  <Badge badgeContent={pulseAlerts.length} sx={{ '& .MuiBadge-badge': { bgcolor: '#f59e0b', color: '#000', fontSize: '0.5rem', fontWeight: 700, minWidth: 16, height: 16, right: -6, top: -2 } }}><Box /></Badge>
+                )}
+              </Box>
+            </Tooltip>
           }
         />
         <Tab
           id="analytics-tab-1"
           aria-controls="analytics-tabpanel-1"
           label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <span>Analysis</span>
-              {results.length > 0 && (
-                <Chip label={results.length} size="small" sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${BRAND}20`, color: BRAND, '& .MuiChip-label': { px: 0.4 } }} />
-              )}
-            </Box>
+            <Tooltip title="The candidate's risk score over time, scored every 30 seconds from apps, typing, and voice." arrow>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <span>Risk Timeline</span>
+                {results.length > 0 && (
+                  <Chip label={results.length} size="small" sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${BRAND}20`, color: BRAND, '& .MuiChip-label': { px: 0.4 } }} />
+                )}
+              </Box>
+            </Tooltip>
           }
         />
         <Tab
           id="analytics-tab-2"
           aria-controls="analytics-tabpanel-2"
           label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <span>Screenshots</span>
-              {imageAnalysisResults.length > 0 && (
-                <Chip label={imageAnalysisResults.length} size="small" sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${BRAND}20`, color: BRAND, '& .MuiChip-label': { px: 0.4 } }} />
-              )}
-            </Box>
+            <Tooltip title="Screenshots captured during the interview and what the AI found in them." arrow>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <span>Image Analysis</span>
+                {imageAnalysisResults.length > 0 && (
+                  <Chip label={imageAnalysisResults.length} size="small" sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${BRAND}20`, color: BRAND, '& .MuiChip-label': { px: 0.4 } }} />
+                )}
+              </Box>
+            </Tooltip>
           }
         />
         <Tab
           id="analytics-tab-3"
           aria-controls="analytics-tabpanel-3"
           label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <span>Transcript</span>
-              {transcriptFragments.filter((f) => f.is_final).length > 0 && (
-                <Chip
-                  label={transcriptFragments.filter((f) => f.is_final).length}
-                  size="small"
-                  sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${BRAND}20`, color: BRAND, '& .MuiChip-label': { px: 0.4 } }}
-                />
-              )}
-            </Box>
+            <Tooltip title="The interviewer and candidate conversation, transcribed live." arrow>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <span>Transcript</span>
+                {transcriptFragments.filter((f) => f.is_final).length > 0 && (
+                  <Chip
+                    label={transcriptFragments.filter((f) => f.is_final).length}
+                    size="small"
+                    sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${BRAND}20`, color: BRAND, '& .MuiChip-label': { px: 0.4 } }}
+                  />
+                )}
+              </Box>
+            </Tooltip>
           }
         />
       </Tabs>
@@ -818,38 +862,9 @@ export default function AnalyticsPanel({
           {/* Screenshot analysis results */}
           {imageAnalysisResults.length > 0 ? (
             <Box>
-              {[...imageAnalysisResults].reverse().map((ia) => {
-                const iaColor = getRiskColor(ia.risk);
-                return (
-                  <Box key={ia.analysis_id} sx={{ mb: 0.8, borderRadius: '10px', border: `1px solid ${iaColor}25`, bgcolor: `${iaColor}08`, overflow: 'hidden' }}>
-                    <Box sx={{ p: 1.2 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <CameraIcon sx={{ fontSize: 14, color: iaColor }} />
-                          <Chip label={ia.risk?.toUpperCase()} size="small" sx={{ height: 20, fontSize: '0.6rem', fontWeight: 700, bgcolor: `${iaColor}15`, color: iaColor }} />
-                          <Typography sx={{ fontSize: '0.55rem', color: DARK_TEXT_MUTED }}>{ia.image_count} images</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.3 }}>
-                          <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: getScoreColor(ia.score), lineHeight: 1 }}>{ia.score}</Typography>
-                          <Typography sx={{ fontSize: '0.6rem', color: DARK_TEXT_MUTED }}>/100</Typography>
-                          <Typography sx={{ fontSize: '0.65rem', color: DARK_TEXT_MUTED, ml: 0.5 }}>{formatTime(ia.processed_at)}</Typography>
-                        </Box>
-                      </Box>
-                      {ia.summary && <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.5, mb: 0.5 }}>{ia.summary}</Typography>}
-                      {ia.thumbnail_urls?.length > 0 && (
-                        <ThumbnailCarousel urls={ia.thumbnail_urls} onClickThumb={(i) => openScreenshotViewer(ia.thumbnail_urls, i)} />
-                      )}
-                      {ia.image_signals?.length > 0 && (
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
-                          {ia.image_signals.map((s, i) => (
-                            <Chip key={i} label={formatSignal(s)} size="small" sx={{ height: 18, fontSize: '0.55rem', fontWeight: 500, bgcolor: `${iaColor}10`, color: iaColor, border: `1px solid ${iaColor}20`, '& .MuiChip-label': { px: 0.6 } }} />
-                          ))}
-                        </Box>
-                      )}
-                    </Box>
-                  </Box>
-                );
-              })}
+              {[...imageAnalysisResults].reverse().map((ia) => (
+                <ImageAnalysisCard key={ia.analysis_id} result={ia} onExpand={openScreenshotViewer} />
+              ))}
             </Box>
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 1.5 }}>
@@ -906,7 +921,7 @@ export default function AnalyticsPanel({
 // label only shown when the speaker changes (iMessage / WhatsApp-style
 // message grouping). Auto-scrolls to the newest bubble on every update.
 
-function TranscriptFeed({
+export function TranscriptFeed({
   fragments,
   isActive,
   transcriptionOn,
@@ -1181,7 +1196,7 @@ function TranscriptFeed({
 
 // ── Screenshot lightbox — fullscreen modal with prev/next ────────────
 
-function ScreenshotLightbox({
+export function ScreenshotLightbox({
   urls, index, onClose, onChange,
 }: {
   urls: string[];
