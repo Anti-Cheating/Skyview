@@ -33,6 +33,7 @@ import {
   UnfoldMore as UnfoldMoreIcon,
 } from '@mui/icons-material';
 import { TOKENS } from '../../theme';
+import { formatDateTime, formatClock } from '../../utils/dateFormat';
 import type { WindowResult, ModalityRisk, Correlation, UseRiskSocketReturn, TranscriptFragment, ImageAnalysisResult } from '../../hooks/useRiskSocket';
 // CortexService import removed — capture button disabled (interviewer has no local Sentinel)
 import PulseAlertBanner from './PulseAlertBanner';
@@ -114,10 +115,6 @@ function getImpactColor(impact: string): string {
     case 'weak': return '#eab308';
     default: return '#94a3b8';
   }
-}
-
-function formatTime(isoString: string): string {
-  return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
 function formatSignal(signal: string): string {
@@ -216,7 +213,7 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
             )}
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_MUTED }}>{formatTime(result.processed_at)}</Typography>
+            <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_MUTED }}>{formatDateTime(result.processed_at)}</Typography>
             {hasExpandable && <Box sx={{ color: DARK_TEXT_MUTED, display: 'flex', '& svg': { fontSize: 16 } }}>{expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}</Box>}
           </Box>
         </Box>
@@ -282,7 +279,7 @@ export function ImageAnalysisCard({ result: ia, onExpand }: { result: ImageAnaly
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.3 }}>
             <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: getScoreColor(ia.score), lineHeight: 1 }}>{ia.score}</Typography>
             <Typography sx={{ fontSize: '0.6rem', color: DARK_TEXT_MUTED }}>/100</Typography>
-            <Typography sx={{ fontSize: '0.65rem', color: DARK_TEXT_MUTED, ml: 0.5 }}>{formatTime(ia.processed_at)}</Typography>
+            <Typography sx={{ fontSize: '0.65rem', color: DARK_TEXT_MUTED, ml: 0.5 }}>{formatDateTime(ia.processed_at)}</Typography>
           </Box>
         </Box>
         {ia.summary && <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.5, mb: 0.5 }}>{ia.summary}</Typography>}
@@ -363,7 +360,7 @@ function getTopSignals(results: WindowResult[], max: number = 5): string[] {
 
 function ScoreTimelineChart({ results }: { results: WindowResult[] }) {
   if (results.length < 2) return null;
-  const data = results.map((r) => ({ time: formatTime(r.processed_at), score: r.score }));
+  const data = results.map((r) => ({ time: formatDateTime(r.processed_at), score: r.score }));
   const latestScore = results[results.length - 1].score;
 
   return (
@@ -432,9 +429,11 @@ function RollingSummaryCard({ results }: { results: WindowResult[] }) {
 function WindowGroupHeader({ group, isExpanded, onToggle }: { group: WindowGroup; isExpanded: boolean; onToggle: () => void }) {
   const color = getRiskColor(group.risk);
   const count = group.windows.length;
+  // Full date+time for the group start; end collapses to clock-only so the
+  // range stays readable (same day) — e.g. "Jan 15, 2026, 2:32:45 PM – 2:33:15 PM".
   const timeRange = count === 1
-    ? formatTime(group.startTime)
-    : `${formatTime(group.startTime)}–${formatTime(group.endTime)}`;
+    ? formatDateTime(group.startTime)
+    : `${formatDateTime(group.startTime)} – ${formatClock(group.endTime)}`;
 
   return (
     <Box
@@ -892,11 +891,6 @@ export default function AnalyticsPanel({
             fragments={transcriptFragments}
             isActive={activeTab === 3}
             transcriptionOn={transcriptionOn}
-            sessionAnchorIso={
-              interview?.actual_start_at ??
-              interview?.scheduled_start_at ??
-              null
-            }
           />
         </Box>
       )}
@@ -925,47 +919,12 @@ export function TranscriptFeed({
   fragments,
   isActive,
   transcriptionOn,
-  sessionAnchorIso,
 }: {
   fragments: TranscriptFragment[];
   isActive: boolean;
   transcriptionOn: boolean;
-  sessionAnchorIso: string | null;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
-
-  // Anchor = when the session began. Used to format each bubble's
-  // timestamp as "[mm:ss] elapsed since session start". Falls back when
-  // the provided anchor is in the future — e.g., interviewer joined
-  // before the scheduled_start_at they told us to use — otherwise every
-  // offset would clamp to 00:00.
-  const anchorMs = useMemo(() => {
-    const now = Date.now();
-    if (sessionAnchorIso) {
-      const t = new Date(sessionAnchorIso).getTime();
-      if (Number.isFinite(t) && t <= now) return t;
-    }
-    if (fragments[0]?.timestamp) {
-      const t = new Date(fragments[0].timestamp).getTime();
-      if (Number.isFinite(t)) return t;
-    }
-    return now;
-  }, [sessionAnchorIso, fragments]);
-
-  const formatOffset = useCallback(
-    (iso: string): string => {
-      const delta = Math.max(
-        0,
-        Math.round((new Date(iso).getTime() - anchorMs) / 1000)
-      );
-      const h = Math.floor(delta / 3600);
-      const m = Math.floor((delta % 3600) / 60);
-      const s = delta % 60;
-      const pad = (n: number) => String(n).padStart(2, "0");
-      return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
-    },
-    [anchorMs]
-  );
 
   // Stick to the bottom whenever fragments update OR the tab becomes
   // active (so switching in mid-session lands on the latest message).
@@ -1118,9 +1077,11 @@ export function TranscriptFeed({
                   wordBreak: 'break-word',
                   position: 'relative',
                   // Reserve space on the last line for the inline time
-                  // block so long messages still have room for it.
+                  // block so long messages still have room for it. The
+                  // full date+time stamp is wide, so give it a bit more
+                  // bottom room than the old mm:ss offset needed.
                   pr: f.is_final ? 5.5 : 2.5,
-                  pb: 1.4,
+                  pb: f.is_final ? 2.2 : 1,
                   minWidth: 52,
                 }}
               >
@@ -1171,7 +1132,7 @@ export function TranscriptFeed({
                     sx={{
                       position: 'absolute',
                       right: 8,
-                      bottom: 4,
+                      bottom: 5,
                       fontSize: '0.6rem',
                       color: bubbleTime,
                       fontVariantNumeric: 'tabular-nums',
@@ -1179,7 +1140,7 @@ export function TranscriptFeed({
                       lineHeight: 1,
                     }}
                   >
-                    {formatOffset(f.timestamp)}
+                    {formatDateTime(f.timestamp)}
                   </Typography>
                 )}
               </Box>

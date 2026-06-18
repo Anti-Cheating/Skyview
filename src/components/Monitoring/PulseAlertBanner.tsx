@@ -27,6 +27,7 @@ import {
   DeveloperMode as DevToolsIcon,
   Keyboard as KeyboardIcon,
 } from '@mui/icons-material';
+import { formatDateTime } from '../../utils/dateFormat';
 import type { PulseAlert, PulseDetection } from '../../hooks/useRiskSocket';
 
 interface PulseAlertBannerProps {
@@ -101,10 +102,6 @@ function getActivityConfig(activity: string) {
     color: '#475569',
     bg: 'rgba(71, 85, 105, 0.10)',
   };
-}
-
-function formatTime(isoString: string): string {
-  return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDuration(firstSeenISO: string): string {
@@ -296,7 +293,7 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        since {formatTime(firstSeen)} ({formatDuration(firstSeen)})
+                        since {formatDateTime(firstSeen)} ({formatDuration(firstSeen)})
                       </Typography>
                     )}
                   </Box>

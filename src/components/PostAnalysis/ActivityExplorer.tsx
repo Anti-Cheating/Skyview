@@ -158,7 +158,7 @@ function TranscriptHistFeed({ sessionId, participantId }: { sessionId?: string; 
   }));
   return (
     <FeedFrame>
-      {fragments.length > 0 && <TranscriptFeed fragments={fragments} isActive transcriptionOn={false} sessionAnchorIso={null} />}
+      {fragments.length > 0 && <TranscriptFeed fragments={fragments} isActive transcriptionOn={false} />}
       <FeedStatus loading={loading} error={error} empty={items.length === 0} label="transcript" />
       <ScrollSentinel onHit={loadMore} disabled={!hasMore || loading} />
     </FeedFrame>
