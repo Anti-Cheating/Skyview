@@ -5,6 +5,7 @@ import { ENV } from "../../config/env";
 import { STORAGE_KEYS } from "../../config/constants";
 import { MOCK_ANALYSIS_SCENARIOS, type MockScenario } from "../../mockData/postAnalysisMock";
 import { InterviewService } from "../../services/interview.service";
+import { refreshAccessToken } from "../../services/api.service";
 import type { InterviewSession } from "../../types/interview.types";
 import "./PostAnalysisPanel.css";
 
@@ -413,10 +414,15 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
     if (!sessionId || pdfLoading) return;
     setPdfLoading(true);
     try {
-      const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
-      const res = await fetch(`${ENV.CORTEX_API_URL}/interviews/${sessionId}/analysis/pdf`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const pdfUrl = `${ENV.CORTEX_API_URL}/interviews/${sessionId}/analysis/pdf`;
+      const fetchPdf = (tok: string | null) =>
+        fetch(pdfUrl, { headers: tok ? { Authorization: `Bearer ${tok}` } : {} });
+      let res = await fetchPdf(localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN));
+      // Blob endpoint can't go through ApiService — refresh + retry once on 401.
+      if (res.status === 401) {
+        const fresh = await refreshAccessToken();
+        if (fresh) res = await fetchPdf(fresh);
+      }
       if (!res.ok) throw new Error(`PDF request failed: ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);

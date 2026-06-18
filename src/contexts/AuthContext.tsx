@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { AuthService } from '../services/auth.service';
+import { startTokenAutoRefresh, stopTokenAutoRefresh } from '../services/api.service';
 import type { User, LoginCredentials, SignupCredentials } from '../types/auth.types';
 
 interface AuthContextType {
@@ -99,6 +100,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 60000);
     return () => clearInterval(interval);
   }, [user, handleLogout]);
+
+  // Proactively refresh the access token before it expires (every ~3.5h of a
+  // 4h token) so the session lasts the full 7-day refresh window and the socket
+  // / PDF / feed calls always have a valid token. Stops on logout.
+  useEffect(() => {
+    if (user) startTokenAutoRefresh();
+    else stopTokenAutoRefresh();
+    return () => stopTokenAutoRefresh();
+  }, [user]);
 
   const login = async (credentials: LoginCredentials) => {
     const authData = await AuthService.login(credentials);

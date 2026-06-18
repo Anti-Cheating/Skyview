@@ -10,7 +10,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Chip, CircularProgress, Tooltip, Typography } from "@mui/material";
 import { ENV } from "../../config/env";
-import { STORAGE_KEYS, getDefaultPagination } from "../../config/constants";
+import { getDefaultPagination } from "../../config/constants";
+import { ApiService } from "../../services/api.service";
 import { TOKENS } from "../../theme";
 import PulseAlertBanner from "../Monitoring/PulseAlertBanner";
 import { WindowCard, TranscriptFeed, ImageAnalysisCard, ScreenshotLightbox } from "../Monitoring/AnalyticsPanel";
@@ -25,9 +26,10 @@ const TABS: { v: Tab4; label: string; tip: string; path: string }[] = [
   { v: "transcript", label: "Transcript", tip: "The interviewer and candidate conversation, transcribed live.", path: "transcript" },
 ];
 
-const token = () => localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN) || "";
-const reqUrl = (sessionId: string, path: string, participantId: string | undefined, limit: number, offset: number) =>
-  `${ENV.CORTEX_API_URL}/interview-sessions/${sessionId}/${path}?limit=${limit}&offset=${offset}` +
+// Endpoint path only — ApiService prepends the base URL, adds the auth header,
+// and transparently refreshes the access token + retries on a 401.
+const endpoint = (sessionId: string, path: string, participantId: string | undefined, limit: number, offset: number) =>
+  `/interview-sessions/${sessionId}/${path}?limit=${limit}&offset=${offset}` +
   (participantId ? `&participant_id=${encodeURIComponent(participantId)}` : "");
 
 // ── per-tab total counts (for badges), fetched once ────────────────────────
@@ -38,9 +40,8 @@ function useCounts(sessionId?: string, participantId?: string) {
     let cancelled = false;
     TABS.forEach(async (t) => {
       try {
-        const r = await fetch(reqUrl(sessionId, t.path, participantId, 1, 0), { headers: { Authorization: `Bearer ${token()}` } });
-        const j = await r.json();
-        if (!cancelled) setCounts((c) => ({ ...c, [t.v]: j?.data?.total ?? 0 }));
+        const r = await ApiService.get(endpoint(sessionId, t.path, participantId, 1, 0), undefined, ENV.CORTEX_API_URL);
+        if (!cancelled) setCounts((c) => ({ ...c, [t.v]: (r.data as any)?.total ?? 0 }));
       } catch { /* badge just won't show */ }
     });
     return () => { cancelled = true; };
@@ -65,10 +66,8 @@ function useInfiniteList<T>(path: string, sessionId?: string, participantId?: st
     setLoading(true);
     setError(null);
     try {
-      const resp = await fetch(reqUrl(sessionId, path, participantId, PAGE, offsetRef.current), { headers: { Authorization: `Bearer ${token()}` } });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const json = await resp.json();
-      const data = (json.data ?? {}) as { results?: T[]; total?: number };
+      const resp = await ApiService.get(endpoint(sessionId, path, participantId, PAGE, offsetRef.current), undefined, ENV.CORTEX_API_URL);
+      const data = (resp.data ?? {}) as { results?: T[]; total?: number };
       const batch = data.results ?? [];
       offsetRef.current += batch.length;
       setItems((prev) => [...prev, ...batch]);

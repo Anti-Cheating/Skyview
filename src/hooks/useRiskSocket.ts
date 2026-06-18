@@ -261,13 +261,15 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     // Pass our JWT as socket auth so Cortex's new middleware can
     // identify the user. In dev Cortex lets anonymous through; in
     // production it rejects, so this is the auth path for both.
-    const token = localStorage.getItem('auth_access_token') || '';
     // client: "skyview" lets Cortex distinguish us from daemon sockets
     // (Trueyy Helper, Sentinel) — only Skyview disconnects trigger session
     // teardown, and only when the last Skyview tab leaves.
+    // Function form so socket.io re-reads the (proactively-refreshed) token on
+    // every connect/reconnect instead of capturing a stale one at mount.
     const socket = io(ENV.AUTH_API_URL, {
       transports: ['websocket', 'polling'],
-      auth: { client: 'skyview', ...(token ? { token } : {}) },
+      auth: (cb: (data: Record<string, unknown>) => void) =>
+        cb({ client: 'skyview', token: localStorage.getItem('auth_access_token') || '' }),
     });
 
     socketRef.current = socket;
