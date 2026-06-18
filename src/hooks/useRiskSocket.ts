@@ -55,9 +55,22 @@ export interface PulseDetection {
   matchedKeywords: string[];
 }
 
+/** Discrete keyboard alert — shown every occurrence (no dedup). */
+export interface KeyboardAlert {
+  type: string;
+  label: string;
+  riskLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  key?: string;
+  app?: string;
+  fromApp?: string;
+  toApp?: string;
+  count?: number;
+}
+
 export interface PulseAlert {
   detections: PulseDetection[];
   activities: string[];
+  keyboardAlerts?: KeyboardAlert[];
   timestamp: string;
 }
 

@@ -28,7 +28,34 @@ import {
   Keyboard as KeyboardIcon,
 } from '@mui/icons-material';
 import { formatDateTime } from '../../utils/dateFormat';
-import type { PulseAlert, PulseDetection } from '../../hooks/useRiskSocket';
+import type { PulseAlert, PulseDetection, KeyboardAlert } from '../../hooks/useRiskSocket';
+
+// Risk → colour for the keyboard-event feed (matches the app-detection palette).
+const KB_RISK_COLOR: Record<string, string> = {
+  CRITICAL: '#DC2626',
+  HIGH: '#F97316',
+  MEDIUM: '#EAB308',
+  LOW: '#16A34A',
+};
+
+function kbIcon(type: string) {
+  switch (type) {
+    case 'screenshot':
+    case 'screen_record':
+      return ScreenshotIcon;
+    case 'app_switch_storm':
+      return AppSwitchIcon;
+    case 'select_all_copy':
+      return CopyIcon;
+    case 'copy_paste_roundtrip':
+    case 'paste_into_ai':
+    case 'rapid_paste':
+    case 'cut':
+      return ClipboardIcon;
+    default:
+      return KeyboardIcon;
+  }
+}
 
 interface PulseAlertBannerProps {
   alerts: PulseAlert[];
@@ -168,8 +195,15 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
   const allActivities = Array.from(activityCounts.entries())
     .map(([activity, count]) => ({ activity, count }));
 
+  // Keyboard alerts — a flat chronological FEED, every occurrence (NO dedup).
+  // Unlike app detections (deduped per category), each keyboard event is a
+  // distinct moment we want the interviewer to see each time it happens.
+  const allKeyboardAlerts = alerts
+    .flatMap((a) => (a.keyboardAlerts ?? []).map((k: KeyboardAlert) => ({ ...k, timestamp: a.timestamp })))
+    .sort((x, y) => new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime());
+
   if (alerts.length === 0) return null;
-  if (allDetections.length === 0 && allActivities.length === 0) return null;
+  if (allDetections.length === 0 && allActivities.length === 0 && allKeyboardAlerts.length === 0) return null;
 
   return (
     <Box
@@ -360,6 +394,39 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                 </Typography>
               </Box>
             )}
+          </Box>
+        );
+      })}
+
+      {/* Keyboard event FEED — every occurrence, with app context + time. */}
+      {allKeyboardAlerts.map((k, i) => {
+        const color = KB_RISK_COLOR[k.riskLevel] ?? '#6B7280';
+        const KbIcon = kbIcon(k.type);
+        return (
+          <Box
+            key={`${k.timestamp}-${i}`}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.75,
+              px: 1,
+              py: 0.5,
+              borderRadius: '8px',
+              bgcolor: `${color}12`,
+              border: `1px solid ${color}30`,
+            }}
+          >
+            <KbIcon sx={{ fontSize: 15, color, flexShrink: 0 }} />
+            <Typography
+              sx={{ fontSize: '0.72rem', fontWeight: 600, color: '#1F2937', flex: 1, minWidth: 0 }}
+            >
+              {k.label}
+            </Typography>
+            <Typography
+              sx={{ fontSize: '0.6rem', fontWeight: 500, color: '#9CA3AF', whiteSpace: 'nowrap', flexShrink: 0 }}
+            >
+              {formatDateTime(k.timestamp)}
+            </Typography>
           </Box>
         );
       })}
