@@ -147,7 +147,7 @@ async function apiRequest<T = any>(
     if (response.status >= 500) throw { message: ERROR_MESSAGES.SERVER_ERROR, status: response.status, data } as ApiError;
     if (!response.ok) throw { message: data.message || data.error || `Request failed with status ${response.status}`, status: response.status, data } as ApiError;
 
-    return { success: true, data: data.data || data, message: data.message };
+    return { success: true, data: 'data' in data ? data.data : data, message: data.message };
   } catch (error: any) {
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       throw { message: ERROR_MESSAGES.NETWORK_ERROR, status: 0 } as ApiError;
