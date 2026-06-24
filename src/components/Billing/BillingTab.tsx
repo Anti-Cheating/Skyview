@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Box, Alert, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  CircularProgress, Collapse,
+  CircularProgress, Collapse, Table, TableBody, TableCell, TableHead, TableRow, Chip,
 } from '@mui/material';
 import { TOKENS } from '../../theme';
 import { CardTitle, Secondary, Caption, Overline, SubHeading } from '../layout/Typography';
@@ -9,7 +9,7 @@ import { ActionButton } from '../common/ActionButton';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { BillingService } from '../../services/billing.service';
 import { PlanSelectModal } from './PlanSelectModal';
-import type { Subscription, SubscriptionStatus, Plan } from '../../types/billing.types';
+import type { Subscription, SubscriptionStatus, Plan, Invoice } from '../../types/billing.types';
 
 const STATUS_CONFIG: Record<SubscriptionStatus, { label: string; bg: string; fg: string; dot: string }> = {
   trial:     { label: 'Free Trial',    bg: 'rgba(59, 130, 246, 0.12)', fg: '#2563EB', dot: '#3B82F6' },
@@ -81,6 +81,16 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
   const [selectedInterval, setSelectedInterval] = useState<'monthly' | 'yearly'>('monthly');
   const [selectedPlanKey, setSelectedPlanKey] = useState<string>('');
   const [processingPlan, setProcessingPlan] = useState<string | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+
+  useEffect(() => {
+    setLoadingInvoices(true);
+    BillingService.listInvoices()
+      .then(setInvoices)
+      .catch(() => {})
+      .finally(() => setLoadingInvoices(false));
+  }, [subscription]);
 
   useEffect(() => {
     if (plansExpanded && plans.length === 0) {
@@ -268,7 +278,7 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
     );
   }
 
-  const canUpgrade = status !== 'cancelled' && status !== 'completed';
+  const canUpgrade = true;
   const canCancel =
     !!razorpay_subscription_id &&
     status !== 'cancelled' &&
@@ -414,6 +424,64 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
           </Button>
         </Box>
       )}
+
+      {/* Invoices */}
+      <Box
+        sx={{
+          bgcolor: TOKENS.bgCard,
+          border: `1px solid ${TOKENS.border}`,
+          borderRadius: '12px',
+          p: 2.5,
+        }}
+      >
+        <CardTitle sx={{ color: TOKENS.textPrimary, mb: 2 }}>Invoices</CardTitle>
+        {loadingInvoices ? (
+          <CircularProgress size={22} sx={{ color: TOKENS.brand }} />
+        ) : invoices.length === 0 ? (
+          <Caption sx={{ color: TOKENS.textMuted }}>No invoices yet.</Caption>
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ color: TOKENS.textMuted, fontWeight: 600, fontSize: '0.75rem', borderColor: TOKENS.border }}>Cycle</TableCell>
+                <TableCell sx={{ color: TOKENS.textMuted, fontWeight: 600, fontSize: '0.75rem', borderColor: TOKENS.border }}>Amount</TableCell>
+                <TableCell sx={{ color: TOKENS.textMuted, fontWeight: 600, fontSize: '0.75rem', borderColor: TOKENS.border }}>Status</TableCell>
+                <TableCell sx={{ color: TOKENS.textMuted, fontWeight: 600, fontSize: '0.75rem', borderColor: TOKENS.border }}>Date</TableCell>
+                <TableCell sx={{ color: TOKENS.textMuted, fontWeight: 600, fontSize: '0.75rem', borderColor: TOKENS.border }}>Payment ID</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {invoices.map(inv => (
+                <TableRow key={inv.id}>
+                  <TableCell sx={{ color: TOKENS.textPrimary, fontSize: '0.875rem', borderColor: TOKENS.border }}>#{inv.cycle}</TableCell>
+                  <TableCell sx={{ color: TOKENS.textPrimary, fontSize: '0.875rem', borderColor: TOKENS.border }}>
+                    {inv.currency === 'INR' ? `₹${(inv.amount / 100).toLocaleString('en-IN')}` : `${inv.currency} ${inv.amount / 100}`}
+                  </TableCell>
+                  <TableCell sx={{ borderColor: TOKENS.border }}>
+                    <Chip
+                      label={inv.status}
+                      size="small"
+                      sx={{
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        bgcolor: inv.status === 'completed' ? 'rgba(76,217,100,0.14)' : 'rgba(250,204,21,0.15)',
+                        color: inv.status === 'completed' ? '#047857' : '#B45309',
+                        height: 20,
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell sx={{ color: TOKENS.textSecondary, fontSize: '0.875rem', borderColor: TOKENS.border }}>
+                    {inv.paid_at ? formatDate(inv.paid_at) : '—'}
+                  </TableCell>
+                  <TableCell sx={{ color: TOKENS.textMuted, fontSize: '0.75rem', fontFamily: 'monospace', borderColor: TOKENS.border }}>
+                    {inv.razorpay_payment_id ?? '—'}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Box>
 
       <PlanSelectModal
         open={planModalOpen}

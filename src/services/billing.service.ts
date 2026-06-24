@@ -1,5 +1,5 @@
 import { ApiService } from './api.service';
-import type { Plan, Subscription, CheckoutCreds, VerifyInput } from '../types/billing.types';
+import type { Plan, Subscription, CheckoutCreds, VerifyInput, Invoice } from '../types/billing.types';
 
 export const BillingService = {
   async listPlans(): Promise<Plan[]> {
@@ -27,5 +27,10 @@ export const BillingService = {
     await ApiService.post('/api/payments/cancel-subscription', {
       razorpay_subscription_id: razorpaySubscriptionId,
     });
+  },
+
+  async listInvoices(): Promise<Invoice[]> {
+    const resp = await ApiService.get<Invoice[]>('/api/payments/invoices');
+    return resp.data ?? [];
   },
 };

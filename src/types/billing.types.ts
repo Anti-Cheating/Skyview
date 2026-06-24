@@ -43,6 +43,17 @@ export interface VerifyInput {
   razorpay_signature: string;
 }
 
+export interface Invoice {
+  id: string;
+  cycle: number;
+  amount: number;
+  currency: string;
+  status: string;
+  razorpay_payment_id: string | null;
+  paid_at: string | null;
+  created_at: string;
+}
+
 export interface RazorpayOptions {
   key: string;
   subscription_id: string;
