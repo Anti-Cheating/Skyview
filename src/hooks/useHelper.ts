@@ -57,6 +57,7 @@ export function useHelper(pollMs = 3000): UseHelperReturn {
           screen_recording_ok:
             p?.screen_recording_ok ?? s.screen_recording_ok,
           microphone_ok: p?.microphone_ok ?? s.microphone_ok,
+          keyboard_ok: p?.keyboard_ok ?? s.keyboard_ok,
         });
       } else {
         setStatus(null);

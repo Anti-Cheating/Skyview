@@ -28,6 +28,7 @@ import { InterviewService } from '../../services/interview.service';
 import type { InterviewSession } from '../../types/interview.types';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { PostAnalysisPanel } from '../PostAnalysis';
+import ActivityExplorer from '../PostAnalysis/ActivityExplorer';
 
 function getInitials(first: string, last: string): string {
   return `${first?.[0] ?? ''}${last?.[0] ?? ''}`.toUpperCase();
@@ -329,7 +330,7 @@ export default function InterviewDetailPage() {
   // panel to poll for the in-flight result instead of fetching once.
   const [panelPending, setPanelPending] = useState(false);
   // Page tabs: Basic Info (interview + candidate cards) / Analysis (report).
-  const [tab, setTab] = useState<'info' | 'analysis'>('info');
+  const [tab, setTab] = useState<'info' | 'analysis' | 'activity'>('info');
   // The analysis panel mounts (and fetches) only after the Analysis tab is
   // first opened — data loads per tab selection, not eagerly on page load.
   const [analysisMounted, setAnalysisMounted] = useState(false);
@@ -523,7 +524,7 @@ export default function InterviewDetailPage() {
       {/* Tabs — content loads per selection */}
       <Tabs
         value={tab}
-        onChange={(_, v: 'info' | 'analysis') => {
+        onChange={(_, v: 'info' | 'analysis' | 'activity') => {
           setTab(v);
           if (v === 'analysis') setAnalysisMounted(true);
         }}
@@ -543,6 +544,7 @@ export default function InterviewDetailPage() {
       >
         <Tab value="info" label="Basic Info" disableRipple />
         <Tab value="analysis" label="Analysis" disableRipple />
+        <Tab value="activity" label="Activity Explorer" disableRipple />
       </Tabs>
 
       {/* Scrollable tab content — everything above stays pinned */}
@@ -695,6 +697,22 @@ export default function InterviewDetailPage() {
             }}
           />
         )}
+      </Box>
+
+      {/* ── Tab: Activity Explorer (post-interview monitoring replay) ──────── */}
+      <Box
+        sx={{
+          display: tab === 'activity' ? 'block' : 'none',
+          bgcolor: '#FFFFFF',
+          border: '1px solid #E5E7EB',
+          borderRadius: '12px',
+          p: { xs: 2, md: 3 },
+        }}
+      >
+        <ActivityExplorer
+          sessionId={session.id}
+          participantId={session.interview_session_participants?.find((p: any) => p.candidate_id)?.id}
+        />
       </Box>
 
       </Box>{/* /scrollable tab content */}

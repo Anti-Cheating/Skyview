@@ -17,10 +17,17 @@ import {
   CircularProgress,
   Alert,
   Chip,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
   FiberManualRecord as DotIcon,
+  StopCircleOutlined as EndIcon,
 } from '@mui/icons-material';
 import { useRiskSocket } from '../../hooks/useRiskSocket';
 import { useHelper } from '../../hooks/useHelper';
@@ -49,6 +56,7 @@ export default function MonitoringView() {
   const [error, setError] = useState<string | null>(null);
   const [activated, setActivated] = useState(false);
   const [activateError, setActivateError] = useState<string | null>(null);
+  const [endDialogOpen, setEndDialogOpen] = useState(false);
 
   const riskData = useRiskSocket(interviewId ?? null);
   const helper = useHelper(2000);
@@ -192,6 +200,7 @@ export default function MonitoringView() {
               extension_installed: !!response.data.extension_status.extension_installed,
               screen_recording: !!response.data.extension_status.screen_recording,
               mic_granted: !!response.data.extension_status.mic_granted,
+              keyboard_granted: !!response.data.extension_status.keyboard_granted,
               joined: !!response.data.extension_status.joined,
               updated_at: response.data.extension_status.updated_at ?? null,
             });
@@ -273,6 +282,24 @@ export default function MonitoringView() {
     if (interviewId) {
       sessionStorage.setItem(`skyview:txn:${interviewId}`, '0');
       sessionStorage.setItem(`skyview:anl:${interviewId}`, '0');
+    }
+    navigate('/interviews');
+  };
+
+  // Explicit, deliberate end — the primary "I'm done" action. Gated by a
+  // confirm dialog so a misclick can't finalize a live interview. This
+  // matters more now that a lapsed heartbeat no longer auto-ends sessions:
+  // the interviewer's intentional click (or the scheduled-end deadline) is
+  // the main path to COMPLETED. Stops both modalities, persists the
+  // off-intent, fires an explicit /deactivate, then leaves.
+  const handleEndInterview = () => {
+    setEndDialogOpen(false);
+    if (transcriptionOn) riskData.emitStopTranscription();
+    if (analysisOn) riskData.emitStopAnalysis();
+    if (interviewId) {
+      sessionStorage.setItem(`skyview:txn:${interviewId}`, '0');
+      sessionStorage.setItem(`skyview:anl:${interviewId}`, '0');
+      InterviewService.deactivate(interviewId).catch(() => {});
     }
     navigate('/interviews');
   };
@@ -441,7 +468,58 @@ export default function MonitoringView() {
               Capture / Start / Stop so all interviewer actions live in
               one toolbar. */}
         </Box>
+
+        {/* End Interview — explicit, confirmed finalize. Distinct from the
+            back-arrow exit so ending is always a deliberate, acknowledged
+            action. */}
+        <Button
+          onClick={() => setEndDialogOpen(true)}
+          variant="contained"
+          color="error"
+          size="small"
+          startIcon={<EndIcon />}
+          sx={{ flexShrink: 0, textTransform: 'none', fontWeight: 600 }}
+        >
+          End Interview
+        </Button>
       </Box>
+
+      {/* End-interview confirmation. Finalizing a live session is
+          irreversible (it can only be resumed inside the 60s reload grace),
+          so we always ask first. */}
+      <Dialog
+        open={endDialogOpen}
+        onClose={() => setEndDialogOpen(false)}
+        aria-labelledby="end-interview-title"
+        aria-describedby="end-interview-desc"
+      >
+        <DialogTitle id="end-interview-title">End this interview?</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="end-interview-desc">
+            Are you sure you want to end the interview? This stops live
+            monitoring and finalizes the session — it can&apos;t be resumed
+            afterwards. All captured activity is preserved for post-interview
+            analysis.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setEndDialogOpen(false)}
+            sx={{ textTransform: 'none', color: '#6B7280' }}
+          >
+            Keep monitoring
+          </Button>
+          <Button
+            onClick={handleEndInterview}
+            variant="contained"
+            color="error"
+            startIcon={<EndIcon />}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            End interview
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Full monitoring UI */}
       <>

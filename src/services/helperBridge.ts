@@ -51,6 +51,7 @@ export interface HelperStatus {
   role: 'candidate' | 'interviewer' | null;
   screen_recording_ok: boolean;
   microphone_ok: boolean;
+  keyboard_ok: boolean;
   mic_active: boolean;
   connected: boolean;
 }
@@ -169,7 +170,7 @@ const _lastOpenAt: Record<string, number> = {};
 const OPEN_COOLDOWN_MS = 2000;
 
 export async function openSettingsPane(
-  pane: 'microphone' | 'screen_recording'
+  pane: 'microphone' | 'screen_recording' | 'accessibility'
 ): Promise<boolean> {
   const now = Date.now();
   if (now - (_lastOpenAt[pane] || 0) < OPEN_COOLDOWN_MS) {
@@ -198,7 +199,7 @@ export async function openSettingsPane(
  * will pick up the change on the next poll.
  */
 export async function requestHelperPermission(
-  pane: 'microphone' | 'screen_recording'
+  pane: 'microphone' | 'screen_recording' | 'accessibility'
 ): Promise<boolean> {
   try {
     const resp = await fetch(`${HELPER_BASE}/permissions/request`, {
@@ -222,6 +223,7 @@ export async function requestHelperPermission(
 export async function getHelperPermissions(): Promise<{
   screen_recording_ok: boolean;
   microphone_ok: boolean;
+  keyboard_ok: boolean;
 } | null> {
   try {
     const resp = await fetch(`${HELPER_BASE}/permissions`, { method: 'GET' });
@@ -229,6 +231,7 @@ export async function getHelperPermissions(): Promise<{
     return (await resp.json()) as {
       screen_recording_ok: boolean;
       microphone_ok: boolean;
+      keyboard_ok: boolean;
     };
   } catch {
     return null;

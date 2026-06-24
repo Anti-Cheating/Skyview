@@ -28,7 +28,7 @@ function clearAuthData(): void {
 // we don't burn N refresh-token round-trips when N requests fail at once.
 let _refreshInFlight: Promise<string | null> | null = null;
 
-async function refreshAccessToken(): Promise<string | null> {
+export async function refreshAccessToken(): Promise<string | null> {
   if (_refreshInFlight) return _refreshInFlight;
   const refreshToken = getRefreshToken();
   if (!refreshToken) return null;
@@ -59,6 +59,44 @@ async function refreshAccessToken(): Promise<string | null> {
     }
   })();
   return _refreshInFlight;
+}
+
+// ── Proactive refresh ──────────────────────────────────────────────────────
+// The 401-retry above only covers calls that go through apiRequest. The socket
+// connection, the PDF export, and other raw-fetch callers read the token from
+// localStorage directly, so if the 4h access token expires they fail without
+// recovering. Refreshing ~5 min BEFORE expiry keeps the stored token valid for
+// everyone, for the full 7-day refresh window. Start on login, stop on logout.
+let _refreshTimer: ReturnType<typeof setTimeout> | null = null;
+const REFRESH_BUFFER_MS = 5 * 60 * 1000;
+const FALLBACK_REFRESH_MS = 3.5 * 60 * 60 * 1000; // access is 4h; refresh at ~3.5h if exp unreadable
+
+function jwtExpMs(token: string): number | null {
+  try {
+    const payload = JSON.parse(atob((token.split('.')[1] || '').replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload?.exp === 'number' ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+export function startTokenAutoRefresh(): void {
+  stopTokenAutoRefresh();
+  const token = getAccessToken();
+  if (!token) return;
+  const exp = jwtExpMs(token);
+  const delay = exp ? Math.max(0, exp - Date.now() - REFRESH_BUFFER_MS) : FALLBACK_REFRESH_MS;
+  _refreshTimer = setTimeout(async () => {
+    await refreshAccessToken();
+    startTokenAutoRefresh(); // reschedule off the freshly-issued token
+  }, delay);
+}
+
+export function stopTokenAutoRefresh(): void {
+  if (_refreshTimer) {
+    clearTimeout(_refreshTimer);
+    _refreshTimer = null;
+  }
 }
 
 async function apiRequest<T = any>(
@@ -109,7 +147,7 @@ async function apiRequest<T = any>(
     if (response.status >= 500) throw { message: ERROR_MESSAGES.SERVER_ERROR, status: response.status, data } as ApiError;
     if (!response.ok) throw { message: data.message || data.error || `Request failed with status ${response.status}`, status: response.status, data } as ApiError;
 
-    return { success: true, data: data.data || data, message: data.message };
+    return { success: true, data: 'data' in data ? data.data : data, message: data.message };
   } catch (error: any) {
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       throw { message: ERROR_MESSAGES.NETWORK_ERROR, status: 0 } as ApiError;

@@ -20,6 +20,7 @@ import PreviewPage from './components/PostAnalysis/PreviewPage';
 import MonitoringView from './components/Monitoring/MonitoringView';
 import CandidateJoinPage from './components/AppLayout/CandidateJoinPage';
 import TeamPage from './components/Team/TeamPage';
+import BillingPage from './components/Billing/BillingPage';
 import ProfilePage from './components/Profile/ProfilePage';
 import NotFoundPage from './components/NotFound/NotFoundPage';
 import InviteAcceptPage from './components/Team/InviteAcceptPage';
@@ -183,6 +184,7 @@ function AppRoutes() {
           <Route path="interviews/:id/join" element={<CandidateJoinPage />} />
           <Route path="interviews/:id/monitor" element={<MonitoringView />} />
           <Route path="users" element={<CompanyManagerRoute><TeamPage /></CompanyManagerRoute>} />
+          <Route path="billing" element={<CompanyManagerRoute><BillingPage /></CompanyManagerRoute>} />
           <Route path="profile" element={<ProfilePage />} />
           {/* Authenticated 404 — renders inside AppLayout so the user
               keeps the sidebar and can navigate out. */}

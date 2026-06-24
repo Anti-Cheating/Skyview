@@ -55,9 +55,22 @@ export interface PulseDetection {
   matchedKeywords: string[];
 }
 
+/** Discrete keyboard alert — shown every occurrence (no dedup). */
+export interface KeyboardAlert {
+  type: string;
+  label: string;
+  riskLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  key?: string;
+  app?: string;
+  fromApp?: string;
+  toApp?: string;
+  count?: number;
+}
+
 export interface PulseAlert {
   detections: PulseDetection[];
   activities: string[];
+  keyboardAlerts?: KeyboardAlert[];
   timestamp: string;
 }
 
@@ -78,6 +91,7 @@ export interface CandidateStatus {
   extension_installed: boolean;
   screen_recording: boolean;
   mic_granted: boolean;
+  keyboard_granted: boolean;
   joined: boolean;
   updated_at: string | null;
 }
@@ -260,13 +274,15 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     // Pass our JWT as socket auth so Cortex's new middleware can
     // identify the user. In dev Cortex lets anonymous through; in
     // production it rejects, so this is the auth path for both.
-    const token = localStorage.getItem('auth_access_token') || '';
     // client: "skyview" lets Cortex distinguish us from daemon sockets
     // (Trueyy Helper, Sentinel) — only Skyview disconnects trigger session
     // teardown, and only when the last Skyview tab leaves.
+    // Function form so socket.io re-reads the (proactively-refreshed) token on
+    // every connect/reconnect instead of capturing a stale one at mount.
     const socket = io(ENV.AUTH_API_URL, {
       transports: ['websocket', 'polling'],
-      auth: { client: 'skyview', ...(token ? { token } : {}) },
+      auth: (cb: (data: Record<string, unknown>) => void) =>
+        cb({ client: 'skyview', token: localStorage.getItem('auth_access_token') || '' }),
     });
 
     socketRef.current = socket;
@@ -300,6 +316,7 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
         extension_installed: !!data.extension_installed,
         screen_recording: !!data.screen_recording,
         mic_granted: !!data.mic_granted,
+        keyboard_granted: !!data.keyboard_granted,
         joined: !!data.joined,
         updated_at: data.updated_at ?? new Date().toISOString(),
       });

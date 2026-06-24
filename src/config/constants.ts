@@ -51,6 +51,14 @@ export const STORAGE_KEYS = {
   USER_DATA: 'auth_user',
 } as const;
 
+// Pagination — shared defaults so every list/feed pages the same way.
+export const DEFAULT_PAGE_LIMIT = 10;
+
+/** Default offset/limit for a first-page request. */
+export function getDefaultPagination(): { offset: number; limit: number } {
+  return { offset: 0, limit: DEFAULT_PAGE_LIMIT };
+}
+
 // API Endpoints
 export const API_ENDPOINTS = {
   AUTH: {

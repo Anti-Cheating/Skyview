@@ -179,6 +179,11 @@ export default function CandidateJoinPage() {
     if (!ok) await openSettingsPane('microphone');
     helper.refresh();
   };
+  const openKeyboardSettings = async () => {
+    const ok = await requestHelperPermission('accessibility');
+    if (!ok) await openSettingsPane('accessibility');
+    helper.refresh();
+  };
 
   // ── Render ────────────────────────────────────────────────────────
 
@@ -210,9 +215,10 @@ export default function CandidateJoinPage() {
     : helper.installed ? 'done' : 'missing';
   const screenOk = !!helper.status?.screen_recording_ok;
   const micOk = !!helper.status?.microphone_ok;
+  const keyboardOk = !!helper.status?.keyboard_ok;
   const monitoringState = !helper.installed
     ? 'pending'
-    : screenOk && micOk
+    : screenOk && micOk && keyboardOk
       ? 'done'
       : 'permission-needed';
   const meetingState = meetingOpened ? 'done' : monitoringState === 'done' ? 'pending' : 'pending';
@@ -304,7 +310,7 @@ export default function CandidateJoinPage() {
                 <Status busy text="Connecting to helper..." />
               )}
               {monitoringState === 'done' && (
-                <Status ok text="Screen Recording & Microphone granted" />
+                <Status ok text="Screen Recording, Microphone & Keyboard granted" />
               )}
               {monitoringState === 'permission-needed' && (
                 <>
@@ -314,6 +320,9 @@ export default function CandidateJoinPage() {
                   <PermissionRow title="Microphone"
                     desc="Required for live transcription"
                     done={micOk} onEnable={openMicSettings} />
+                  <PermissionRow title="Keyboard Access"
+                    desc="Required for keyboard activity monitoring"
+                    done={keyboardOk} onEnable={openKeyboardSettings} />
                   <Caption sx={{ display: 'block', color: TOKENS.textSecondary, mt: 1 }}>
                     {detectHelperPlatform() === 'windows'
                       ? <>Enable <strong>Microphone access</strong> (and <strong>Let desktop apps access your microphone</strong>) in Windows Settings, then return here. This page updates automatically.</>
