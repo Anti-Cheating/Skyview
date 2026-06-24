@@ -9,6 +9,7 @@ export interface Plan {
   minutes_per_interview: number;
   max_seats: number | null; // null = unlimited
   is_active: boolean;
+  features?: string[];
 }
 
 export type SubscriptionStatus =
