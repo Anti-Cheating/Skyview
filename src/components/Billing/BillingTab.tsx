@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import {
   Box, Alert, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   CircularProgress, Collapse, Table, TableBody, TableCell, TableHead, TableRow, Chip,
+  IconButton, Tooltip,
 } from '@mui/material';
+import { FileDownloadOutlined } from '@mui/icons-material';
 import { TOKENS } from '../../theme';
 import { CardTitle, Secondary, Caption, Overline, SubHeading } from '../layout/Typography';
 import { ActionButton } from '../common/ActionButton';
@@ -72,6 +74,23 @@ interface Props {
 
 export function BillingTab({ subscription, loading, onRefresh }: Props) {
   const { showSuccess, showError } = useSnackbar();
+
+  // Server renders a branded PDF (logo + details); we just download the blob.
+  const downloadInvoice = async (inv: Invoice) => {
+    try {
+      const blob = await BillingService.getInvoicePdf(inv.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Trueyy-invoice-${inv.cycle}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      showError('Could not download the invoice. Please try again.');
+    }
+  };
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -448,6 +467,7 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
                 <TableCell sx={{ color: TOKENS.textMuted, fontWeight: 600, fontSize: '0.75rem', borderColor: TOKENS.border }}>Status</TableCell>
                 <TableCell sx={{ color: TOKENS.textMuted, fontWeight: 600, fontSize: '0.75rem', borderColor: TOKENS.border }}>Date</TableCell>
                 <TableCell sx={{ color: TOKENS.textMuted, fontWeight: 600, fontSize: '0.75rem', borderColor: TOKENS.border }}>Payment ID</TableCell>
+                <TableCell sx={{ borderColor: TOKENS.border }} align="right" />
               </TableRow>
             </TableHead>
             <TableBody>
@@ -475,6 +495,13 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
                   </TableCell>
                   <TableCell sx={{ color: TOKENS.textMuted, fontSize: '0.75rem', fontFamily: 'monospace', borderColor: TOKENS.border }}>
                     {inv.razorpay_payment_id ?? '—'}
+                  </TableCell>
+                  <TableCell align="right" sx={{ borderColor: TOKENS.border, py: 0.5 }}>
+                    <Tooltip title="Download invoice">
+                      <IconButton size="small" onClick={() => downloadInvoice(inv)} sx={{ color: TOKENS.brand }}>
+                        <FileDownloadOutlined fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </TableCell>
                 </TableRow>
               ))}
