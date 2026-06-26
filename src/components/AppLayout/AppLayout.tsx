@@ -148,7 +148,9 @@ export default function AppLayout() {
           <Box
             sx={{
               px: 1.5,
-              py: 0.75,
+              // Taller bar so the wordmark sits centered with breathing
+              // room above/below instead of hugging the top/bottom edges.
+              minHeight: 64,
               bgcolor: TOKENS.sidebar,
               display: 'flex',
               alignItems: 'center',
@@ -165,10 +167,8 @@ export default function AppLayout() {
             >
               <MenuIcon sx={{ fontSize: 20 }} />
             </IconButton>
-            {/* Bumped from a scaled-down `small` (~20px tall) to a full
-                `medium` (~40px) so the wordmark is legible. The header's
-                py:0.75 + 36px IconButton already reserves enough room
-                for a 40px logo without expanding the bar. */}
+            {/* `medium` (28px) matches the sidebar; the 64px bar centers
+                it with comfortable space above/below. */}
             <TruoyyLogo collapsed={false} size="medium" />
           </Box>
         )}
