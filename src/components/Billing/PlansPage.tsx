@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Tabs, Tab, CircularProgress, Chip } from '@mui/material';
-import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { TOKENS } from '../../theme';
 import { PageTitle, CardTitle, Caption, Secondary } from '../layout/Typography';
@@ -120,19 +119,6 @@ export default function PlansPage() {
 
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
-      <Box
-        component="button"
-        onClick={() => navigate('/billing')}
-        sx={{
-          display: 'inline-flex', alignItems: 'center', gap: 0.5, mb: 1.5,
-          background: 'none', border: 'none', cursor: 'pointer', p: 0,
-          color: TOKENS.textSecondary, fontSize: '0.8125rem',
-          '&:hover': { color: TOKENS.textPrimary },
-        }}
-      >
-        <ArrowBackIcon sx={{ fontSize: 16 }} /> Back to billing
-      </Box>
-
       <PageTitle sx={{ color: TOKENS.textPrimary, mb: 0.5 }}>Choose your plan</PageTitle>
       <Secondary sx={{ color: TOKENS.textSecondary, mb: 2.5 }}>
         Start free, scale as you hire. Payment is processed securely via Razorpay.

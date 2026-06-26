@@ -12,8 +12,9 @@ import ResetPassword from './components/Auth/ResetPassword';
 import Dashboard from './components/Dashboard/Dashboard';
 import AppLayout from './components/AppLayout/AppLayout';
 import AppDashboard from './components/AppLayout/AppDashboard';
-import AppInterviewList from './components/AppLayout/AppInterviewList';
-import CreateInterviewPage from './components/AppLayout/CreateInterviewPage';
+import ProcessListPage from './components/AppLayout/ProcessListPage';
+import CreateProcessPage from './components/AppLayout/CreateProcessPage';
+import ProcessDetailPage from './components/AppLayout/ProcessDetailPage';
 import InterviewDetailPage from './components/AppLayout/InterviewDetailPage';
 import { PostAnalysisPanel } from './components/PostAnalysis';
 import PreviewPage from './components/PostAnalysis/PreviewPage';
@@ -177,13 +178,16 @@ function AppRoutes() {
         {/* Full web app with sidebar — nested routes render in AppLayout's <Outlet /> */}
         <Route path="/" element={<PrivateRoute><AppLayout /></PrivateRoute>}>
           <Route index element={<AppDashboard />} />
-          <Route path="interviews" element={<AppInterviewList />} />
-          <Route path="interviews/new" element={<CreateInterviewPage />} />
-          <Route path="interviews/:id" element={<InterviewDetailPage />} />
-          <Route path="interviews/:id/analysis" element={<PostAnalysisPanel />} />
-          <Route path="interviews/:id/edit" element={<CreateInterviewPage />} />
+          {/* Parent "Interview" (process) — manager-managed list + create */}
+          <Route path="interviews" element={<CompanyManagerRoute><ProcessListPage /></CompanyManagerRoute>} />
+          <Route path="interviews/new" element={<CompanyManagerRoute><CreateProcessPage /></CompanyManagerRoute>} />
+          <Route path="interviews/:processId" element={<ProcessDetailPage />} />
+          {/* Round screens — a round is a session, so these reuse the existing pages */}
+          <Route path="interviews/:processId/rounds/:roundId" element={<InterviewDetailPage />} />
+          <Route path="interviews/:processId/rounds/:roundId/analysis" element={<PostAnalysisPanel />} />
+          <Route path="interviews/:processId/rounds/:roundId/monitor" element={<MonitoringView />} />
+          {/* Candidate join link (from invite emails) — uses the round/session id directly */}
           <Route path="interviews/:id/join" element={<CandidateJoinPage />} />
-          <Route path="interviews/:id/monitor" element={<MonitoringView />} />
           <Route path="users" element={<CompanyManagerRoute><TeamPage /></CompanyManagerRoute>} />
           <Route path="billing" element={<CompanyManagerRoute><BillingPage /></CompanyManagerRoute>} />
           <Route path="plans" element={<CompanyManagerRoute><PlansPage /></CompanyManagerRoute>} />
