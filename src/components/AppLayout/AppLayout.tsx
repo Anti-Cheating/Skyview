@@ -45,6 +45,7 @@ export default function AppLayout() {
     ];
     if (isCompanyManagerRole(userRole)) {
       shared.push({ id: 'users', label: 'Users', iconName: 'People', route: '/users', badge: null });
+      shared.push({ id: 'plans', label: 'Plans', iconName: 'Plans', route: '/plans', badge: null });
       shared.push({ id: 'billing', label: 'Billing', iconName: 'CreditCard', route: '/billing', badge: null });
     }
     // Profile is available to every authenticated user — the page itself
@@ -66,6 +67,7 @@ export default function AppLayout() {
   const getActiveId = (): string => {
     if (location.pathname.startsWith('/interviews')) return 'interviews';
     if (location.pathname.startsWith('/users')) return 'users';
+    if (location.pathname.startsWith('/plans')) return 'plans';
     if (location.pathname.startsWith('/billing')) return 'billing';
     if (location.pathname.startsWith('/profile')) return 'profile';
     return 'dashboard';

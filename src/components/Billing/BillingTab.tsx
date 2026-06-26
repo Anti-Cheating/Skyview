@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Alert, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  CircularProgress, Collapse,
+  CircularProgress, Chip, IconButton, Tooltip,
 } from '@mui/material';
+import { FileDownloadOutlined } from '@mui/icons-material';
 import { TOKENS } from '../../theme';
 import { CardTitle, Secondary, Caption, Overline, SubHeading } from '../layout/Typography';
 import { ActionButton } from '../common/ActionButton';
+import { DataTable, type DataTableColumn } from '../common/DataTable';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { BillingService } from '../../services/billing.service';
-import { PlanSelectModal } from './PlanSelectModal';
-import type { Subscription, SubscriptionStatus, Plan } from '../../types/billing.types';
+import type { Subscription, SubscriptionStatus, Invoice } from '../../types/billing.types';
 
 const STATUS_CONFIG: Record<SubscriptionStatus, { label: string; bg: string; fg: string; dot: string }> = {
   trial:     { label: 'Free Trial',    bg: 'rgba(59, 130, 246, 0.12)', fg: '#2563EB', dot: '#3B82F6' },
@@ -27,23 +29,11 @@ function StatusPill({ status }: { status: SubscriptionStatus }) {
     <Box
       component="span"
       sx={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 0.75,
-        px: 1,
-        height: 22,
-        borderRadius: '6px',
-        bgcolor: c.bg,
-        color: c.fg,
-        fontSize: '0.75rem',
-        fontWeight: 600,
-        lineHeight: 1,
+        display: 'inline-flex', alignItems: 'center', gap: 0.75, px: 1, height: 22,
+        borderRadius: '6px', bgcolor: c.bg, color: c.fg, fontSize: '0.75rem', fontWeight: 600, lineHeight: 1,
       }}
     >
-      <Box
-        component="span"
-        sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: c.dot, flexShrink: 0 }}
-      />
+      <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: c.dot, flexShrink: 0 }} />
       {c.label}
     </Box>
   );
@@ -51,9 +41,7 @@ function StatusPill({ status }: { status: SubscriptionStatus }) {
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString(undefined, {
-    year: 'numeric', month: 'short', day: 'numeric',
-  });
+  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function formatPrice(paise: number, currency: string, interval: string | null = 'monthly'): string {
@@ -72,70 +60,84 @@ interface Props {
 
 export function BillingTab({ subscription, loading, onRefresh }: Props) {
   const { showSuccess, showError } = useSnackbar();
-  const [planModalOpen, setPlanModalOpen] = useState(false);
+  const navigate = useNavigate();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [plansExpanded, setPlansExpanded] = useState(false);
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [loadingPlans, setLoadingPlans] = useState(false);
-  const [selectedInterval, setSelectedInterval] = useState<'monthly' | 'yearly'>('monthly');
-  const [selectedPlanKey, setSelectedPlanKey] = useState<string>('');
-  const [processingPlan, setProcessingPlan] = useState<string | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoicesTotal, setInvoicesTotal] = useState(0);
+  const [invoicesPage, setInvoicesPage] = useState(1);
+  const [invoicesPageSize, setInvoicesPageSize] = useState(10);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (plansExpanded && plans.length === 0) {
-      setLoadingPlans(true);
-      BillingService.listPlans()
-        .then(setPlans)
-        .catch(err => showError(err?.message || 'Failed to load plans'))
-        .finally(() => setLoadingPlans(false));
-    }
-  }, [plansExpanded]);
+    setLoadingInvoices(true);
+    BillingService.listInvoices(invoicesPage, invoicesPageSize)
+      .then(({ items, total }) => { setInvoices(items); setInvoicesTotal(total); })
+      .catch(() => {})
+      .finally(() => setLoadingInvoices(false));
+  }, [subscription, invoicesPage, invoicesPageSize]);
 
-  const handleSelectPlan = async (planKey: string) => {
-    setProcessingPlan(planKey);
+  // Server renders a branded PDF (logo + details); we just download the blob.
+  const downloadInvoice = async (inv: Invoice) => {
+    setDownloadingId(inv.id);
     try {
-      if (planKey === 'trial') {
-        await BillingService.createSubscription(planKey);
-        showSuccess('Trial activated! No card required.');
-        setPlansExpanded(false);
-        onRefresh();
-        return;
-      }
-
-      const creds = await BillingService.createSubscription(planKey);
-      if (typeof window.Razorpay !== 'undefined') {
-        const rzp = new window.Razorpay({
-          key: creds.key_id,
-          subscription_id: creds.subscription_id,
-          name: 'Trueyy',
-          description: 'Interview Monitoring Platform',
-          handler: (response: any) => {
-            BillingService.verifySubscription({
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_subscription_id: response.razorpay_subscription_id,
-              razorpay_signature: response.razorpay_signature,
-            })
-              .then(() => {
-                showSuccess('Payment successful! Subscription activated.');
-                setPlansExpanded(false);
-                onRefresh();
-              })
-              .catch(err => showError(err?.message || 'Payment verification failed'));
-          },
-          modal: { ondismiss: () => setProcessingPlan(null) },
-          theme: { color: '#4CD964' },
-        });
-        rzp.open();
-      } else {
-        showError('Razorpay not loaded');
-      }
-    } catch (err) {
-      showError((err as any)?.message || 'Failed to create subscription');
+      const blob = await BillingService.getInvoicePdf(inv.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Trueyy-invoice-${inv.cycle}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      showError('Could not download the invoice. Please try again.');
     } finally {
-      setProcessingPlan(null);
+      setDownloadingId(null);
     }
   };
+
+  const invoiceColumns: DataTableColumn<Invoice>[] = [
+    { key: 'cycle', header: 'Cycle', width: 90, render: (inv) => <Box sx={{ color: TOKENS.textPrimary }}>#{inv.cycle}</Box> },
+    {
+      key: 'amount', header: 'Amount',
+      render: (inv) => (
+        <Box sx={{ color: TOKENS.textPrimary }}>
+          {inv.currency === 'INR' ? `₹${(inv.amount / 100).toLocaleString('en-IN')}` : `${inv.currency} ${inv.amount / 100}`}
+        </Box>
+      ),
+    },
+    {
+      key: 'status', header: 'Status',
+      render: (inv) => (
+        <Chip
+          label={inv.status}
+          size="small"
+          sx={{
+            fontSize: '0.7rem', fontWeight: 600, height: 20,
+            bgcolor: inv.status === 'completed' ? 'rgba(76,217,100,0.14)' : 'rgba(250,204,21,0.15)',
+            color: inv.status === 'completed' ? '#047857' : '#B45309',
+          }}
+        />
+      ),
+    },
+    { key: 'date', header: 'Date', hideOn: 'mobile', render: (inv) => <Box sx={{ color: TOKENS.textSecondary }}>{inv.paid_at ? formatDate(inv.paid_at) : '—'}</Box> },
+    { key: 'paymentId', header: 'Payment ID', hideOn: 'mobile', render: (inv) => <Box sx={{ color: TOKENS.textMuted, fontSize: '0.75rem', fontFamily: 'monospace' }}>{inv.razorpay_payment_id ?? '—'}</Box> },
+    {
+      key: 'download', header: '', align: 'right', width: 56, showOnHover: true,
+      render: (inv) =>
+        downloadingId === inv.id ? (
+          <CircularProgress size={18} sx={{ color: TOKENS.brand }} />
+        ) : (
+          <Tooltip title="Download invoice">
+            <IconButton className="row-action" size="small" onClick={() => downloadInvoice(inv)} sx={{ color: TOKENS.brand }}>
+              <FileDownloadOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        ),
+    },
+  ];
 
   if (loading && !subscription) {
     return (
@@ -145,115 +147,14 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
     );
   }
 
+  // No subscription → send the user to the dedicated plans page.
   if (!subscription) {
     return (
-      <Box sx={{ pt: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box sx={{ pt: 3, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}>
         <Box sx={{ color: TOKENS.textSecondary, fontSize: '0.875rem' }}>
           No active subscription. Choose a plan to get started.
         </Box>
-        <ActionButton onClick={() => setPlansExpanded(!plansExpanded)}>
-          {plansExpanded ? 'Hide Plans' : 'View Plans'}
-        </ActionButton>
-        <Collapse in={plansExpanded}>
-          <Box sx={{ display: 'flex', gap: 1, mb: 2, justifyContent: 'center' }}>
-            <Button
-              variant={selectedInterval === 'monthly' ? 'contained' : 'outlined'}
-              onClick={() => setSelectedInterval('monthly')}
-              sx={{
-                textTransform: 'none',
-                fontWeight: 500,
-                borderColor: selectedInterval === 'monthly' ? TOKENS.brand : TOKENS.border,
-                color: selectedInterval === 'monthly' ? '#fff' : TOKENS.textPrimary,
-                backgroundColor: selectedInterval === 'monthly' ? TOKENS.brand : 'transparent',
-              }}
-            >
-              Monthly
-            </Button>
-            <Button
-              variant={selectedInterval === 'yearly' ? 'contained' : 'outlined'}
-              onClick={() => setSelectedInterval('yearly')}
-              sx={{
-                textTransform: 'none',
-                fontWeight: 500,
-                borderColor: selectedInterval === 'yearly' ? TOKENS.brand : TOKENS.border,
-                color: selectedInterval === 'yearly' ? '#fff' : TOKENS.textPrimary,
-                backgroundColor: selectedInterval === 'yearly' ? TOKENS.brand : 'transparent',
-              }}
-            >
-              Yearly
-            </Button>
-          </Box>
-        </Collapse>
-        <Collapse in={plansExpanded}>
-          {loadingPlans ? (
-            <CircularProgress size={24} sx={{ color: TOKENS.brand }} />
-          ) : (
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2, mt: 2 }}>
-              {plans
-                .filter(p => !p.interval || p.interval === selectedInterval)
-                .sort((a, b) => {
-                  const tierOrder: Record<string, number> = { trial: 0, starter: 1, growth: 2 };
-                  const aOrder = tierOrder[a.plan_key.split('_')[0]] ?? 999;
-                  const bOrder = tierOrder[b.plan_key.split('_')[0]] ?? 999;
-                  return aOrder - bOrder;
-                })
-                .map((plan) => (
-                <Box
-                  key={plan.id}
-                  sx={{
-                    bgcolor: TOKENS.bgCard,
-                    border: `1px solid ${TOKENS.border}`,
-                    borderRadius: '12px',
-                    p: 2.5,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 1.5,
-                  }}
-                >
-                  <Box>
-                    <CardTitle sx={{ color: TOKENS.textPrimary, mb: 0.5 }}>{plan.name}</CardTitle>
-                    <Box sx={{ fontSize: '1.75rem', fontWeight: 700, color: TOKENS.brand, mb: 0.5 }}>
-                      {plan.amount === 0 ? '₹0' : `₹${(plan.amount / 100).toLocaleString('en-IN')}`}
-                    </Box>
-                    <Caption sx={{ color: TOKENS.textSecondary }}>
-                      {plan.amount > 0 && `${plan.interval === 'yearly' ? 'per year' : 'per month'}`}
-                      {plan.amount === 0 && 'No card required'}
-                    </Caption>
-                  </Box>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
-                    {Array.isArray(plan.features) && plan.features.map((feature: string, idx: number) => (
-                      <Caption key={idx} sx={{ color: TOKENS.textSecondary, fontWeight: 500 }}>
-                        ✓ {feature}
-                      </Caption>
-                    ))}
-                  </Box>
-                  <ActionButton
-                    onClick={() => handleSelectPlan(plan.plan_key)}
-                    loading={processingPlan === plan.plan_key}
-                    disabled={processingPlan !== null}
-                    sx={{ width: '100%' }}
-                  >
-                    {plan.plan_key === 'trial' ? 'Start Free' : 'Select'}
-                  </ActionButton>
-                </Box>
-              ))}
-            </Box>
-          )}
-        </Collapse>
-        <PlanSelectModal
-          open={planModalOpen}
-          currentPlanKey={selectedPlanKey}
-          onClose={() => {
-            setPlanModalOpen(false);
-            setSelectedPlanKey('');
-          }}
-          onSuccess={() => {
-            setPlanModalOpen(false);
-            setPlansExpanded(false);
-            setSelectedPlanKey('');
-            onRefresh();
-          }}
-        />
+        <ActionButton onClick={() => navigate('/plans')}>View plans</ActionButton>
       </Box>
     );
   }
@@ -268,7 +169,6 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
     );
   }
 
-  const canUpgrade = status !== 'cancelled' && status !== 'completed';
   const canCancel =
     !!razorpay_subscription_id &&
     status !== 'cancelled' &&
@@ -310,25 +210,8 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
       )}
 
       {/* Plan card */}
-      <Box
-        sx={{
-          bgcolor: TOKENS.bgCard,
-          border: `1px solid ${TOKENS.border}`,
-          borderRadius: '12px',
-          p: 2.5,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        }}
-      >
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 1.5,
-            mb: 2.5,
-          }}
-        >
+      <Box sx={{ bgcolor: TOKENS.bgCard, border: `1px solid ${TOKENS.border}`, borderRadius: '12px', p: 2.5, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, mb: 2.5 }}>
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
               <CardTitle sx={{ color: TOKENS.textPrimary }}>{plan.name}</CardTitle>
@@ -338,62 +221,32 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
               {formatPrice(plan.amount, plan.currency, plan.interval)}
             </Secondary>
           </Box>
-          {canUpgrade && (
-            <ActionButton onClick={() => setPlanModalOpen(true)}>
-              Upgrade plan
-            </ActionButton>
-          )}
+          <ActionButton onClick={() => navigate('/plans')}>
+            {status === 'trial' ? 'Upgrade plan' : 'Change plan'}
+          </ActionButton>
         </Box>
 
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, 1fr)' },
-            gap: 2,
-          }}
-        >
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
           <PlanDetail label="Interviews / cycle" value={String(plan.interviews_per_cycle)} />
           <PlanDetail label="Minutes per interview" value={`${plan.minutes_per_interview}m`} />
           <PlanDetail label="Seat cap" value={plan.max_seats === null ? 'Unlimited' : String(plan.max_seats)} />
         </Box>
 
         {current_period_end && (
-          <Box
-            sx={{
-              mt: 2.5,
-              pt: 2,
-              borderTop: `1px solid ${TOKENS.border}`,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.75,
-            }}
-          >
-            <Caption sx={{ color: TOKENS.textMuted }}>
-              {is_auto_pay ? 'Renews on' : 'Access until'}
-            </Caption>
-            <Caption sx={{ color: TOKENS.textPrimary, fontWeight: 600 }}>
-              {formatDate(current_period_end)}
-            </Caption>
+          <Box sx={{ mt: 2.5, pt: 2, borderTop: `1px solid ${TOKENS.border}`, display: 'flex', alignItems: 'center', gap: 0.75 }}>
+            <Caption sx={{ color: TOKENS.textMuted }}>{is_auto_pay ? 'Renews on' : 'Access until'}</Caption>
+            <Caption sx={{ color: TOKENS.textPrimary, fontWeight: 600 }}>{formatDate(current_period_end)}</Caption>
           </Box>
         )}
       </Box>
 
       {/* Danger zone */}
       {canCancel && (
-        <Box
-          sx={{
-            bgcolor: TOKENS.bgCard,
-            border: '1px solid rgba(239,68,68,0.25)',
-            borderRadius: '12px',
-            p: 2.5,
-          }}
-        >
+        <Box sx={{ bgcolor: TOKENS.bgCard, border: '1px solid rgba(239,68,68,0.25)', borderRadius: '12px', p: 2.5 }}>
           <SubHeading sx={{ color: TOKENS.error, mb: 0.5 }}>⚠ Cancel subscription</SubHeading>
           <Secondary sx={{ color: TOKENS.textSecondary, mb: 2 }}>
             Cancelling stops future charges. Your current plan remains active until{' '}
-            <Box component="span" sx={{ fontWeight: 600, color: TOKENS.textPrimary }}>
-              {formatDate(current_period_end)}
-            </Box>
+            <Box component="span" sx={{ fontWeight: 600, color: TOKENS.textPrimary }}>{formatDate(current_period_end)}</Box>
             . After that, you'll lose access to all features.
           </Secondary>
           <Button
@@ -401,12 +254,8 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
             size="small"
             onClick={() => setCancelOpen(true)}
             sx={{
-              textTransform: 'none',
-              fontWeight: 500,
-              fontSize: '0.875rem',
-              borderRadius: '8px',
-              color: TOKENS.error,
-              borderColor: 'rgba(239,68,68,0.4)',
+              textTransform: 'none', fontWeight: 500, fontSize: '0.875rem', borderRadius: '8px',
+              color: TOKENS.error, borderColor: 'rgba(239,68,68,0.4)',
               '&:hover': { borderColor: TOKENS.error, bgcolor: 'rgba(239,68,68,0.04)' },
             }}
           >
@@ -415,52 +264,46 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
         </Box>
       )}
 
-      <PlanSelectModal
-        open={planModalOpen}
-        currentPlanKey={plan.plan_key}
-        onClose={() => setPlanModalOpen(false)}
-        onSuccess={() => { setPlanModalOpen(false); onRefresh(); }}
-      />
+      {/* Invoices — label sits outside; the table itself reuses the shared
+          DataTable so rows + column headers match the Interviews/Users tables. */}
+      <Box>
+        <CardTitle sx={{ color: TOKENS.textPrimary, mb: 1.5 }}>Invoices</CardTitle>
+        <DataTable<Invoice>
+          columns={invoiceColumns}
+          rows={invoices}
+          rowKey={(r) => r.id}
+          loading={loadingInvoices}
+          emptyText="No invoices yet."
+          pagination={{
+            page: invoicesPage,
+            pageSize: invoicesPageSize,
+            total: invoicesTotal,
+            onChange: (p, sz) => { setInvoicesPage(p); setInvoicesPageSize(sz); },
+          }}
+        />
+      </Box>
 
       {/* Cancel confirm */}
       <Dialog open={cancelOpen} onClose={() => !cancelling && setCancelOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 700, pb: 1 }}>
-          Cancel subscription?
-        </DialogTitle>
+        <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 700, pb: 1 }}>Cancel subscription?</DialogTitle>
         <DialogContent>
           <Secondary sx={{ color: TOKENS.textSecondary }}>
             Your plan stays active until{' '}
-            <Box component="strong" sx={{ color: TOKENS.textPrimary }}>
-              {formatDate(current_period_end)}
-            </Box>
+            <Box component="strong" sx={{ color: TOKENS.textPrimary }}>{formatDate(current_period_end)}</Box>
             . After that, access reverts to the free trial. This cannot be undone.
           </Secondary>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <ActionButton
-            variant="secondary"
-            onClick={() => setCancelOpen(false)}
-            disabled={cancelling}
-          >
+          <ActionButton variant="secondary" onClick={() => setCancelOpen(false)} disabled={cancelling}>
             Keep subscription
           </ActionButton>
           <Button
             onClick={handleCancel}
             disabled={cancelling}
-            startIcon={
-              cancelling
-                ? <CircularProgress size={16} thickness={5} sx={{ color: '#fff' }} />
-                : undefined
-            }
+            startIcon={cancelling ? <CircularProgress size={16} thickness={5} sx={{ color: '#fff' }} /> : undefined}
             sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              fontSize: '0.875rem',
-              borderRadius: '8px',
-              px: 2,
-              py: 1,
-              bgcolor: TOKENS.error,
-              color: '#fff',
+              textTransform: 'none', fontWeight: 600, fontSize: '0.875rem', borderRadius: '8px', px: 2, py: 1,
+              bgcolor: TOKENS.error, color: '#fff',
               '&:hover': { bgcolor: '#B91C1C' },
               '&.Mui-disabled': { bgcolor: TOKENS.border, color: TOKENS.textMuted },
             }}
@@ -477,9 +320,7 @@ function PlanDetail({ label, value }: { label: string; value: string }) {
   return (
     <Box>
       <Overline sx={{ color: TOKENS.textMuted }}>{label}</Overline>
-      <Box sx={{ fontSize: '0.9375rem', fontWeight: 600, color: TOKENS.textPrimary, mt: 0.25 }}>
-        {value}
-      </Box>
+      <Box sx={{ fontSize: '0.9375rem', fontWeight: 600, color: TOKENS.textPrimary, mt: 0.25 }}>{value}</Box>
     </Box>
   );
 }
