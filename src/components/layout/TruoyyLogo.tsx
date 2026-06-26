@@ -23,10 +23,14 @@ interface TruoyyLogoProps {
   sx?: SxProps<Theme>;
 }
 
+// Heights tuned for the new wider wordmark (~4.16:1).
+//   small  → tight/compact spots
+//   medium → sidebar header + mobile app header (kept modest so it doesn't dominate)
+//   large  → login / auth hero panels, which have room for a bigger mark
 const HEIGHT_BY_SIZE: Record<NonNullable<TruoyyLogoProps['size']>, number> = {
-  small: 28,
-  medium: 40,
-  large: 56,
+  small: 22,
+  medium: 28,
+  large: 40,
 };
 
 export function TruoyyLogo({

@@ -142,7 +142,7 @@ export function AuthCard({
                 mb: 2,
               }}
             >
-              <TruoyyLogo collapsed={false} size="large" variant="dark" />
+              <TruoyyLogo collapsed={false} size="medium" variant="dark" />
             </Box>
           )}
           {children}
@@ -217,8 +217,8 @@ function BrandSidebar() {
 
       {/* Logo — pinned top-left. Negative margin-left cancels the SVG's
           baked-in left padding so the "T" is flush with the headline. */}
-      <Box sx={{ position: 'relative', zIndex: 1, display: 'flex', ml: '-15px' }}>
-        <TruoyyLogo collapsed={false} size="large" variant="light" />
+      <Box sx={{ position: 'relative', zIndex: 1, display: 'flex' }}>
+        <TruoyyLogo collapsed={false} size="medium" variant="light" />
       </Box>
 
       {/* Hero block — vertically centered via space-between flex */}

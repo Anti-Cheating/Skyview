@@ -288,7 +288,7 @@ export function Sidebar({
             },
           }}
         >
-          <TruoyyLogo collapsed={false} size="large" />
+          <TruoyyLogo collapsed={false} size="medium" />
         </Box>
       </Box>
 
