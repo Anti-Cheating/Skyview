@@ -29,6 +29,7 @@ import {
   ExitToApp as ExitIcon,
   VideoCall as VideoCallIcon,
   CreditCard as CreditCardIcon,
+  RocketLaunch as RocketLaunchIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { SidebarProps } from './sidebar.types';
@@ -48,6 +49,7 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   People: PeopleIcon,
   ExitToApp: ExitIcon,
   CreditCard: CreditCardIcon,
+  Plans: RocketLaunchIcon,
 };
 
 const getInitials = (label: string): string => {

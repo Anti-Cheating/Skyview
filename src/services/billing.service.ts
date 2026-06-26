@@ -31,9 +31,12 @@ export const BillingService = {
     });
   },
 
-  async listInvoices(): Promise<Invoice[]> {
-    const resp = await ApiService.get<Invoice[]>('/api/payments/invoices');
-    return resp.data ?? [];
+  async listInvoices(page = 1, pageSize = 10): Promise<{ items: Invoice[]; total: number }> {
+    const offset = (page - 1) * pageSize;
+    const resp = await ApiService.get<{ items: Invoice[]; total: number }>(
+      `/api/payments/invoices?limit=${pageSize}&offset=${offset}`
+    );
+    return { items: resp.data?.items ?? [], total: resp.data?.total ?? 0 };
   },
 
   /** Fetch the server-rendered branded invoice PDF as a Blob. */
