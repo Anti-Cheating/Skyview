@@ -47,6 +47,7 @@ export default function AppLayout() {
       shared.push({ id: 'users', label: 'Users', iconName: 'People', route: '/users', badge: null });
       shared.push({ id: 'plans', label: 'Plans', iconName: 'Plans', route: '/plans', badge: null });
       shared.push({ id: 'billing', label: 'Billing', iconName: 'CreditCard', route: '/billing', badge: null });
+      shared.push({ id: 'settings', label: 'Settings', iconName: 'Settings', route: '/settings/tokens', badge: null });
     }
     // Profile is available to every authenticated user — the page itself
     // gates the Owner-only Company tab inside.
@@ -69,6 +70,7 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/users')) return 'users';
     if (location.pathname.startsWith('/plans')) return 'plans';
     if (location.pathname.startsWith('/billing')) return 'billing';
+    if (location.pathname.startsWith('/settings')) return 'settings';
     if (location.pathname.startsWith('/profile')) return 'profile';
     return 'dashboard';
   };

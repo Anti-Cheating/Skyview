@@ -29,6 +29,12 @@ import InviteAcceptPage from './components/Team/InviteAcceptPage';
 import CheckInbox from './components/Auth/CheckInbox';
 import VerifyEmail from './components/Auth/VerifyEmail';
 import OnboardingWorkspace from './components/Auth/OnboardingWorkspace';
+import SettingsLayout from './components/Settings/SettingsLayout';
+import ApiTokensPage from './components/Settings/ApiTokensPage';
+import WebhooksPage from './components/Settings/WebhooksPage';
+import SettingsBillingPage from './components/Settings/BillingPage';
+import BrandingPage from './components/Settings/BrandingPage';
+import RetentionPage from './components/Settings/RetentionPage';
 import { isCompanyManagerRole } from './config/constants';
 
 /**
@@ -68,9 +74,11 @@ function getReturnTo(): string | null {
  * Candidates are global identities with no workspace concept, so
  * they're explicitly excluded.
  */
-function userNeedsOnboarding(user: { role?: string; company_id?: string | null } | null): boolean {
+function userNeedsOnboarding(user: { role?: string; company_id?: string | null; is_super_admin?: boolean } | null): boolean {
   if (!user) return false;
   if (user.role === 'Candidate') return false;
+  // SuperAdmin is a Trueyy back-office identity — no company, no onboarding.
+  if (user.is_super_admin || user.role === 'SuperAdmin') return false;
   return !user.company_id;
 }
 
@@ -192,6 +200,15 @@ function AppRoutes() {
           <Route path="billing" element={<CompanyManagerRoute><BillingPage /></CompanyManagerRoute>} />
           <Route path="plans" element={<CompanyManagerRoute><PlansPage /></CompanyManagerRoute>} />
           <Route path="profile" element={<ProfilePage />} />
+          {/* Settings — V1 SDK platform pages (API tokens, webhooks, branding, retention, billing). */}
+          <Route path="settings" element={<CompanyManagerRoute><SettingsLayout /></CompanyManagerRoute>}>
+            <Route index element={<Navigate to="tokens" replace />} />
+            <Route path="tokens" element={<ApiTokensPage />} />
+            <Route path="webhooks" element={<WebhooksPage />} />
+            <Route path="billing" element={<SettingsBillingPage />} />
+            <Route path="branding" element={<BrandingPage />} />
+            <Route path="retention" element={<RetentionPage />} />
+          </Route>
           {/* Authenticated 404 — renders inside AppLayout so the user
               keeps the sidebar and can navigate out. */}
           <Route path="*" element={<NotFoundPage />} />
