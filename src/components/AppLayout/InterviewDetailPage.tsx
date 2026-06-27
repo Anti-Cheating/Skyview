@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Breadcrumb } from '../common/Breadcrumb';
+import { ProcessService } from '../../services/process.service';
+import type { ProcessDetail } from '../../types/process.types';
 import {
   Box,
   Typography,
-  Chip,
   Button,
   Avatar,
   CircularProgress,
@@ -13,7 +15,6 @@ import {
   Skeleton,
 } from '@mui/material';
 import {
-  ArrowBack as BackIcon,
   Schedule as ScheduleIcon,
   AccessTime as DurationIcon,
   PersonOutline as PersonOutlineIcon,
@@ -49,50 +50,6 @@ function formatCreatedAt(iso: string) {
     day: 'numeric',
     year: 'numeric',
   });
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const isCompleted = status === 'COMPLETED';
-  const isActive = status === 'ACTIVE';
-  const isCancelled = status === 'CANCELLED';
-  const color = isCompleted ? '#047857' : isActive ? '#1D4ED8' : isCancelled ? '#DC2626' : '#374151';
-  const bg = isCompleted ? 'rgba(4,120,87,0.1)' : isActive ? 'rgba(29,78,216,0.1)' : isCancelled ? 'rgba(220,38,38,0.1)' : '#F3F4F6';
-  const border = isCompleted
-    ? 'rgba(4,120,87,0.25)'
-    : isActive
-    ? 'rgba(29,78,216,0.25)'
-    : isCancelled
-    ? 'rgba(220,38,38,0.25)'
-    : '#E5E7EB';
-
-  const label =
-    status === 'COMPLETED'
-      ? 'Completed'
-      : status === 'ACTIVE'
-      ? 'Active'
-      : status === 'CANCELLED'
-      ? 'Cancelled'
-      : status === 'SCHEDULED'
-      ? 'Scheduled'
-      : status;
-
-  return (
-    <Chip
-      label={label}
-      size="small"
-      sx={{
-        fontSize: '0.75rem',
-        height: 22,
-        bgcolor: bg,
-        color,
-        fontWeight: 600,
-        border: '1px solid',
-        borderColor: border,
-        borderRadius: '6px',
-        '& .MuiChip-label': { px: 1 },
-      }}
-    />
-  );
 }
 
 function FieldRow({
@@ -314,10 +271,14 @@ function CandidateCard({ session }: { session: InterviewSession }) {
 }
 
 export default function InterviewDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  // Round screens live under /interviews/:processId/rounds/:roundId — read the
+  // round id (a round IS a session). `id` keeps the rest of the component working.
+  const { roundId, processId } = useParams<{ roundId: string; processId: string }>();
+  const id = roundId;
   const navigate = useNavigate();
   const { showError } = useSnackbar();
   const [session, setSession] = useState<InterviewSession | null>(null);
+  const [proc, setProc] = useState<ProcessDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [analysing, setAnalysing] = useState(false);
@@ -337,6 +298,10 @@ export default function InterviewDetailPage() {
   // Last status the embedded panel reported — drives the tab's loader and
   // when to reveal the report container.
   const [panelStatus, setPanelStatus] = useState<'loading' | 'ready' | 'error' | null>(null);
+
+  useEffect(() => {
+    if (processId) ProcessService.getById(processId).then((r) => setProc(r.data ?? null)).catch(() => {});
+  }, [processId]);
 
   useEffect(() => {
     if (!id) return;
@@ -458,25 +423,6 @@ export default function InterviewDetailPage() {
         overflow: 'hidden',
       }}
     >
-      {/* Back nav */}
-      <Box
-        component={Link}
-        to="/interviews"
-        sx={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 0.5,
-          color: '#6B7280',
-          textDecoration: 'none',
-          fontSize: '0.875rem',
-          width: 'fit-content',
-          '&:hover': { color: '#374151' },
-        }}
-      >
-        <BackIcon sx={{ fontSize: 18 }} />
-        Interviews
-      </Box>
-
       {/* Header — title on the left, session actions on the right (the old
           standalone action bar card is gone). */}
       <Box
@@ -488,11 +434,30 @@ export default function InterviewDetailPage() {
           flexWrap: 'wrap',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-          <Typography sx={{ fontSize: '1.75rem', fontWeight: 700, color: '#111827', lineHeight: 1.2 }}>
-            {session.title || 'Untitled Interview'}
-          </Typography>
-          <StatusBadge status={session.status} />
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            <Typography sx={{ fontSize: '1.75rem', fontWeight: 700, color: '#111827', lineHeight: 1.2 }}>
+              {session.title || 'Untitled Interview'}
+            </Typography>
+          </Box>
+          {/* Breadcrumb sits below the title */}
+          <Box sx={{ mt: 0.75 }}>
+            <Breadcrumb
+              items={[
+                { label: 'Interviews', to: '/interviews' },
+                {
+                  label: proc ? proc.role : 'Interview',
+                  to: `/interviews/${processId}`,
+                },
+                {
+                  label: (() => {
+                    const r = proc?.rounds.find((x) => x.id === id);
+                    return r?.round_name ?? 'Round';
+                  })(),
+                },
+              ]}
+            />
+          </Box>
         </Box>
 
         {/* Disabled Start is hidden — in the heading it would just be
@@ -500,7 +465,7 @@ export default function InterviewDetailPage() {
         {canStart && (
           <Button
             variant="contained"
-            onClick={() => navigate(`/interviews/${session.id}/monitor`)}
+            onClick={() => navigate(`/interviews/${processId}/rounds/${session.id}/monitor`)}
             startIcon={<StartIcon sx={{ fontSize: 18 }} />}
             sx={{
               fontWeight: 700,

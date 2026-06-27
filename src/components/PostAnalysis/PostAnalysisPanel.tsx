@@ -351,8 +351,8 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   embedded = false,
   onStatusChange,
 }) => {
-  const { id, sessionId: sessionIdLegacy } = useParams<{ id?: string; sessionId?: string }>();
-  const sessionId = sessionIdProp ?? id ?? sessionIdLegacy;
+  const { roundId, processId, id, sessionId: sessionIdLegacy } = useParams<{ roundId?: string; processId?: string; id?: string; sessionId?: string }>();
+  const sessionId = sessionIdProp ?? roundId ?? id ?? sessionIdLegacy;
   const [searchParams] = useSearchParams();
   const mockScenario = searchParams.get("mock") as MockScenario | null;
   const pendingPoll = pendingProp ?? searchParams.get("pending") === "1";
@@ -483,7 +483,7 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
     return (
       <div className="pa-state pa-state-error">
         <p>{error}</p>
-        {!embedded && sessionId && <Link to={`/interviews/${sessionId}`} className="pa-back-link">Back to interview</Link>}
+        {!embedded && sessionId && <Link to={`/interviews/${processId}/rounds/${sessionId}`} className="pa-back-link">Back to interview</Link>}
       </div>
     );
   }
@@ -526,7 +526,7 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
       {/* ── Nav ─────────────────────────────────────────────────────────── */}
       <nav className="pa-nav no-print">
         {!embedded ? (
-          <Link to={`/interviews/${sessionId}`} className="pa-nav-back">
+          <Link to={`/interviews/${processId}/rounds/${sessionId}`} className="pa-nav-back">
             <BackIcon sx={{ fontSize: 15 }} /> Back to Interview
           </Link>
         ) : <span />}
