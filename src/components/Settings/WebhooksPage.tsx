@@ -593,8 +593,8 @@ export default function WebhooksPage() {
   // ── Render ────────────────────────────────────────────────────────
 
   return (
-    <Box>
-      {/* Section header — NOT a PageTitle (SettingsLayout owns that). */}
+    <Box sx={{ p: { xs: 2, md: 3 } }}>
+      {/* Section header — now a top-level page (standalone sidebar item). */}
       <Stack
         direction="row"
         justifyContent="space-between"

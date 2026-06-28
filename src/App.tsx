@@ -29,12 +29,19 @@ import InviteAcceptPage from './components/Team/InviteAcceptPage';
 import CheckInbox from './components/Auth/CheckInbox';
 import VerifyEmail from './components/Auth/VerifyEmail';
 import OnboardingWorkspace from './components/Auth/OnboardingWorkspace';
-import SettingsLayout from './components/Settings/SettingsLayout';
 import ApiTokensPage from './components/Settings/ApiTokensPage';
 import WebhooksPage from './components/Settings/WebhooksPage';
-import SettingsBillingPage from './components/Settings/BillingPage';
-import BrandingPage from './components/Settings/BrandingPage';
-import RetentionPage from './components/Settings/RetentionPage';
+import AdminRoute from './components/Admin/AdminRoute';
+import AdminLayout from './components/Admin/AdminLayout';
+import AdminDashboardPage from './components/Admin/DashboardPage';
+import AdminCompaniesPage from './components/Admin/CompaniesPage';
+import AdminCompanyDetailPage from './components/Admin/CompanyDetailPage';
+import AdminBillingPage from './components/Admin/BillingPage';
+import AdminLicensingPage from './components/Admin/LicensingPage';
+import AdminOpsPage from './components/Admin/OpsPage';
+import AdminAuditPage from './components/Admin/AuditPage';
+import AdminContactQueriesPage from './components/Admin/ContactQueriesPage';
+import AdminPlansPage from './components/Admin/PlansPage';
 import { isCompanyManagerRole } from './config/constants';
 
 /**
@@ -200,17 +207,27 @@ function AppRoutes() {
           <Route path="billing" element={<CompanyManagerRoute><BillingPage /></CompanyManagerRoute>} />
           <Route path="plans" element={<CompanyManagerRoute><PlansPage /></CompanyManagerRoute>} />
           <Route path="profile" element={<ProfilePage />} />
-          {/* Settings — V1 SDK platform pages (API tokens, webhooks, branding, retention, billing). */}
-          <Route path="settings" element={<CompanyManagerRoute><SettingsLayout /></CompanyManagerRoute>}>
-            <Route index element={<Navigate to="tokens" replace />} />
-            <Route path="tokens" element={<ApiTokensPage />} />
-            <Route path="webhooks" element={<WebhooksPage />} />
-            <Route path="billing" element={<SettingsBillingPage />} />
-            <Route path="branding" element={<BrandingPage />} />
-            <Route path="retention" element={<RetentionPage />} />
-          </Route>
+          {/* SDK platform pages — now top-level sidebar items (out of Settings). */}
+          <Route path="tokens" element={<CompanyManagerRoute><ApiTokensPage /></CompanyManagerRoute>} />
+          <Route path="webhooks" element={<CompanyManagerRoute><WebhooksPage /></CompanyManagerRoute>} />
           {/* Authenticated 404 — renders inside AppLayout so the user
               keeps the sidebar and can navigate out. */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+        {/* Super Admin console — separate layout + sidebar, System Admin only.
+            Additive; the customer app above is untouched. */}
+        <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<AdminDashboardPage />} />
+          <Route path="companies" element={<AdminCompaniesPage />} />
+          <Route path="companies/:id" element={<AdminCompanyDetailPage />} />
+          <Route path="billing" element={<AdminBillingPage />} />
+          <Route path="licensing" element={<AdminLicensingPage />} />
+          <Route path="ops" element={<AdminOpsPage />} />
+          <Route path="audit" element={<AdminAuditPage />} />
+          <Route path="contact" element={<AdminContactQueriesPage />} />
+          <Route path="plans" element={<AdminPlansPage />} />
+          <Route path="profile" element={<ProfilePage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
         <Route

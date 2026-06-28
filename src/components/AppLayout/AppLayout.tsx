@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Box, IconButton, useMediaQuery, useTheme } from '@mui/material';
 import { Menu as MenuIcon } from '@mui/icons-material';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { TruoyyLogo } from '../layout/TruoyyLogo';
 import { TOKENS } from '../../theme';
@@ -9,7 +9,7 @@ import { Sidebar } from '../layout/Sidebar';
 import type { LogoConfig, NavItem, ProfileConfig } from '../layout/sidebar.types';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserDisplayName } from '../../utils/user.utils';
-import { USER_ROLES, isCompanyManagerRole } from '../../config/constants';
+import { USER_ROLES, isCompanyManagerRole, isSystemAdmin } from '../../config/constants';
 
 const DRAWER_WIDTH = 280;
 
@@ -47,10 +47,11 @@ export default function AppLayout() {
       shared.push({ id: 'users', label: 'Users', iconName: 'People', route: '/users', badge: null });
       shared.push({ id: 'plans', label: 'Plans', iconName: 'Plans', route: '/plans', badge: null });
       shared.push({ id: 'billing', label: 'Billing', iconName: 'CreditCard', route: '/billing', badge: null });
-      shared.push({ id: 'settings', label: 'Settings', iconName: 'Settings', route: '/settings/tokens', badge: null });
+      shared.push({ id: 'tokens', label: 'API Tokens', iconName: 'Settings', route: '/tokens', badge: null });
+      shared.push({ id: 'webhooks', label: 'Webhooks', iconName: 'HelpOutline', route: '/webhooks', badge: null });
     }
     // Profile is available to every authenticated user — the page itself
-    // gates the Owner-only Company tab inside.
+    // gates the Owner-only Company section inside.
     shared.push({ id: 'profile', label: 'Profile', iconName: 'Person', route: '/profile', badge: null });
     return shared;
   })();
@@ -70,7 +71,8 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/users')) return 'users';
     if (location.pathname.startsWith('/plans')) return 'plans';
     if (location.pathname.startsWith('/billing')) return 'billing';
-    if (location.pathname.startsWith('/settings')) return 'settings';
+    if (location.pathname.startsWith('/tokens')) return 'tokens';
+    if (location.pathname.startsWith('/webhooks')) return 'webhooks';
     if (location.pathname.startsWith('/profile')) return 'profile';
     return 'dashboard';
   };
@@ -82,6 +84,9 @@ export default function AppLayout() {
     },
     [navigate, isMobile]
   );
+
+  // System Admins live entirely in the /admin console — never the customer shell.
+  if (isSystemAdmin(userRole)) return <Navigate to="/admin" replace />;
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>

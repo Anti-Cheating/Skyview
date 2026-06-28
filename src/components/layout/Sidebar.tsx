@@ -30,6 +30,11 @@ import {
   VideoCall as VideoCallIcon,
   CreditCard as CreditCardIcon,
   RocketLaunch as RocketLaunchIcon,
+  Business as BusinessIcon,
+  VpnKey as VpnKeyIcon,
+  Hub as HubIcon,
+  History as HistoryIcon,
+  Mail as MailIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { SidebarProps } from './sidebar.types';
@@ -50,6 +55,11 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   ExitToApp: ExitIcon,
   CreditCard: CreditCardIcon,
   Plans: RocketLaunchIcon,
+  Business: BusinessIcon,
+  VpnKey: VpnKeyIcon,
+  Hub: HubIcon,
+  History: HistoryIcon,
+  Mail: MailIcon,
 };
 
 const getInitials = (label: string): string => {

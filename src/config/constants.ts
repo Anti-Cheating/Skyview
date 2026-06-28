@@ -44,6 +44,11 @@ export function isCompanyManagerRole(role?: string | null): boolean {
   return !!role && COMPANY_MANAGER_ROLES.includes(role);
 }
 
+/** True ONLY for Trueyy-internal System Admin — gates the /admin console. */
+export function isSystemAdmin(role?: string | null): boolean {
+  return role === USER_ROLES.SYSTEM_ADMIN;
+}
+
 // Storage Keys
 export const STORAGE_KEYS = {
   ACCESS_TOKEN: 'auth_access_token',

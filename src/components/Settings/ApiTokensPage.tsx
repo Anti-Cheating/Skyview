@@ -286,7 +286,7 @@ export default function ApiTokensPage() {
   );
 
   return (
-    <Box>
+    <Box sx={{ p: { xs: 2, md: 3 } }}>
       <Stack
         direction="row"
         alignItems="center"
