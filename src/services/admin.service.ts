@@ -33,8 +33,10 @@ export const AdminService = {
   // ── licensing ──
   licenses: () => ApiService.get('/admin/licenses'),
   issueLicense: (body: { company_id: string; interviews: number; expires_at: string; plan?: string }) => ApiService.post('/admin/licenses', body),
+  onboardEnterprise: (body: { company_name: string; billing_email?: string; interviews: number; expires_at: string; plan?: string }) => ApiService.post('/admin/licenses/onboard', body),
   topupLicense: (company: string, add: number) => ApiService.post(`/admin/licenses/${company}/topup`, { add }),
   suspendLicense: (company: string) => ApiService.post(`/admin/licenses/${company}/suspend`),
+  licenseToken: (company: string) => ApiService.get(`/admin/licenses/${company}/token`),
   licenseUsage: (company: string) => ApiService.get(`/admin/licenses/${company}/usage`),
 
   // ── ops / support / audit ──
