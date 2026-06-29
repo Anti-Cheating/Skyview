@@ -46,6 +46,11 @@ export interface InterviewSession {
   id: string;
   title: string;
   description?: string;
+  // Multi-round context: job role (from the parent process) + this round's
+  // name/order. Null on legacy flat sessions.
+  role?: string | null;
+  round_name?: string | null;
+  round_order?: number | null;
   created_by: string;
   scheduled_start_at: string;
   scheduled_end_at: string;

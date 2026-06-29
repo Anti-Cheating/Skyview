@@ -13,6 +13,7 @@ import Dashboard from './components/Dashboard/Dashboard';
 import AppLayout from './components/AppLayout/AppLayout';
 import AppDashboard from './components/AppLayout/AppDashboard';
 import ProcessListPage from './components/AppLayout/ProcessListPage';
+import AppInterviewList from './components/AppLayout/AppInterviewList';
 import CreateProcessPage from './components/AppLayout/CreateProcessPage';
 import ProcessDetailPage from './components/AppLayout/ProcessDetailPage';
 import InterviewDetailPage from './components/AppLayout/InterviewDetailPage';
@@ -147,6 +148,21 @@ function CompanyManagerRoute({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * /interviews is role-aware:
+ *  - Company managers (Owner/Admin/System Admin) → the process list (multi-round
+ *    management view).
+ *  - Everyone else (candidates, members) → their OWN scoped interview cards
+ *    (session view, server-filtered to the signed-in user).
+ * Restores candidate/member access that the multi-round refactor inadvertently
+ * locked behind CompanyManagerRoute (which redirected them to the dashboard).
+ */
+function InterviewsIndex() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <LoadingSpinner fullScreen message="Loading..." />;
+  return isCompanyManagerRole(user?.role) ? <ProcessListPage /> : <AppInterviewList />;
+}
+
+/**
  * Auth route — redirects away from login/signup if already authenticated.
  * Honors ?returnTo= so PrivateRoute → /login → original destination works.
  */
@@ -194,7 +210,7 @@ function AppRoutes() {
         <Route path="/" element={<PrivateRoute><AppLayout /></PrivateRoute>}>
           <Route index element={<AppDashboard />} />
           {/* Parent "Interview" (process) — manager-managed list + create */}
-          <Route path="interviews" element={<CompanyManagerRoute><ProcessListPage /></CompanyManagerRoute>} />
+          <Route path="interviews" element={<InterviewsIndex />} />
           <Route path="interviews/new" element={<CompanyManagerRoute><CreateProcessPage /></CompanyManagerRoute>} />
           <Route path="interviews/:processId" element={<ProcessDetailPage />} />
           {/* Round screens — a round is a session, so these reuse the existing pages */}
