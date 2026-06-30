@@ -21,6 +21,8 @@ export interface CreateInterviewInput {
   // The interviewer-supplied meeting URL (Zoom / Meet / Teams / …) —
   // Cortex parses the provider from it.
   meeting_link: string;
+  // Multi-round: editable round label on the underlying session.
+  round_name?: string;
   interview_session_participants: CreateInterviewParticipantInput[];
 }
 

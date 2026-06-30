@@ -12,8 +12,10 @@ import ResetPassword from './components/Auth/ResetPassword';
 import Dashboard from './components/Dashboard/Dashboard';
 import AppLayout from './components/AppLayout/AppLayout';
 import AppDashboard from './components/AppLayout/AppDashboard';
+import ProcessListPage from './components/AppLayout/ProcessListPage';
 import AppInterviewList from './components/AppLayout/AppInterviewList';
-import CreateInterviewPage from './components/AppLayout/CreateInterviewPage';
+import CreateProcessPage from './components/AppLayout/CreateProcessPage';
+import ProcessDetailPage from './components/AppLayout/ProcessDetailPage';
 import InterviewDetailPage from './components/AppLayout/InterviewDetailPage';
 import { PostAnalysisPanel } from './components/PostAnalysis';
 import PreviewPage from './components/PostAnalysis/PreviewPage';
@@ -28,6 +30,19 @@ import InviteAcceptPage from './components/Team/InviteAcceptPage';
 import CheckInbox from './components/Auth/CheckInbox';
 import VerifyEmail from './components/Auth/VerifyEmail';
 import OnboardingWorkspace from './components/Auth/OnboardingWorkspace';
+import ApiTokensPage from './components/Settings/ApiTokensPage';
+import WebhooksPage from './components/Settings/WebhooksPage';
+import AdminRoute from './components/Admin/AdminRoute';
+import AdminLayout from './components/Admin/AdminLayout';
+import AdminDashboardPage from './components/Admin/DashboardPage';
+import AdminCompaniesPage from './components/Admin/CompaniesPage';
+import AdminCompanyDetailPage from './components/Admin/CompanyDetailPage';
+import AdminBillingPage from './components/Admin/BillingPage';
+import AdminLicensingPage from './components/Admin/LicensingPage';
+import AdminOpsPage from './components/Admin/OpsPage';
+import AdminAuditPage from './components/Admin/AuditPage';
+import AdminContactQueriesPage from './components/Admin/ContactQueriesPage';
+import AdminPlansPage from './components/Admin/PlansPage';
 import { isCompanyManagerRole } from './config/constants';
 
 /**
@@ -67,9 +82,11 @@ function getReturnTo(): string | null {
  * Candidates are global identities with no workspace concept, so
  * they're explicitly excluded.
  */
-function userNeedsOnboarding(user: { role?: string; company_id?: string | null } | null): boolean {
+function userNeedsOnboarding(user: { role?: string; company_id?: string | null; is_super_admin?: boolean } | null): boolean {
   if (!user) return false;
   if (user.role === 'Candidate') return false;
+  // SuperAdmin is a Trueyy back-office identity — no company, no onboarding.
+  if (user.is_super_admin || user.role === 'SuperAdmin') return false;
   return !user.company_id;
 }
 
@@ -131,6 +148,21 @@ function CompanyManagerRoute({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * /interviews is role-aware:
+ *  - Company managers (Owner/Admin/System Admin) → the process list (multi-round
+ *    management view).
+ *  - Everyone else (candidates, members) → their OWN scoped interview cards
+ *    (session view, server-filtered to the signed-in user).
+ * Restores candidate/member access that the multi-round refactor inadvertently
+ * locked behind CompanyManagerRoute (which redirected them to the dashboard).
+ */
+function InterviewsIndex() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <LoadingSpinner fullScreen message="Loading..." />;
+  return isCompanyManagerRole(user?.role) ? <ProcessListPage /> : <AppInterviewList />;
+}
+
+/**
  * Auth route — redirects away from login/signup if already authenticated.
  * Honors ?returnTo= so PrivateRoute → /login → original destination works.
  */
@@ -177,19 +209,41 @@ function AppRoutes() {
         {/* Full web app with sidebar — nested routes render in AppLayout's <Outlet /> */}
         <Route path="/" element={<PrivateRoute><AppLayout /></PrivateRoute>}>
           <Route index element={<AppDashboard />} />
-          <Route path="interviews" element={<AppInterviewList />} />
-          <Route path="interviews/new" element={<CreateInterviewPage />} />
-          <Route path="interviews/:id" element={<InterviewDetailPage />} />
-          <Route path="interviews/:id/analysis" element={<PostAnalysisPanel />} />
-          <Route path="interviews/:id/edit" element={<CreateInterviewPage />} />
+          {/* Parent "Interview" (process) — manager-managed list + create */}
+          <Route path="interviews" element={<InterviewsIndex />} />
+          <Route path="interviews/new" element={<CompanyManagerRoute><CreateProcessPage /></CompanyManagerRoute>} />
+          <Route path="interviews/:processId" element={<ProcessDetailPage />} />
+          {/* Round screens — a round is a session, so these reuse the existing pages */}
+          <Route path="interviews/:processId/rounds/:roundId" element={<InterviewDetailPage />} />
+          <Route path="interviews/:processId/rounds/:roundId/analysis" element={<PostAnalysisPanel />} />
+          <Route path="interviews/:processId/rounds/:roundId/monitor" element={<MonitoringView />} />
+          {/* Candidate join link (from invite emails) — uses the round/session id directly */}
           <Route path="interviews/:id/join" element={<CandidateJoinPage />} />
-          <Route path="interviews/:id/monitor" element={<MonitoringView />} />
           <Route path="users" element={<CompanyManagerRoute><TeamPage /></CompanyManagerRoute>} />
           <Route path="billing" element={<CompanyManagerRoute><BillingPage /></CompanyManagerRoute>} />
           <Route path="plans" element={<CompanyManagerRoute><PlansPage /></CompanyManagerRoute>} />
           <Route path="profile" element={<ProfilePage />} />
+          {/* SDK platform pages — now top-level sidebar items (out of Settings). */}
+          <Route path="tokens" element={<CompanyManagerRoute><ApiTokensPage /></CompanyManagerRoute>} />
+          <Route path="webhooks" element={<CompanyManagerRoute><WebhooksPage /></CompanyManagerRoute>} />
           {/* Authenticated 404 — renders inside AppLayout so the user
               keeps the sidebar and can navigate out. */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+        {/* Super Admin console — separate layout + sidebar, System Admin only.
+            Additive; the customer app above is untouched. */}
+        <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<AdminDashboardPage />} />
+          <Route path="companies" element={<AdminCompaniesPage />} />
+          <Route path="companies/:id" element={<AdminCompanyDetailPage />} />
+          <Route path="billing" element={<AdminBillingPage />} />
+          <Route path="licensing" element={<AdminLicensingPage />} />
+          <Route path="ops" element={<AdminOpsPage />} />
+          <Route path="audit" element={<AdminAuditPage />} />
+          <Route path="contact" element={<AdminContactQueriesPage />} />
+          <Route path="plans" element={<AdminPlansPage />} />
+          <Route path="profile" element={<ProfilePage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
         <Route

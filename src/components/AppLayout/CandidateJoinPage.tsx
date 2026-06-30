@@ -115,6 +115,8 @@ export default function CandidateJoinPage() {
   useEffect(() => {
     if (!helper.installed) return;
     if (!interview || !interviewId || !user?.id) return;
+    // Never bind the helper to a terminal session — it can't be joined.
+    if (['CANCELLED', 'COMPLETED', 'ENDED'].includes(interview.status)) return;
     // Skip if already bound to this session
     if (helper.status?.session_id === interviewId) return;
 
@@ -205,6 +207,19 @@ export default function CandidateJoinPage() {
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="error">{error || 'Interview not found'}</Alert>
+      </Box>
+    );
+  }
+
+  // Guard the direct-from-email link: a cancelled / completed / ended interview
+  // can't be joined, so show a clear message instead of the join flow.
+  if (['CANCELLED', 'COMPLETED', 'ENDED'].includes(interview.status)) {
+    const label = interview.status === 'CANCELLED' ? 'cancelled' : interview.status === 'COMPLETED' ? 'completed' : 'ended';
+    return (
+      <Box sx={{ p: 3, maxWidth: 520, mx: 'auto', mt: 8 }}>
+        <Alert severity="info">
+          This interview has been {label} and can no longer be joined. Please contact your interviewer if you believe this is a mistake.
+        </Alert>
       </Box>
     );
   }

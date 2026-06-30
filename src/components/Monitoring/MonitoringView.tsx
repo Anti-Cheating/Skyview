@@ -46,7 +46,8 @@ const LIGHT_BORDER = TOKENS.border;
 const BRAND = TOKENS.brand;
 
 export default function MonitoringView() {
-  const { id: interviewId } = useParams<{ id: string }>();
+  const { roundId } = useParams<{ roundId: string }>();
+  const interviewId = roundId;
   const navigate = useNavigate();
   const { user } = useAuth();
   const userRole = user?.role || USER_ROLES.CANDIDATE;

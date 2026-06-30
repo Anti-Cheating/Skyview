@@ -3,6 +3,33 @@ import { ENV } from '../config/env';
 import { STORAGE_KEYS } from '../config/constants';
 import type { Plan, Subscription, CheckoutCreds, VerifyInput, Invoice } from '../types/billing.types';
 
+/** V1 customer-billing usage (shared-DB tenants). */
+export interface UsageInfo {
+  current: number;
+  plan: string;
+  plan_limit: number;
+  cap_policy: string;
+  overage_per_session_usd: number;
+  estimated: number;
+  last_reset_at: string;
+  billing_contact_email: string | null;
+  is_v2: boolean;
+}
+
+/** V1 customer-billing invoice (/api/companies/me/invoices). Distinct from
+ *  the Razorpay subscription Invoice in billing.types. */
+export interface BillingInvoice {
+  id: string;
+  period: string;
+  total_usd: string;
+  status: string;
+  due_at: string;
+  paid_at: string | null;
+  pdf_url: string | null;
+  paid_via: string | null;
+  payment_reference: string | null;
+}
+
 export const BillingService = {
   async listPlans(): Promise<Plan[]> {
     const resp = await ApiService.get<Plan[]>('/api/payments/plans');
@@ -48,4 +75,10 @@ export const BillingService = {
     if (!resp.ok) throw new Error('Failed to generate invoice');
     return resp.blob();
   },
+
+  // ── V1 customer-billing settings (/api/companies/me/*) ──
+  usage: () => ApiService.get<UsageInfo>('/api/companies/me/usage'),
+  invoices: () => ApiService.get<{ invoices: BillingInvoice[] }>('/api/companies/me/invoices'),
+  updateBillingContact: (email: string | null) =>
+    ApiService.patch('/api/companies/me/billing-contact', { billing_contact_email: email }),
 };

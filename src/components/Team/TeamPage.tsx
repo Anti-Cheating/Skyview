@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
+  Stack,
   Alert,
   Tabs,
   Tab,
@@ -25,7 +26,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  MenuItem,
   TextField,
   InputAdornment,
 } from '@mui/material';
@@ -811,14 +811,19 @@ export default function TeamPage() {
         </MenuItemMui>
       </Menu>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 700, pb: 1 }}>Invite teammate</DialogTitle>
+      <Dialog
+        open={dialogOpen}
+        onClose={() => !dialogBusy && setDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Invite teammate</DialogTitle>
         <DialogContent>
-          <Secondary sx={{ color: TOKENS.textSecondary, mb: 2.5 }}>
-            We'll email the invitee a link to join as the selected role. Admins can manage the
-            team; Members can run interviews.
-          </Secondary>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Secondary sx={{ color: TOKENS.textSecondary }}>
+              We'll email the invitee a link to join as the selected role. Admins can manage the
+              team; Members can run interviews.
+            </Secondary>
             <FormField
               autoFocus
               label="Email"
@@ -835,11 +840,12 @@ export default function TeamPage() {
               value={dialogRole}
               onChange={(e) => setDialogRole(e.target.value as InviteRole)}
               disabled={dialogBusy}
+              SelectProps={{ native: true }}
             >
-              <MenuItem value="Admin">Admin</MenuItem>
-              <MenuItem value="Member">Member</MenuItem>
+              <option value="Admin">Admin</option>
+              <option value="Member">Member</option>
             </FormField>
-          </Box>
+          </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <ActionButton
@@ -847,14 +853,14 @@ export default function TeamPage() {
             onClick={() => setDialogOpen(false)}
             disabled={dialogBusy}
           >
-            Close
+            Cancel
           </ActionButton>
           <ActionButton
             onClick={handleSubmit}
             loading={dialogBusy}
             disabled={!dialogEmail.trim()}
           >
-            {dialogBusy ? 'Sending…' : 'Send invitation'}
+            Send invite
           </ActionButton>
         </DialogActions>
       </Dialog>

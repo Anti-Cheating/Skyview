@@ -79,15 +79,21 @@ export default function AppInterviewCard({ interview, userRole, onJoin, onEdit, 
   //   - Completed                → "View Details"
   //   - Otherwise (candidate + application) → "Join in Falcon App"
   const isCompleted = interview.status === 'COMPLETED';
+  const isCancelled = interview.status === 'CANCELLED';
+  // A cancelled or completed session is closed — nobody can join/monitor it.
+  const isClosed = isCompleted || isCancelled;
   const isInterviewer = isStaffRole(userRole);
   const isCandidate = userRole === USER_ROLES.CANDIDATE;
-  const canMonitor = isInterviewer && !isCompleted;
-  const canCandidateJoin = isCandidate && !isCompleted;
+  const canMonitor = isInterviewer && !isClosed;
+  const canCandidateJoin = isCandidate && !isClosed;
   const canJoin = canMonitor || canCandidateJoin;
 
   let actionLabel: string;
   let tooltipMessage: string;
-  if (isCompleted) {
+  if (isCancelled) {
+    actionLabel = 'Cancelled';
+    tooltipMessage = 'This interview was cancelled';
+  } else if (isCompleted) {
     actionLabel = 'View Details';
     tooltipMessage = '';
   } else if (canMonitor) {
@@ -377,6 +383,28 @@ export default function AppInterviewCard({ interview, userRole, onJoin, onEdit, 
 
         {/* Details Section */}
         <Box sx={{ mb: 2, flex: 1 }}>
+          {/* Job role (from the parent interview process) + which round this is.
+              Null on legacy flat sessions, so the row only shows when present. */}
+          {interview.role && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+              <WorkIcon sx={{ fontSize: 18, color: 'primary.main' }} />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ fontSize: '0.688rem', color: '#757575', display: 'block', mb: 0.25 }}
+                >
+                  Role
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ fontSize: '0.813rem', color: '#212121', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                >
+                  {interview.role}
+                  {interview.round_order != null ? ` · Round ${interview.round_order}` : ''}
+                </Typography>
+              </Box>
+            </Box>
+          )}
           {/* Candidate-only: which company is interviewing them. The
               briefcase header icon hints at it but a name is what
               actually disambiguates "Frontend Round 1" between

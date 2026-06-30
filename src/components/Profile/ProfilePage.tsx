@@ -16,6 +16,7 @@ import { TOKENS } from '../../theme';
 import { useAuth } from '../../contexts/AuthContext';
 import PersonalTab from './PersonalTab';
 import CompanyTab from './CompanyTab';
+import BrandingPage from '../Settings/BrandingPage';
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -59,6 +60,13 @@ export default function ProfilePage() {
         {showCompanyCard && <CompanyTab companyId={user.company_id!} />}
         <PersonalTab />
       </Box>
+
+      {/* Branding card — logo + brand colour. Owners only (it edits the company). */}
+      {showCompanyCard && (
+        <Box sx={{ mt: 2.5 }}>
+          <BrandingPage />
+        </Box>
+      )}
     </Box>
   );
 }
