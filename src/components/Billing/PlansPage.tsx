@@ -179,7 +179,10 @@ export default function PlansPage() {
                       )}
                       {isPending && (
                         <Tooltip title="Payment pending">
-                          <WarningAmberRoundedIcon sx={{ fontSize: 18, color: '#FACC15' }} />
+                          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.375 }}>
+                            <WarningAmberRoundedIcon sx={{ fontSize: 16, color: '#B45309' }} />
+                            <Caption sx={{ color: '#B45309', fontWeight: 700 }}>Pending</Caption>
+                          </Box>
                         </Tooltip>
                       )}
                     </Box>
