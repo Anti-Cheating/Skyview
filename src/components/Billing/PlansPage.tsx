@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Tabs, Tab, CircularProgress, Chip } from '@mui/material';
+import { Box, Tabs, Tab, CircularProgress, Chip, Tooltip } from '@mui/material';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import { motion } from 'framer-motion';
 import { TOKENS } from '../../theme';
 import { PageTitle, CardTitle, Caption, Secondary } from '../layout/Typography';
@@ -160,7 +161,7 @@ export default function PlansPage() {
                   key={plan.id}
                   sx={{
                     bgcolor: isCurrent ? TOKENS.brandBg : TOKENS.bgCard,
-                    border: `1px solid ${isCurrent ? TOKENS.brand : isPending ? '#FACC15' : TOKENS.border}`,
+                    border: `1px solid ${isCurrent ? TOKENS.brand : TOKENS.border}`,
                     borderRadius: '12px',
                     p: 2.5,
                     display: 'flex',
@@ -177,7 +178,9 @@ export default function PlansPage() {
                         <Chip label="Current" size="small" sx={{ bgcolor: TOKENS.brand, color: '#fff', fontWeight: 700, fontSize: '0.6rem', height: 18 }} />
                       )}
                       {isPending && (
-                        <Chip label="Payment pending" size="small" sx={{ bgcolor: '#FACC15', color: '#B45309', fontWeight: 700, fontSize: '0.6rem', height: 18 }} />
+                        <Tooltip title="Payment pending">
+                          <WarningAmberRoundedIcon sx={{ fontSize: 18, color: '#FACC15' }} />
+                        </Tooltip>
                       )}
                     </Box>
                     <Box sx={{ fontSize: '1.75rem', fontWeight: 700, color: TOKENS.brand, mb: 0.5 }}>
