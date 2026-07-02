@@ -233,7 +233,14 @@ export default function PlansPage() {
                     onClick={() => isPending ? handleCompletePayment(plan) : handleSelectPlan(plan)}
                     loading={isBusy}
                     disabled={isCurrent || (anyBusy && !isBusy)}
-                    sx={{ width: '100%' }}
+                    sx={{
+                      width: '100%',
+                      ...(isPending && {
+                        bgcolor: '#FEF3C7',
+                        color: '#B45309',
+                        '&:hover': { bgcolor: '#FDE68A' },
+                      }),
+                    }}
                   >
                     {isCurrent ? 'Current plan' : isPending ? 'Complete payment' : isBusy ? 'Opening…' : plan.plan_key === 'trial' ? 'Start free' : 'Select'}
                   </ActionButton>
