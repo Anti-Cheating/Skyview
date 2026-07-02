@@ -159,7 +159,7 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
     );
   }
 
-  const { plan, status, current_period_end, is_auto_pay, razorpay_subscription_id } = subscription;
+  const { plan, status, current_period_end, is_auto_pay, razorpay_subscription_id, short_url } = subscription;
 
   if (!plan) {
     return (
@@ -204,7 +204,23 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
         </Alert>
       )}
       {status === 'created' && (
-        <Alert severity="warning" sx={{ borderRadius: '10px' }}>
+        <Alert
+          severity="warning"
+          sx={{ borderRadius: '10px' }}
+          action={
+            short_url ? (
+              <Button
+                size="small"
+                href={short_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{ textTransform: 'none', fontWeight: 600 }}
+              >
+                Complete payment
+              </Button>
+            ) : undefined
+          }
+        >
           Subscription created but payment not yet received. Complete checkout to activate.
         </Alert>
       )}
