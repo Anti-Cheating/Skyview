@@ -8,7 +8,7 @@ import { PageTitle, CardTitle, Caption, Secondary } from '../layout/Typography';
 import { ActionButton } from '../common/ActionButton';
 import { BillingService } from '../../services/billing.service';
 import { useSnackbar } from '../../contexts/SnackbarContext';
-import type { Plan } from '../../types/billing.types';
+import type { Plan, Subscription } from '../../types/billing.types';
 
 // Same underline-tab treatment as BillingPage (Usage | Billing).
 const TAB_SX = {
@@ -43,6 +43,7 @@ export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [currentPlanKey, setCurrentPlanKey] = useState<string>('');
   const [pendingPlanKey, setPendingPlanKey] = useState<string>('');
+  const [pendingSub, setPendingSub] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [scriptError, setScriptError] = useState(false);
   const [interval, setIntervalTab] = useState<'monthly' | 'yearly'>('monthly');
@@ -60,6 +61,7 @@ export default function PlansPage() {
         const isConfirmed = sub && ['trial', 'active', 'charged'].includes(sub.status);
         setCurrentPlanKey(isConfirmed ? sub.plan.plan_key : '');
         setPendingPlanKey(sub?.status === 'created' ? sub.plan.plan_key : '');
+        setPendingSub(sub?.status === 'created' ? sub : null);
         if (!scriptOk) setScriptError(true);
       })
       .catch((err: any) => showError(err?.message || 'Failed to load plans'))
@@ -119,6 +121,30 @@ export default function PlansPage() {
       showError(err?.message || 'Failed to start checkout');
       setBusyPlan(null);
     }
+  };
+
+  const handleCompletePayment = async (plan: Plan) => {
+    if (!pendingSub?.razorpay_subscription_id || !pendingSub?.key_id) return;
+    setBusyPlan(plan.plan_key);
+    const rzp = new window.Razorpay({
+      key: pendingSub.key_id,
+      subscription_id: pendingSub.razorpay_subscription_id,
+      name: 'Trueyy',
+      description: `${plan.name} Plan`,
+      handler: async (response) => {
+        try {
+          await BillingService.verifySubscription(response);
+          showSuccess(`You're on ${plan.name}!`);
+          navigate('/billing');
+        } catch (err: any) {
+          showError(err?.message || 'Payment verification failed');
+          setBusyPlan(null);
+        }
+      },
+      modal: { ondismiss: () => setBusyPlan(null) },
+      theme: { color: TOKENS.brand },
+    });
+    rzp.open();
   };
 
   return (
@@ -204,7 +230,7 @@ export default function PlansPage() {
                   </Box>
 
                   <ActionButton
-                    onClick={() => isPending ? navigate('/billing') : handleSelectPlan(plan)}
+                    onClick={() => isPending ? handleCompletePayment(plan) : handleSelectPlan(plan)}
                     loading={isBusy}
                     disabled={isCurrent || (anyBusy && !isBusy)}
                     sx={{ width: '100%' }}
