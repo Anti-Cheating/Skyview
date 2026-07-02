@@ -41,6 +41,7 @@ export default function PlansPage() {
   const { showSuccess, showError } = useSnackbar();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [currentPlanKey, setCurrentPlanKey] = useState<string>('');
+  const [pendingPlanKey, setPendingPlanKey] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [scriptError, setScriptError] = useState(false);
   const [interval, setIntervalTab] = useState<'monthly' | 'yearly'>('monthly');
@@ -55,7 +56,9 @@ export default function PlansPage() {
     ])
       .then(([planList, sub, scriptOk]) => {
         setPlans(planList);
-        setCurrentPlanKey(sub?.plan?.plan_key ?? '');
+        const isConfirmed = sub && ['trial', 'active', 'charged'].includes(sub.status);
+        setCurrentPlanKey(isConfirmed ? sub.plan.plan_key : '');
+        setPendingPlanKey(sub?.status === 'created' ? sub.plan.plan_key : '');
         if (!scriptOk) setScriptError(true);
       })
       .catch((err: any) => showError(err?.message || 'Failed to load plans'))
@@ -150,13 +153,14 @@ export default function PlansPage() {
           >
             {visiblePlans.map((plan) => {
               const isCurrent = plan.plan_key === currentPlanKey;
+              const isPending = plan.plan_key === pendingPlanKey;
               const isBusy = busyPlan === plan.plan_key;
               return (
                 <Box
                   key={plan.id}
                   sx={{
                     bgcolor: isCurrent ? TOKENS.brandBg : TOKENS.bgCard,
-                    border: `1px solid ${isCurrent ? TOKENS.brand : TOKENS.border}`,
+                    border: `1px solid ${isCurrent ? TOKENS.brand : isPending ? '#FACC15' : TOKENS.border}`,
                     borderRadius: '12px',
                     p: 2.5,
                     display: 'flex',
@@ -171,6 +175,9 @@ export default function PlansPage() {
                       <CardTitle sx={{ color: TOKENS.textPrimary }}>{plan.name}</CardTitle>
                       {isCurrent && (
                         <Chip label="Current" size="small" sx={{ bgcolor: TOKENS.brand, color: '#fff', fontWeight: 700, fontSize: '0.6rem', height: 18 }} />
+                      )}
+                      {isPending && (
+                        <Chip label="Payment pending" size="small" sx={{ bgcolor: '#FACC15', color: '#B45309', fontWeight: 700, fontSize: '0.6rem', height: 18 }} />
                       )}
                     </Box>
                     <Box sx={{ fontSize: '1.75rem', fontWeight: 700, color: TOKENS.brand, mb: 0.5 }}>
@@ -191,12 +198,12 @@ export default function PlansPage() {
                   </Box>
 
                   <ActionButton
-                    onClick={() => handleSelectPlan(plan)}
+                    onClick={() => isPending ? navigate('/billing') : handleSelectPlan(plan)}
                     loading={isBusy}
                     disabled={isCurrent || (anyBusy && !isBusy)}
                     sx={{ width: '100%' }}
                   >
-                    {isCurrent ? 'Current plan' : isBusy ? 'Opening…' : plan.plan_key === 'trial' ? 'Start free' : 'Select'}
+                    {isCurrent ? 'Current plan' : isPending ? 'Complete payment' : isBusy ? 'Opening…' : plan.plan_key === 'trial' ? 'Start free' : 'Select'}
                   </ActionButton>
                 </Box>
               );

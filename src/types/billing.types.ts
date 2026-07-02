@@ -30,6 +30,7 @@ export interface Subscription {
   short_url: string | null;
   plan: Plan;
   seats_used: number;
+  key_id: string | null;
 }
 
 export interface CheckoutCreds {

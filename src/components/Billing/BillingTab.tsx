@@ -39,6 +39,17 @@ function StatusPill({ status }: { status: SubscriptionStatus }) {
   );
 }
 
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof window.Razorpay !== 'undefined') { resolve(true); return; }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -69,6 +80,7 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
   const [invoicesPageSize, setInvoicesPageSize] = useState(10);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [resuming, setResuming] = useState(false);
 
   useEffect(() => {
     setLoadingInvoices(true);
@@ -159,7 +171,38 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
     );
   }
 
-  const { plan, status, current_period_end, is_auto_pay, razorpay_subscription_id, short_url } = subscription;
+  const { plan, status, current_period_end, is_auto_pay, razorpay_subscription_id, key_id } = subscription;
+
+  const handleCompletePayment = async () => {
+    if (!razorpay_subscription_id || !key_id) return;
+    setResuming(true);
+    const loaded = await loadRazorpayScript();
+    if (!loaded) {
+      showError('Could not load Razorpay checkout. Please try again.');
+      setResuming(false);
+      return;
+    }
+    const rzp = new window.Razorpay({
+      key: key_id,
+      subscription_id: razorpay_subscription_id,
+      name: 'Trueyy',
+      description: `${plan.name} Plan`,
+      handler: async (response) => {
+        try {
+          await BillingService.verifySubscription(response);
+          showSuccess(`You're on ${plan.name}!`);
+          onRefresh();
+        } catch (err: any) {
+          showError(err?.message || 'Payment verification failed');
+        } finally {
+          setResuming(false);
+        }
+      },
+      modal: { ondismiss: () => setResuming(false) },
+      theme: { color: TOKENS.brand },
+    });
+    rzp.open();
+  };
 
   if (!plan) {
     return (
@@ -208,15 +251,15 @@ export function BillingTab({ subscription, loading, onRefresh }: Props) {
           severity="warning"
           sx={{ borderRadius: '10px' }}
           action={
-            short_url ? (
+            razorpay_subscription_id && key_id ? (
               <Button
                 size="small"
-                href={short_url}
-                target="_blank"
-                rel="noopener noreferrer"
+                onClick={handleCompletePayment}
+                disabled={resuming}
+                startIcon={resuming ? <CircularProgress size={14} thickness={5} /> : undefined}
                 sx={{ textTransform: 'none', fontWeight: 600 }}
               >
-                Complete payment
+                {resuming ? 'Opening…' : 'Complete payment'}
               </Button>
             ) : undefined
           }
