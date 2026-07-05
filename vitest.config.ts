@@ -13,5 +13,22 @@ export default defineConfig({
     css: false,
     // Component tests only — exclude e2e/build artifacts.
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary', 'text', 'html'],
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/**/*.{test,spec}.{ts,tsx}',
+        'src/test/**',
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+        'src/**/*.d.ts',
+        // Type-only modules — no runtime statements to cover.
+        'src/types/**',
+        'src/**/*.types.ts',
+        // Static mock/demo data — scaffolding, not production logic.
+        'src/mockData/**',
+      ],
+    },
   },
 });
