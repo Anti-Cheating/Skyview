@@ -44,6 +44,7 @@ export const AdminService = {
   webhooks: (q: Record<string, unknown> = {}) => ApiService.get(`/admin/webhooks${qs(q)}`),
   contactQueries: (q: Record<string, unknown> = {}) => ApiService.get(`/admin/contact-queries${qs(q)}`),
   audit: (q: Record<string, unknown> = {}) => ApiService.get(`/admin/audit${qs(q)}`),
+  auditDetail: (id: string) => ApiService.get(`/admin/audit/${id}`),
 
   // ── interviews (cloud only) ──
   interview: (sid: string) => ApiService.get(`/admin/interviews/${sid}`),

@@ -89,6 +89,8 @@ export interface DataTableProps<TRow> {
   pagination?: DataTablePagination;
   /** Set to enable sticky header — body scrolls inside this height. */
   maxBodyHeight?: number | string;
+  /** Makes rows clickable (pointer cursor) — e.g. navigate to a detail page. */
+  onRowClick?: (row: TRow, index: number) => void;
 }
 
 // Antd table dimensions, in our tokens.
@@ -113,6 +115,7 @@ export function DataTable<TRow>({
   loadingRowCount = 5,
   pagination,
   maxBodyHeight,
+  onRowClick,
 }: DataTableProps<TRow>) {
   const isLoadingFirstPaint = loading && rows.length === 0;
 
@@ -452,7 +455,8 @@ export function DataTable<TRow>({
                 {rows.map((row, index) => (
                   <MotionTableRow
                     key={rowKey(row, index)}
-                    sx={rowSx}
+                    onClick={onRowClick ? () => onRowClick(row, index) : undefined}
+                    sx={onRowClick ? { ...rowSx, cursor: 'pointer' } : rowSx}
                     // Fade-only enter/exit. Skipping layout transforms
                     // on table rows on purpose (see import comment).
                     initial={{ opacity: 0 }}

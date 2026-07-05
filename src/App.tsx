@@ -41,6 +41,9 @@ import AdminBillingPage from './components/Admin/BillingPage';
 import AdminLicensingPage from './components/Admin/LicensingPage';
 import AdminOpsPage from './components/Admin/OpsPage';
 import AdminAuditPage from './components/Admin/AuditPage';
+import AdminAuditDetailPage from './components/Admin/AuditDetailPage';
+import AuditLogPage from './components/Settings/AuditLogPage';
+import AuditDetailPage from './components/Settings/AuditDetailPage';
 import AdminContactQueriesPage from './components/Admin/ContactQueriesPage';
 import AdminPlansPage from './components/Admin/PlansPage';
 import { isCompanyManagerRole } from './config/constants';
@@ -226,6 +229,9 @@ function AppRoutes() {
           {/* SDK platform pages — now top-level sidebar items (out of Settings). */}
           <Route path="tokens" element={<CompanyManagerRoute><ApiTokensPage /></CompanyManagerRoute>} />
           <Route path="webhooks" element={<CompanyManagerRoute><WebhooksPage /></CompanyManagerRoute>} />
+          {/* Company audit trail — Owner/Admin; server hides platform-staff rows. */}
+          <Route path="audit-log" element={<CompanyManagerRoute><AuditLogPage /></CompanyManagerRoute>} />
+          <Route path="audit-log/:id" element={<CompanyManagerRoute><AuditDetailPage /></CompanyManagerRoute>} />
           {/* Authenticated 404 — renders inside AppLayout so the user
               keeps the sidebar and can navigate out. */}
           <Route path="*" element={<NotFoundPage />} />
@@ -241,6 +247,7 @@ function AppRoutes() {
           <Route path="licensing" element={<AdminLicensingPage />} />
           <Route path="ops" element={<AdminOpsPage />} />
           <Route path="audit" element={<AdminAuditPage />} />
+          <Route path="audit/:id" element={<AdminAuditDetailPage />} />
           <Route path="contact" element={<AdminContactQueriesPage />} />
           <Route path="plans" element={<AdminPlansPage />} />
           <Route path="profile" element={<ProfilePage />} />
