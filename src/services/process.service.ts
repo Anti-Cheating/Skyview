@@ -80,4 +80,17 @@ export class ProcessService {
     const r = await ApiService.delete<unknown>(`/interview-processes/${id}`, undefined, 'auth');
     return { success: r.success, data: r.data, message: r.message };
   }
+
+  /**
+   * GDPR Art. 17 — company-directed candidate erasure. Hard-deletes the
+   * candidate's capture data (recordings, transcripts, screenshots) from THIS
+   * company's interviews only; the shared global identity and other companies'
+   * data are untouched. Owner/Admin only. Returns the erasure receipt.
+   */
+  static async eraseCandidate(candidateId: string): Promise<ApiResponse<{ receipt: { id: string; requested_at: string } }>> {
+    const r = await ApiService.delete<{ receipt: { id: string; requested_at: string } }>(
+      `/api/companies/me/candidates/${candidateId}`, undefined, 'auth',
+    );
+    return { success: r.success, data: r.data, message: r.message };
+  }
 }

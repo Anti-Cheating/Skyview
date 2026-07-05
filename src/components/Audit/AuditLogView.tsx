@@ -17,7 +17,7 @@ export const AUDIT_ACTIONS: string[] = [
   'interview.create', 'interview.update', 'interview.cancel', 'interview.add_round',
   'analysis.run', 'report.export',
   'consent.given', 'consent.declined', 'consent.revoked',
-  'user.invite', 'user.invite_accept', 'user.invite_revoke', 'user.update',
+  'user.invite', 'user.invite_accept', 'user.invite_revoke', 'user.update', 'candidate.erased',
   'api_token.create', 'api_token.revoke', 'session_token.mint',
   'webhook.create', 'webhook.update', 'webhook.revoke', 'webhook.rotate_secret', 'webhook.refire_delivery',
   'subscription.create', 'subscription.activate', 'subscription.cancel',

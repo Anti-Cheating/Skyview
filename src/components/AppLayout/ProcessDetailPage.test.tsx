@@ -15,12 +15,14 @@ const getById = vi.fn();
 const cancel = vi.fn();
 const update = vi.fn();
 const addRound = vi.fn();
+const eraseCandidate = vi.fn();
 vi.mock('../../services/process.service', () => ({
   ProcessService: {
     getById: (...a: unknown[]) => getById(...a),
     cancel: (...a: unknown[]) => cancel(...a),
     update: (...a: unknown[]) => update(...a),
     addRound: (...a: unknown[]) => addRound(...a),
+    eraseCandidate: (...a: unknown[]) => eraseCandidate(...a),
   },
 }));
 
@@ -153,6 +155,40 @@ beforeEach(() => {
   cancel.mockResolvedValue({ success: true });
   update.mockResolvedValue({ success: true });
   addRound.mockResolvedValue({ success: true });
+  eraseCandidate.mockResolvedValue({ success: true, data: { receipt: { id: 'rcpt1', requested_at: '2026-07-05T00:00:00.000Z' } } });
+});
+
+describe('ProcessDetailPage — GDPR candidate erasure', () => {
+  test('Owner sees the erase action; erasing calls the service and navigates away', async () => {
+    render(<ProcessDetailPage />);
+    await screen.findByRole('heading', { name: 'SDE-1' });
+
+    await userEvent.click(screen.getByRole('button', { name: /erase candidate data/i }));
+    // Confirm dialog explains scope; confirm.
+    expect(await screen.findByText('Erase candidate data?')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Erase data' }));
+
+    await waitFor(() => expect(eraseCandidate).toHaveBeenCalledWith('c9'));
+    expect(showSuccess).toHaveBeenCalledWith('Candidate data erased');
+    expect(mockNavigate).toHaveBeenCalledWith('/interviews');
+  });
+
+  test('a service failure surfaces an error and stays on the page', async () => {
+    eraseCandidate.mockResolvedValue({ success: false, message: 'nope' });
+    render(<ProcessDetailPage />);
+    await screen.findByRole('heading', { name: 'SDE-1' });
+    await userEvent.click(screen.getByRole('button', { name: /erase candidate data/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Erase data' }));
+    await waitFor(() => expect(showError).toHaveBeenCalledWith('nope'));
+    expect(mockNavigate).not.toHaveBeenCalledWith('/interviews');
+  });
+
+  test('Members do not see the erase action', async () => {
+    authUser = { id: 'u1', company_id: 'c1', role: 'Member' };
+    render(<ProcessDetailPage />);
+    await screen.findByRole('heading', { name: 'SDE-1' });
+    expect(screen.queryByRole('button', { name: /erase candidate data/i })).not.toBeInTheDocument();
+  });
 });
 
 describe('ProcessDetailPage — rendering & states', () => {

@@ -56,4 +56,11 @@ describe('ProcessService', () => {
     await ProcessService.cancel('p1');
     expect(del).toHaveBeenCalledWith('/interview-processes/p1', undefined, 'auth');
   });
+
+  test('eraseCandidate hits the company-scoped erasure endpoint', async () => {
+    del.mockResolvedValue({ success: true, data: { receipt: { id: 'r1', requested_at: 'now' } } });
+    const r = await ProcessService.eraseCandidate('c9');
+    expect(del).toHaveBeenCalledWith('/api/companies/me/candidates/c9', undefined, 'auth');
+    expect(r.success).toBe(true);
+  });
 });

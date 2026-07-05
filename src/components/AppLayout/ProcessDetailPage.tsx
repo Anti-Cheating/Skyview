@@ -4,7 +4,7 @@ import {
   Box, Chip, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   MenuItem, Typography, IconButton, Tooltip,
 } from '@mui/material';
-import { Add as AddIcon, EditOutlined as EditIcon, DeleteOutline as DeleteIcon } from '@mui/icons-material';
+import { Add as AddIcon, EditOutlined as EditIcon, DeleteOutline as DeleteIcon, DeleteForeverOutlined as EraseIcon } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -49,6 +49,11 @@ export default function ProcessDetailPage() {
   const [editRound, setEditRound] = useState<RoundSummary | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RoundSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [eraseOpen, setEraseOpen] = useState(false);
+  const [erasing, setErasing] = useState(false);
+
+  // GDPR Art. 17 erasure is Owner/Admin only (matches the Cortex route guard).
+  const canErase = ['Owner', 'Admin'].includes(user?.role ?? '') || !!user?.is_super_admin;
 
   const refresh = () => {
     if (!processId) return;
@@ -98,6 +103,25 @@ export default function ProcessDetailPage() {
       showError(e?.message || 'Could not cancel');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleErase = async () => {
+    if (!candidate?.id) return;
+    setErasing(true);
+    try {
+      const r = await ProcessService.eraseCandidate(candidate.id);
+      if (r.success) {
+        showSuccess('Candidate data erased');
+        navigate('/interviews');
+      } else {
+        showError(r.message || 'Could not erase the candidate’s data');
+      }
+    } catch (e: any) {
+      showError(e?.message || 'Could not erase the candidate’s data');
+    } finally {
+      setErasing(false);
+      setEraseOpen(false);
     }
   };
 
@@ -229,6 +253,21 @@ export default function ProcessDetailPage() {
           <DetailRow label="Created on" value={new Date(data.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} />
           {data.description ? <DetailRow label="Description" value={data.description} /> : null}
         </Box>
+        {canErase && (
+          <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${TOKENS.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5, flexWrap: 'wrap' }}>
+            <Caption sx={{ color: TOKENS.textSecondary }}>
+              Permanently delete this candidate’s recordings, transcripts, and screenshots from your interviews.
+            </Caption>
+            <ActionButton
+              variant="secondary"
+              onClick={() => setEraseOpen(true)}
+              startIcon={<EraseIcon />}
+              sx={{ color: '#B42318', borderColor: 'rgba(180,35,24,0.35)', '&:hover': { borderColor: '#B42318', bgcolor: 'rgba(180,35,24,0.04)' } }}
+            >
+              Erase candidate data
+            </ActionButton>
+          </Box>
+        )}
       </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
@@ -287,12 +326,27 @@ export default function ProcessDetailPage() {
           <ActionButton onClick={handleDelete} loading={deleting}>{onlyRound ? 'Cancel interview' : 'Cancel round'}</ActionButton>
         </DialogActions>
       </Dialog>
+
+      {/* GDPR erasure confirm */}
+      <Dialog open={eraseOpen} onClose={() => !erasing && setEraseOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ fontWeight: 700, fontSize: '1.05rem' }}>Erase candidate data?</DialogTitle>
+        <DialogContent>
+          <Secondary sx={{ color: TOKENS.textSecondary }}>
+            This permanently deletes <strong>{candidateName}</strong>’s recordings, transcripts, and
+            screenshots from your interviews. This can’t be undone.
+          </Secondary>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <ActionButton variant="secondary" onClick={() => setEraseOpen(false)} disabled={erasing}>Keep data</ActionButton>
+          <ActionButton onClick={handleErase} loading={erasing} sx={{ bgcolor: '#B42318', '&:hover': { bgcolor: '#912018' } }}>Erase data</ActionButton>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
 
 function initialsOf(c: { first_name: string; last_name: string; email: string }): string {
-  const a = c.first_name?.[0] ?? '';
+  const a = c.first_name?.[0] ?? '';  
   const b = c.last_name?.[0] ?? '';
   return (a + b).toUpperCase() || c.email[0]?.toUpperCase() || '?';
 }
