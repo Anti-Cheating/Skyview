@@ -12,8 +12,7 @@ import ResetPassword from './components/Auth/ResetPassword';
 import Dashboard from './components/Dashboard/Dashboard';
 import AppLayout from './components/AppLayout/AppLayout';
 import AppDashboard from './components/AppLayout/AppDashboard';
-import ProcessListPage from './components/AppLayout/ProcessListPage';
-import AppInterviewList from './components/AppLayout/AppInterviewList';
+import InterviewsIndex from './components/AppLayout/InterviewsIndex';
 import CreateProcessPage from './components/AppLayout/CreateProcessPage';
 import ProcessDetailPage from './components/AppLayout/ProcessDetailPage';
 import InterviewDetailPage from './components/AppLayout/InterviewDetailPage';
@@ -152,17 +151,15 @@ function CompanyManagerRoute({ children }: { children: React.ReactNode }) {
 
 /**
  * /interviews is role-aware:
- *  - Company managers (Owner/Admin/System Admin) → the process list (multi-round
- *    management view).
- *  - Everyone else (candidates, members) → their OWN scoped interview cards
- *    (session view, server-filtered to the signed-in user).
- * Restores candidate/member access that the multi-round refactor inadvertently
- * locked behind CompanyManagerRoute (which redirected them to the dashboard).
+ *  - Company managers (Owner/Admin/System Admin) → a view switcher over the
+ *    process list (By interview) and the flat round list (By round).
+ *  - Everyone else (candidates, members) → their OWN scoped round list.
+ * The switcher + role split live in InterviewsIndex.
  */
-function InterviewsIndex() {
-  const { user, isLoading } = useAuth();
+function InterviewsIndexRoute() {
+  const { isLoading } = useAuth();
   if (isLoading) return <LoadingSpinner fullScreen message="Loading..." />;
-  return isCompanyManagerRole(user?.role) ? <ProcessListPage /> : <AppInterviewList />;
+  return <InterviewsIndex />;
 }
 
 /**
@@ -213,7 +210,7 @@ function AppRoutes() {
         <Route path="/" element={<PrivateRoute><AppLayout /></PrivateRoute>}>
           <Route index element={<AppDashboard />} />
           {/* Parent "Interview" (process) — manager-managed list + create */}
-          <Route path="interviews" element={<InterviewsIndex />} />
+          <Route path="interviews" element={<InterviewsIndexRoute />} />
           <Route path="interviews/new" element={<CompanyManagerRoute><CreateProcessPage /></CompanyManagerRoute>} />
           <Route path="interviews/:processId" element={<ProcessDetailPage />} />
           {/* Round screens — a round is a session, so these reuse the existing pages */}

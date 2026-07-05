@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Chip, MenuItem, Select, TextField, Tooltip, InputAdornment } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
+import { SearchField } from '../common/SearchField';
+import { Box, Chip, MenuItem, Select, Tooltip } from '@mui/material';
 import { TOKENS } from '../../theme';
 import { PageTitle, Secondary, Caption } from '../layout/Typography';
 import { DataTable, type DataTableColumn } from '../common/DataTable';
@@ -169,20 +169,11 @@ export default function AuditLogView({
       </Box>
 
       <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
-        <TextField
-          size="small"
+        <SearchField
           placeholder="Search action, entity, or user…"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={setSearch}
           onKeyDown={(e) => { if (e.key === 'Enter') applySearch(); }}
-          sx={{ minWidth: 280 }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon sx={{ fontSize: 18, color: TOKENS.textSecondary }} />
-              </InputAdornment>
-            ),
-          }}
         />
         <Select
           size="small"

@@ -60,6 +60,12 @@ describe('InterviewTable', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/interviews/sess-7');
   });
 
+  test('with a process_id, clicking deep-links to the round detail', async () => {
+    render(<InterviewTable rows={[makeRow({ process_id: 'proc-1' })]} userRole="Owner" />);
+    await userEvent.click(screen.getByRole('button', { name: 'Backend Round 2' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/interviews/proc-1/rounds/sess-7');
+  });
+
   test('renders the empty state when there are no rows', () => {
     render(<InterviewTable rows={[]} userRole="Owner" emptyText="Nothing here" />);
     expect(screen.getByText('Nothing here')).toBeInTheDocument();
