@@ -34,6 +34,9 @@ interface Props {
    *  interview (vs the initial pre-join setup where the card shows for
    *  the first time). Changes the title and adds a warning banner. */
   revoked?: boolean;
+  /** Candidate consent state (GDPR): pending until the candidate acts,
+   *  then given / declined / withdrawn. Rendered as a leading pill. */
+  consent?: 'pending' | 'given' | 'declined' | 'revoked';
 }
 
 // Was hardcoded "#4CD964" — now sourced from the canonical theme so a
@@ -87,7 +90,13 @@ const ROWS: CheckRow[] = [
   },
 ];
 
-export default function CandidateSetupCard({ status, revoked }: Props) {
+export default function CandidateSetupCard({ status, revoked, consent = 'pending' }: Props) {
+  const consentPill = {
+    pending: { label: 'Consent', text: 'Waiting for candidate to accept monitoring consent', done: false, alert: false },
+    given: { label: 'Consent', text: 'Candidate consented to monitoring', done: true, alert: false },
+    declined: { label: 'Consent declined', text: 'Candidate declined monitoring consent — monitoring cannot start', done: false, alert: true },
+    revoked: { label: 'Consent withdrawn', text: 'Candidate withdrew consent — capture stopped', done: false, alert: true },
+  }[consent];
   // Treat null status as "nothing started yet" — every check is pending,
   // every row pending. This is what the interviewer sees the very first
   // time they open MonitoringView for a brand-new extension interview.
@@ -183,6 +192,37 @@ export default function CandidateSetupCard({ status, revoked }: Props) {
           minWidth: 0,
         }}
       >
+        <Tooltip title={consentPill.text} arrow placement="top">
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 0.8,
+              px: 1.25,
+              py: 0.9,
+              borderRadius: 1.2,
+              bgcolor: consentPill.alert ? "#FEF2F2" : consentPill.done ? ROW_BG_DONE : ROW_BG_PENDING,
+              border: `1px solid ${consentPill.alert ? "#FCA5A5" : consentPill.done ? "rgba(76,217,100,0.3)" : "#E5E7EB"}`,
+              minWidth: 0,
+            }}
+          >
+            {consentPill.done
+              ? <CheckIcon sx={{ color: BRAND, fontSize: 15, flexShrink: 0 }} />
+              : <PendingIcon sx={{ color: consentPill.alert ? "#DC2626" : PENDING, fontSize: 15, flexShrink: 0 }} />}
+            <Typography
+              sx={{
+                fontSize: "0.72rem",
+                fontWeight: 600,
+                color: consentPill.alert ? "#DC2626" : consentPill.done ? "#065F46" : "#6B7280",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {consentPill.label}
+            </Typography>
+          </Box>
+        </Tooltip>
         {ROWS.map((row) => {
           const done = !!flags[row.key];
           return (

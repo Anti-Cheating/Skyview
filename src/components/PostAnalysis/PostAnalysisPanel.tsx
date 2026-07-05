@@ -303,6 +303,9 @@ interface PostAnalysis {
   risk_score: number; final_summary: string;
   detected_app_categories: DetectedAppCategory[];
   created_at: string; status?: string;
+  /** Consent coverage windows (GDPR): which portions of the interview
+   *  were monitored. An open window has revoked_at = null. */
+  consent_windows: { given_at: string; revoked_at: string | null; text_version: string }[];
 }
 
 function normalizeAnalysis(raw: Record<string, unknown>): PostAnalysis {
@@ -330,6 +333,9 @@ function normalizeAnalysis(raw: Record<string, unknown>): PostAnalysis {
       : [],
     created_at: String(raw.created_at ?? raw.created_at_analysis ?? new Date().toISOString()),
     status: raw.status != null ? String(raw.status) : undefined,
+    consent_windows: Array.isArray(raw.consent_windows)
+      ? (raw.consent_windows as PostAnalysis["consent_windows"])
+      : [],
   };
 }
 
@@ -584,6 +590,22 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
             <div className="pa-meta-item">
               <span className="pa-meta-label">Role</span>
               <span className="pa-meta-val">{session.title}</span>
+            </div>
+          )}
+          {analysis.consent_windows.length > 0 && (
+            <div className="pa-meta-item">
+              <span className="pa-meta-label">Monitoring coverage</span>
+              <span className="pa-meta-val">
+                {analysis.consent_windows
+                  .map((w) =>
+                    `${new Date(w.given_at).toLocaleTimeString()} – ${
+                      w.revoked_at ? new Date(w.revoked_at).toLocaleTimeString() : 'end'
+                    }`
+                  )
+                  .join(', ')}
+                {analysis.consent_windows.some((w) => w.revoked_at) &&
+                  ' (consent was withdrawn during this interview)'}
+              </span>
             </div>
           )}
         </div>

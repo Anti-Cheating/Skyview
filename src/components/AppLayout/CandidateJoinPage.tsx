@@ -29,7 +29,6 @@ import { CardTitle, Secondary, Caption } from '../layout/Typography';
 import {
   CheckCircle as CheckIcon,
   ArrowBack as ArrowBackIcon,
-  Extension as ExtensionIcon,
   Shield as ShieldIcon,
   VideoCall as VideoCallIcon,
   Schedule as PendingIcon,
@@ -48,7 +47,11 @@ import { ENV } from '../../config/env';
 import type { InterviewSession } from '../../types/interview.types';
 import { TOKENS } from '../../theme';
 import HelperDownloadCard from '../Monitoring/HelperDownloadCard';
-import StepRow from '../common/StepRow';
+import ConsentScreen from '../Consent/ConsentScreen';
+import ConsentOutcome from '../Consent/ConsentOutcome';
+import JoinStepper, { type JoinStep } from '../Consent/JoinStepper';
+import { ConsentService, type ConsentText } from '../../services/consent.service';
+import { Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
 
 const BRAND = TOKENS.brand;
 const LIGHT_BG = TOKENS.bgCard;
@@ -65,6 +68,12 @@ export default function CandidateJoinPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [meetingOpened, setMeetingOpened] = useState(false);
+
+  // ── Consent (GDPR Art. 7) — blocks ALL helper interaction until given.
+  const [consent, setConsent] = useState<'loading' | 'needed' | 'given' | 'declined' | 'revoked'>('loading');
+  const [consentText, setConsentText] = useState<ConsentText | null>(null);
+  const [consentBusy, setConsentBusy] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
 
   const helper = useHelper(2000);
   // Deliberately NO teardown on the candidate side — the candidate
@@ -109,10 +118,76 @@ export default function CandidateJoinPage() {
     return () => { cancelled = true; };
   }, [interviewId, user?.id, navigate]);
 
-  // ── Once helper is reachable AND interview is loaded, bind the ────
-  // session: POST /session/join. Helper connects to Cortex, runs
-  // preflight, and starts reporting status via /status.
+  // ── Load consent state once the interview is known ────────────────
   useEffect(() => {
+    if (!interview || !interviewId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await ConsentService.text(interviewId);
+        if (cancelled) return;
+        if (resp.success && resp.data) {
+          setConsentText(resp.data);
+          setConsent(resp.data.consented ? 'given' : 'needed');
+        } else {
+          setError(resp.message || 'Failed to load consent details');
+        }
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message || 'Failed to load consent details');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [interview, interviewId]);
+
+  const handleAgree = useCallback(async () => {
+    if (!interviewId || !consentText) return;
+    setConsentBusy(true);
+    try {
+      const resp = await ConsentService.grant(interviewId, consentText.version);
+      if (resp.success) {
+        setConsent('given');
+      } else if ((resp as { error?: string }).error === 'stale_text') {
+        // Legal shipped new wording between page load and Agree — re-show.
+        const fresh = await ConsentService.text(interviewId);
+        if (fresh.success && fresh.data) setConsentText(fresh.data);
+      } else {
+        setError(resp.message || 'Failed to record consent');
+      }
+    } finally {
+      setConsentBusy(false);
+    }
+  }, [interviewId, consentText]);
+
+  const handleDecline = useCallback(async () => {
+    if (!interviewId) return;
+    setConsentBusy(true);
+    try {
+      await ConsentService.decline(interviewId);
+      setConsent('declined');
+    } finally {
+      setConsentBusy(false);
+    }
+  }, [interviewId]);
+
+  const handleWithdraw = useCallback(async () => {
+    if (!interviewId) return;
+    setWithdrawOpen(false);
+    setConsentBusy(true);
+    try {
+      await ConsentService.revoke(interviewId);
+      setConsent('revoked');
+    } finally {
+      setConsentBusy(false);
+    }
+  }, [interviewId]);
+
+  // ── Once consent is given, helper is reachable AND interview is ────
+  // loaded, bind the session: POST /session/join. Helper connects to
+  // Cortex, runs preflight, and starts reporting status via /status.
+  // The consent gate here is belt-and-braces — Cortex's sessionGuard
+  // refuses capture writes without an open consent row regardless.
+  useEffect(() => {
+    if (consent !== 'given') return;
     if (!helper.installed) return;
     if (!interview || !interviewId || !user?.id) return;
     // Never bind the helper to a terminal session — it can't be joined.
@@ -141,7 +216,7 @@ export default function CandidateJoinPage() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [helper.installed, interview, interviewId, user?.id, helper.status?.session_id]);
+  }, [consent, helper.installed, interview, interviewId, user?.id, helper.status?.session_id]);
 
   // ── Step 3: Open Meeting ──────────────────────────────────────────
   const handleOpenMeeting = useCallback(() => {
@@ -224,146 +299,214 @@ export default function CandidateJoinPage() {
     );
   }
 
-  // Derived UI state from helper status + local flags
-  const extensionState = helper.checking
-    ? 'checking'
-    : helper.installed ? 'done' : 'missing';
+  if (consent === 'loading') {
+    return (
+      <Box sx={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress sx={{ color: BRAND }} />
+      </Box>
+    );
+  }
+
+  // ── Derived UI state from helper status + local flags ──────────────
   const screenOk = !!helper.status?.screen_recording_ok;
   const micOk = !!helper.status?.microphone_ok;
   const keyboardOk = !!helper.status?.keyboard_ok;
+  const allPermissions = screenOk && micOk && keyboardOk;
   const monitoringState = !helper.installed
     ? 'pending'
-    : screenOk && micOk && keyboardOk
-      ? 'done'
-      : 'permission-needed';
-  const meetingState = meetingOpened ? 'done' : monitoringState === 'done' ? 'pending' : 'pending';
+    : allPermissions ? 'done' : 'permission-needed';
+
+  // Which of the 4 steps is active. Install + permissions self-complete
+  // from a returning candidate's machine, so re-consent (and repeat
+  // interviews) land straight on the last incomplete step.
+  const currentStep: JoinStep =
+    consent !== 'given' ? 'consent'
+    : !helper.installed ? 'install'
+    : !allPermissions ? 'permissions'
+    : 'join';
+
+  const declinedOrRevoked = consent === 'declined' || consent === 'revoked';
 
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#F9FAFB' }}>
-      {/* Header — back arrow, optional company logo (host branding),
-          interview title + subtitle. Logo only renders if the host
-          company has uploaded one; falls back to title-only otherwise. */}
+      {/* Header — context bar: back arrow, company logo, interview title. */}
       <Box sx={{
         display: 'flex', alignItems: 'center', gap: 2,
         px: { xs: 2, md: 3 }, py: 1.5,
         borderBottom: `1px solid ${LIGHT_BORDER}`, bgcolor: LIGHT_BG,
       }}>
-        <IconButton
-          onClick={() => navigate('/')}
-          size="small"
-          // Was an unlabelled icon-only button. SR users heard "button"
-          // with no destination — accessible name now describes the
-          // action and target.
-          aria-label="Back to dashboard"
-          sx={{ color: '#6B7280' }}
-        >
+        <IconButton onClick={() => navigate('/')} size="small" aria-label="Back to dashboard" sx={{ color: '#6B7280' }}>
           <ArrowBackIcon />
         </IconButton>
         {interview.company?.logo_url && (
-          <Box
-            sx={{
-              width: 40,
-              height: 40,
-              borderRadius: '8px',
-              border: `1px solid ${LIGHT_BORDER}`,
-              bgcolor: '#FFFFFF',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-              flexShrink: 0,
-            }}
-          >
-            <img
-              src={interview.company.logo_url}
-              alt={interview.company.name}
-              style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }}
-              draggable={false}
-            />
+          <Box sx={{
+            width: 40, height: 40, borderRadius: '8px', border: `1px solid ${LIGHT_BORDER}`,
+            bgcolor: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            overflow: 'hidden', flexShrink: 0,
+          }}>
+            <img src={interview.company.logo_url} alt={interview.company.name}
+              style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }} draggable={false} />
           </Box>
         )}
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          {/* Use the interview title as the page-level <h1>. The page
-              previously had no h1 at all, breaking the heading rotor
-              flow that the rest of the app relies on. */}
           <CardTitle component="h1" sx={{ m: 0, fontWeight: 700, color: TOKENS.textPrimary }}>
             {interview.title}
           </CardTitle>
-          <Secondary sx={{ color: TOKENS.textSecondary }}>
-            {interview.company?.name
-              ? `Hosted by ${interview.company.name}`
-              : 'Setup your monitoring before joining'}
-          </Secondary>
+          {interview.company?.name && (
+            <Secondary sx={{ color: TOKENS.textSecondary }}>Hosted by {interview.company.name}</Secondary>
+          )}
         </Box>
       </Box>
 
-      {!helper.installed && !helper.checking ? (
-        <HelperDownloadCard checking={helper.checking} onRetry={() => helper.refresh()} />
-      ) : (
-        <Box sx={{
-          flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-          pt: { xs: 3, md: 6 }, px: { xs: 2, md: 3 }, pb: 3,
-        }}>
-          <Box sx={{
-            width: 460, maxWidth: '100%', bgcolor: LIGHT_BG,
-            borderRadius: '12px', border: `1px solid ${LIGHT_BORDER}`,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-          }}>
-            {/* Step 1 — Helper installed */}
-            <StepRow number={1} icon={<ExtensionIcon sx={{ fontSize: 18 }} />} title="Install Trueyy Helper"
-              done={extensionState === 'done'} active={extensionState !== 'done'} first>
-              {extensionState === 'checking' && <Status busy text="Detecting..." />}
-              {extensionState === 'done' && <Status ok text="Trueyy Helper detected" />}
-              {extensionState === 'missing' && <Status err text="Helper not running" />}
-            </StepRow>
-
-            {/* Step 2 — Permissions */}
-            <StepRow number={2} icon={<ShieldIcon sx={{ fontSize: 18 }} />} title="Grant Permissions"
-              done={monitoringState === 'done'}
-              active={extensionState === 'done' && monitoringState !== 'done'}>
-              {monitoringState === 'pending' && helper.installed && (
-                <Status busy text="Connecting to helper..." />
-              )}
-              {monitoringState === 'done' && (
-                <Status ok text="Screen Recording, Microphone & Keyboard granted" />
-              )}
-              {monitoringState === 'permission-needed' && (
-                <>
-                  <PermissionRow title="Screen Recording"
-                    desc="Required for app / window monitoring"
-                    done={screenOk} onEnable={openScreenRecordingSettings} />
-                  <PermissionRow title="Microphone"
-                    desc="Required for live transcription"
-                    done={micOk} onEnable={openMicSettings} />
-                  <PermissionRow title="Keyboard Access"
-                    desc="Required for keyboard activity monitoring"
-                    done={keyboardOk} onEnable={openKeyboardSettings} />
-                  <Caption sx={{ display: 'block', color: TOKENS.textSecondary, mt: 1 }}>
-                    {detectHelperPlatform() === 'windows'
-                      ? <>Enable <strong>Microphone access</strong> (and <strong>Let desktop apps access your microphone</strong>) in Windows Settings, then return here. This page updates automatically.</>
-                      : <>Toggle <strong>Trueyy Helper</strong> ON in each pane, then return here. This page updates automatically.</>}
-                  </Caption>
-                </>
-              )}
-            </StepRow>
-
-            {/* Step 3 — Join Meeting */}
-            <StepRow number={3} icon={<VideoCallIcon sx={{ fontSize: 18 }} />} title="Join Meeting"
-              done={meetingState === 'done'}
-              active={monitoringState === 'done' && meetingState !== 'done'} last>
-              {monitoringState === 'done' && meetingState === 'pending' && (
-                <ActionButton
-                  onClick={handleOpenMeeting}
-                  disabled={!interview.provider_metadata?.join_url}
-                >
-                  Open Meeting
-                </ActionButton>
-              )}
-              {meetingState === 'done' && <Status ok text="Meeting opened — keep this tab open" />}
-            </StepRow>
-          </Box>
+      {/* Declined / withdrawn dead-ends — no stepper, just the recovery card. */}
+      {declinedOrRevoked ? (
+        <Box sx={{ flex: 1 }}>
+          {consent === 'declined' ? (
+            <ConsentOutcome
+              title="Monitoring declined"
+              message="You've declined monitoring consent. Your interviewer has been notified — this interview can't proceed with integrity monitoring until you agree."
+              actionLabel="I changed my mind — review again"
+              onAction={() => setConsent('needed')}
+            />
+          ) : (
+            <ConsentOutcome
+              title="Monitoring stopped"
+              message="You withdrew your consent. Your interviewer has been notified and no further data is being recorded."
+              actionLabel="Re-enable monitoring"
+              onAction={async () => {
+                const fresh = await ConsentService.text(interviewId!);
+                if (fresh.success && fresh.data) setConsentText(fresh.data);
+                setConsent('needed');
+              }}
+            />
+          )}
         </Box>
+      ) : (
+        <>
+          <JoinStepper current={currentStep} />
+
+          {/* Step body — centered card per current step. */}
+          <Box sx={{
+            flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+            pt: { xs: 3, md: 5 }, px: { xs: 2, md: 3 }, pb: 3,
+          }}>
+            {currentStep === 'consent' && consentText && (
+              <ConsentScreen
+                body={consentText.body}
+                version={consentText.version}
+                companyName={interview.company?.name ?? null}
+                companyLogoUrl={interview.company?.logo_url ?? null}
+                onAgree={handleAgree}
+                onDecline={handleDecline}
+                busy={consentBusy}
+              />
+            )}
+
+            {currentStep === 'install' && (
+              <HelperDownloadCard checking={helper.checking} onRetry={() => helper.refresh()} />
+            )}
+
+            {currentStep === 'permissions' && (
+              <SetupCard
+                icon={<ShieldIcon sx={{ fontSize: 20 }} />}
+                title="Grant permissions"
+                subtitle="Enable each permission for Trueyy Helper, then this page updates automatically."
+              >
+                {monitoringState === 'pending' ? (
+                  <Status busy text="Connecting to helper…" />
+                ) : (
+                  <>
+                    <PermissionRow title="Screen Recording" desc="Required for app / window monitoring"
+                      done={screenOk} onEnable={openScreenRecordingSettings} />
+                    <PermissionRow title="Microphone" desc="Required for live transcription"
+                      done={micOk} onEnable={openMicSettings} />
+                    <PermissionRow title="Keyboard Access" desc="Required for keyboard activity monitoring"
+                      done={keyboardOk} onEnable={openKeyboardSettings} />
+                    <Caption sx={{ display: 'block', color: TOKENS.textSecondary, mt: 1.5 }}>
+                      {detectHelperPlatform() === 'windows'
+                        ? <>Enable <strong>Microphone access</strong> (and <strong>Let desktop apps access your microphone</strong>) in Windows Settings, then return here.</>
+                        : <>Toggle <strong>Trueyy Helper</strong> ON in each pane, then return here.</>}
+                    </Caption>
+                  </>
+                )}
+              </SetupCard>
+            )}
+
+            {currentStep === 'join' && (
+              <SetupCard
+                icon={<VideoCallIcon sx={{ fontSize: 20 }} />}
+                title={meetingOpened ? 'You’re all set' : 'Join your meeting'}
+                subtitle={meetingOpened
+                  ? 'Keep this tab open while you interview — monitoring runs in the background.'
+                  : 'Monitoring is active. Open the meeting to begin.'}
+              >
+                {meetingOpened ? (
+                  <Status ok text="Meeting opened — keep this tab open" />
+                ) : (
+                  <ActionButton
+                    startIcon={<VideoCallIcon sx={{ fontSize: 18 }} />}
+                    onClick={handleOpenMeeting}
+                    disabled={!interview.provider_metadata?.join_url}
+                  >
+                    Open meeting
+                  </ActionButton>
+                )}
+                {/* Withdraw stays on the Join step only — this is where
+                    monitoring is actually running, and GDPR Art. 7(3)
+                    requires it to remain available while monitored. */}
+                <Box sx={{ mt: 2.5 }}>
+                  <Button
+                    size="small" color="inherit"
+                    sx={{ color: TOKENS.textSecondary, textTransform: 'none', fontSize: '0.78rem' }}
+                    onClick={() => setWithdrawOpen(true)}
+                  >
+                    Withdraw monitoring consent
+                  </Button>
+                </Box>
+              </SetupCard>
+            )}
+          </Box>
+        </>
       )}
+
+      <Dialog open={withdrawOpen} onClose={() => setWithdrawOpen(false)}>
+        <DialogTitle>Withdraw monitoring consent?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Your interviewer will be notified immediately and recording will stop.
+            The interview may end as a result. Data recorded so far is kept.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setWithdrawOpen(false)}>Cancel</Button>
+          <Button color="error" onClick={handleWithdraw} disabled={consentBusy}>Withdraw consent</Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
+
+/** A plain white setup card (permissions / join) matching ConsentScreen's
+ *  visual weight so the stepped flow feels consistent. */
+function SetupCard({ icon, title, subtitle, children }: {
+  icon: React.ReactNode; title: string; subtitle: string; children: React.ReactNode;
+}) {
+  return (
+    <Box sx={{
+      width: 460, maxWidth: '100%', bgcolor: TOKENS.bgCard,
+      borderRadius: '16px', border: `1px solid ${TOKENS.border}`,
+      boxShadow: '0 4px 24px rgba(17, 24, 39, 0.06)', p: { xs: 3, md: 3.5 },
+    }}>
+      <Box sx={{
+        width: 44, height: 44, borderRadius: '11px', mb: 1.75,
+        bgcolor: TOKENS.brandBg, color: BRAND,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {icon}
+      </Box>
+      <CardTitle component="h2" sx={{ m: 0, mb: 0.5, fontWeight: 700 }}>{title}</CardTitle>
+      <Secondary sx={{ color: TOKENS.textSecondary, mb: 2.5 }}>{subtitle}</Secondary>
+      {children}
     </Box>
   );
 }

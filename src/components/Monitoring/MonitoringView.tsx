@@ -206,6 +206,14 @@ export default function MonitoringView() {
               updated_at: response.data.extension_status.updated_at ?? null,
             });
           }
+          // Seed the consent state from the staff payload; live consent
+          // transitions arrive via the consent-status socket event.
+          const hasConsent = (response.data as { has_open_consent?: boolean }).has_open_consent;
+          if (hasConsent !== undefined) {
+            riskData.setInitialConsentStatus(
+              hasConsent ? { status: 'given', at: new Date().toISOString() } : null
+            );
+          }
         } else {
           setError(response.message || 'Failed to load interview');
         }
@@ -261,7 +269,15 @@ export default function MonitoringView() {
   // sessionStorage so a subsequent reload / reconnect can restore. The
   // UI itself re-renders on the server's modality-state broadcast, not
   // on local state.
+  // Consent gate: after a decline/withdrawal the toggles are locked —
+  // re-enabling would be pointless (Cortex's sessionGuard 409s every
+  // capture write without an open consent row).
+  const consentBlocked =
+    riskData.consentStatus?.status === 'revoked' ||
+    riskData.consentStatus?.status === 'declined';
+
   const handleToggleTranscription = (next: boolean) => {
+    if (next && consentBlocked) return;
     if (interviewId) {
       sessionStorage.setItem(`skyview:txn:${interviewId}`, next ? '1' : '0');
     }
@@ -270,6 +286,7 @@ export default function MonitoringView() {
   };
 
   const handleToggleAnalysis = (next: boolean) => {
+    if (next && consentBlocked) return;
     if (interviewId) {
       sessionStorage.setItem(`skyview:anl:${interviewId}`, next ? '1' : '0');
     }
@@ -524,11 +541,26 @@ export default function MonitoringView() {
 
       {/* Full monitoring UI */}
       <>
+          {/* Consent transitions — loud and persistent. Withdrawal means
+              capture has already been halted server-side. */}
+          {riskData.consentStatus?.status === 'revoked' && (
+            <Alert severity="error" sx={{ mx: { xs: 2, md: 3 }, mt: 1.5 }}>
+              Candidate withdrew monitoring consent at{' '}
+              {new Date(riskData.consentStatus.at).toLocaleTimeString()} — capture stopped.
+              No further data will be collected unless they re-consent.
+            </Alert>
+          )}
+          {riskData.consentStatus?.status === 'declined' && (
+            <Alert severity="warning" sx={{ mx: { xs: 2, md: 3 }, mt: 1.5 }}>
+              Candidate declined monitoring consent — monitoring cannot start for this interview.
+            </Alert>
+          )}
+
           {/* Pre-join checklists */}
           {!riskData.candidateStatus?.joined
-            ? <CandidateSetupCard status={riskData.candidateStatus} />
+            ? <CandidateSetupCard status={riskData.candidateStatus} consent={riskData.consentStatus?.status ?? 'pending'} />
             : !riskData.candidateStatus?.screen_recording
-              ? <CandidateSetupCard status={riskData.candidateStatus} revoked />
+              ? <CandidateSetupCard status={riskData.candidateStatus} consent={riskData.consentStatus?.status ?? 'pending'} revoked />
               : null
           }
 

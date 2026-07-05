@@ -144,6 +144,10 @@ export interface UseRiskSocketReturn {
   // means we haven't received any status yet (e.g. extension never connected
   // for this session, or it's an application-type interview).
   candidateStatus: CandidateStatus | null;
+  /** Candidate consent lifecycle (GDPR) — seeded from the session payload,
+   *  updated live via the consent-status socket event. */
+  consentStatus: { status: 'given' | 'declined' | 'revoked'; at: string } | null;
+  setInitialConsentStatus: (status: { status: 'given' | 'declined' | 'revoked'; at: string } | null) => void;
   setInitialCandidateStatus: (status: CandidateStatus | null) => void;
 }
 
@@ -200,7 +204,14 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
   const [pendingImageAnalysisCount, setPendingImageAnalysisCount] = useState(0);
   const [candidateStatus, setCandidateStatus] = useState<CandidateStatus | null>(null);
   const [modalityState, setModalityState] = useState<ModalityState | null>(null);
+  // Consent lifecycle (GDPR): null until the first event or initial seed;
+  // MonitoringView seeds it from the session payload's has_open_consent.
+  const [consentStatus, setConsentStatus] = useState<{ status: 'given' | 'declined' | 'revoked'; at: string } | null>(null);
   const socketRef = useRef<Socket | null>(null);
+
+  const setInitialConsentStatus = useCallback((status: { status: 'given' | 'declined' | 'revoked'; at: string } | null) => {
+    setConsentStatus((prev) => prev ?? status);
+  }, []);
 
   const setInitialCandidateStatus = useCallback((status: CandidateStatus | null) => {
     setCandidateStatus((prev) => prev ?? status);
@@ -320,6 +331,14 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
         joined: !!data.joined,
         updated_at: data.updated_at ?? new Date().toISOString(),
       });
+    });
+
+    // Candidate consent transitions — Cortex broadcasts on grant/decline/
+    // revoke. Revoke also triggers stop-transcription/analysis broadcasts;
+    // this event is what drives the interviewer banner + toggle lock.
+    socket.on('consent-status', (data: { sessionId: string; status: 'given' | 'declined' | 'revoked'; at: string }) => {
+      console.log('[RiskSocket] consent-status received:', data);
+      setConsentStatus({ status: data.status, at: data.at });
     });
 
     // interviewer-status subscription removed — see comment near the top
@@ -445,6 +464,8 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     emitStopAnalysis,
     modalityState,
     candidateStatus,
+    consentStatus,
+    setInitialConsentStatus,
     setInitialCandidateStatus,
   };
 }
