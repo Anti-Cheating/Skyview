@@ -23,12 +23,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { isCompanyManagerRole } from '../../config/constants';
 import ProcessListPage from './ProcessListPage';
 import AppInterviewList from './AppInterviewList';
+import CandidatesListPage from './CandidatesListPage';
 
-type View = 'interview' | 'round';
+type View = 'interview' | 'round' | 'candidate';
 
 const OPTIONS: { value: View; label: string }[] = [
   { value: 'interview', label: 'Interviews' },
   { value: 'round', label: 'Rounds' },
+  { value: 'candidate', label: 'Candidates' },
 ];
 
 export default function InterviewsIndex() {
@@ -39,7 +41,8 @@ export default function InterviewsIndex() {
   // Interviewers / candidates: the flat round list only, unchanged.
   if (!isCompanyManagerRole(user?.role)) return <AppInterviewList />;
 
-  const view: View = params.get('view') === 'round' ? 'round' : 'interview';
+  const raw = params.get('view');
+  const view: View = raw === 'round' || raw === 'candidate' ? raw : 'interview';
   const setView = (v: View) => {
     const next = new URLSearchParams(params);
     if (v === 'interview') next.delete('view');
@@ -55,7 +58,9 @@ export default function InterviewsIndex() {
           <Secondary sx={{ color: TOKENS.textSecondary }}>
             {view === 'interview'
               ? 'Grouped by candidate and role.'
-              : 'All rounds, newest first.'}
+              : view === 'round'
+                ? 'All rounds, newest first.'
+                : 'One row per candidate.'}
           </Secondary>
         </Box>
         {/* Right cluster: Group by dropdown, then the New interview button */}
@@ -91,7 +96,11 @@ export default function InterviewsIndex() {
         </Box>
       </Box>
 
-      {view === 'interview' ? <ProcessListPage embedded /> : <AppInterviewList embedded />}
+      {view === 'interview'
+        ? <ProcessListPage embedded />
+        : view === 'round'
+          ? <AppInterviewList embedded />
+          : <CandidatesListPage embedded />}
     </Box>
   );
 }

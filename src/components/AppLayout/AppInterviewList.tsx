@@ -158,7 +158,10 @@ export default function AppInterviewList({ embedded = false }: { embedded?: bool
   const showShimmer = useDelayedFlag(loading && items.length === 0, 250);
 
   const handleEditInterview = (interview: InterviewSession) => {
-    navigate(`/interviews/${interview.id}/edit`);
+    // Rounds are edited on the parent interview's detail page (via its round
+    // dialog) — the standalone /edit page was removed in the multi-round
+    // refactor. Fall back to the legacy path only if we somehow lack a process.
+    navigate(interview.process_id ? `/interviews/${interview.process_id}` : `/interviews/${interview.id}/edit`);
   };
   const handleDeleteInterview = (interview: InterviewSession) => {
     setPendingDelete(interview);

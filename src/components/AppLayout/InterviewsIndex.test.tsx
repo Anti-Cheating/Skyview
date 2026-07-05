@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 // Isolate the switcher: stub the two heavy child views with markers.
 vi.mock('./ProcessListPage', () => ({ default: () => <div>PROCESS_VIEW</div> }));
 vi.mock('./AppInterviewList', () => ({ default: () => <div>ROUND_VIEW</div> }));
+vi.mock('./CandidatesListPage', () => ({ default: () => <div>CANDIDATE_VIEW</div> }));
 
 const mockNavigate = vi.fn();
 let sp = new URLSearchParams();
@@ -48,6 +49,20 @@ describe('InterviewsIndex — group-by switcher', () => {
     render(<InterviewsIndex />);
     expect(screen.getByText('ROUND_VIEW')).toBeInTheDocument();
     expect(screen.queryByText('PROCESS_VIEW')).not.toBeInTheDocument();
+  });
+
+  test('view=candidate in the URL renders the candidates list', () => {
+    sp = new URLSearchParams('view=candidate');
+    render(<InterviewsIndex />);
+    expect(screen.getByText('CANDIDATE_VIEW')).toBeInTheDocument();
+  });
+
+  test('choosing "Candidates" writes view=candidate to the URL', async () => {
+    render(<InterviewsIndex />);
+    await userEvent.click(screen.getByRole('combobox'));
+    await userEvent.click(screen.getByRole('option', { name: 'Candidates' }));
+    const written = setSp.mock.calls.at(-1)![0] as URLSearchParams;
+    expect(written.get('view')).toBe('candidate');
   });
 
   test('non-managers get the round list only, with no switcher', () => {

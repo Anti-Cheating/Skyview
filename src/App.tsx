@@ -15,6 +15,7 @@ import AppDashboard from './components/AppLayout/AppDashboard';
 import InterviewsIndex from './components/AppLayout/InterviewsIndex';
 import CreateProcessPage from './components/AppLayout/CreateProcessPage';
 import ProcessDetailPage from './components/AppLayout/ProcessDetailPage';
+import CandidateDetailPage from './components/AppLayout/CandidateDetailPage';
 import InterviewDetailPage from './components/AppLayout/InterviewDetailPage';
 import { PostAnalysisPanel } from './components/PostAnalysis';
 import PreviewPage from './components/PostAnalysis/PreviewPage';
@@ -213,6 +214,7 @@ function AppRoutes() {
           <Route path="interviews" element={<InterviewsIndexRoute />} />
           <Route path="interviews/new" element={<CompanyManagerRoute><CreateProcessPage /></CompanyManagerRoute>} />
           <Route path="interviews/:processId" element={<ProcessDetailPage />} />
+          <Route path="candidates/:candidateId" element={<CompanyManagerRoute><CandidateDetailPage /></CompanyManagerRoute>} />
           {/* Round screens — a round is a session, so these reuse the existing pages */}
           <Route path="interviews/:processId/rounds/:roundId" element={<InterviewDetailPage />} />
           <Route path="interviews/:processId/rounds/:roundId/analysis" element={<PostAnalysisPanel />} />
