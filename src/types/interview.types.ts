@@ -51,6 +51,9 @@ export interface InterviewSession {
   role?: string | null;
   round_name?: string | null;
   round_order?: number | null;
+  // Parent interview process — lets a round row deep-link to its detail
+  // page (/interviews/:process_id/rounds/:id).
+  process_id?: string | null;
   created_by: string;
   scheduled_start_at: string;
   scheduled_end_at: string;

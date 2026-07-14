@@ -292,7 +292,7 @@ export default function ProcessDetailPage() {
 }
 
 function initialsOf(c: { first_name: string; last_name: string; email: string }): string {
-  const a = c.first_name?.[0] ?? '';
+  const a = c.first_name?.[0] ?? '';  
   const b = c.last_name?.[0] ?? '';
   return (a + b).toUpperCase() || c.email[0]?.toUpperCase() || '?';
 }

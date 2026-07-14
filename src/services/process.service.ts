@@ -80,4 +80,5 @@ export class ProcessService {
     const r = await ApiService.delete<unknown>(`/interview-processes/${id}`, undefined, 'auth');
     return { success: r.success, data: r.data, message: r.message };
   }
+
 }

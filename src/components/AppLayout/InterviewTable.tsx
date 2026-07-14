@@ -76,7 +76,13 @@ export default function InterviewTable({
       render: (row) => (
         <Box
           component="button"
-          onClick={() => navigate(`/interviews/${row.id}`)}
+          onClick={() =>
+            navigate(
+              row.process_id
+                ? `/interviews/${row.process_id}/rounds/${row.id}`
+                : `/interviews/${row.id}`,
+            )
+          }
           sx={{
             background: 'none',
             border: 0,

@@ -49,6 +49,7 @@ export default function AppLayout() {
       shared.push({ id: 'billing', label: 'Billing', iconName: 'CreditCard', route: '/billing', badge: null });
       shared.push({ id: 'tokens', label: 'API Tokens', iconName: 'Settings', route: '/tokens', badge: null });
       shared.push({ id: 'webhooks', label: 'Webhooks', iconName: 'HelpOutline', route: '/webhooks', badge: null });
+      shared.push({ id: 'audit-log', label: 'Audit log', iconName: 'Settings', route: '/audit-log', badge: null });
     }
     // Profile is available to every authenticated user — the page itself
     // gates the Owner-only Company section inside.
@@ -73,6 +74,7 @@ export default function AppLayout() {
     if (location.pathname.startsWith('/billing')) return 'billing';
     if (location.pathname.startsWith('/tokens')) return 'tokens';
     if (location.pathname.startsWith('/webhooks')) return 'webhooks';
+    if (location.pathname.startsWith('/audit-log')) return 'audit-log';
     if (location.pathname.startsWith('/profile')) return 'profile';
     return 'dashboard';
   };

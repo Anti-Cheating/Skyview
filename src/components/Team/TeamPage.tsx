@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { SearchField } from '../common/SearchField';
 import {
   Box,
   Stack,
@@ -26,14 +27,11 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  InputAdornment,
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import {
   Add as AddIcon,
   MoreVert as MoreVertIcon,
-  Search as SearchIcon,
 } from '@mui/icons-material';
 import { CircularProgress } from '@mui/material';
 import { PageTitle, Caption, Secondary } from '../layout/Typography';
@@ -659,29 +657,10 @@ export default function TeamPage() {
           transition={{ duration: 0.2, ease: 'easeOut' }}
         >
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
-            <TextField
-              size="small"
+            <SearchField
               placeholder="Search name or email…"
               value={membersSearchInput}
-              onChange={(e) => setMembersSearchInput(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                width: { xs: '100%', sm: 280 },
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                  fontSize: '0.875rem',
-                  bgcolor: '#FFFFFF',
-                  '& fieldset': { borderColor: '#E5E7EB' },
-                  '&:hover fieldset': { borderColor: '#D1D5DB' },
-                  '&.Mui-focused fieldset': { borderColor: '#4CD964', borderWidth: 1 },
-                },
-              }}
+              onChange={setMembersSearchInput}
             />
           </Box>
           <DataTable<TeamMember>
@@ -719,29 +698,10 @@ export default function TeamPage() {
           transition={{ duration: 0.2, ease: 'easeOut' }}
         >
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
-            <TextField
-              size="small"
+            <SearchField
               placeholder="Search invitee email…"
               value={pendingSearchInput}
-              onChange={(e) => setPendingSearchInput(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                width: { xs: '100%', sm: 280 },
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px',
-                  fontSize: '0.875rem',
-                  bgcolor: '#FFFFFF',
-                  '& fieldset': { borderColor: '#E5E7EB' },
-                  '&:hover fieldset': { borderColor: '#D1D5DB' },
-                  '&.Mui-focused fieldset': { borderColor: '#4CD964', borderWidth: 1 },
-                },
-              }}
+              onChange={setPendingSearchInput}
             />
           </Box>
           <DataTable<PendingInvite>
