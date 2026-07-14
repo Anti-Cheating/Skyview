@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
   CircularProgress,
@@ -35,6 +35,7 @@ import {
   Schedule as PendingIcon,
 } from '@mui/icons-material';
 import { InterviewService } from '../../services/interview.service';
+import { SessionJoinService } from '../../services/sessionJoin.service';
 import { useAuth } from '../../contexts/AuthContext';
 import { useHelper } from '../../hooks/useHelper';
 import {
@@ -57,7 +58,8 @@ const LIGHT_BORDER = TOKENS.border;
 export default function CandidateJoinPage() {
   const { id: interviewId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const location = useLocation();
+  const { user, refreshAuth } = useAuth();
 
   const userRole = user?.role || USER_ROLES.CANDIDATE;
 
@@ -65,6 +67,47 @@ export default function CandidateJoinPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [meetingOpened, setMeetingOpened] = useState(false);
+  const [exchanging, setExchanging] = useState(false);
+  const [exchangeError, setExchangeError] = useState<string | null>(null);
+
+  // ── Magic-link exchange ──────────────────────────────────────────
+  // Public route: no PrivateRoute gate. If the URL carries ?t=<token>
+  // and there's no authenticated user yet, trade it for a real session
+  // before anything else runs. Runs once per mount.
+  useEffect(() => {
+    if (user) return; // already signed in (e.g. re-visit on the same tab)
+    const token = new URLSearchParams(location.search).get('t');
+    if (!token || !interviewId) return;
+    let cancelled = false;
+    setExchanging(true);
+    (async () => {
+      const result = await SessionJoinService.exchangeJoinToken(interviewId, token);
+      if (cancelled) return;
+      if (!result.ok) {
+        setExchangeError(result.error);
+        setExchanging(false);
+        return;
+      }
+      localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, result.data.accessToken);
+      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, result.data.refreshToken);
+      localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(result.data.user));
+      await refreshAuth();
+      setExchanging(false);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interviewId]);
+
+  // Fallback: no token in the URL and no authenticated user — nothing
+  // this page can do, send them to login preserving returnTo (mirrors
+  // PrivateRoute's own redirect behaviour for a page that's now public).
+  useEffect(() => {
+    if (user || exchanging) return;
+    const token = new URLSearchParams(location.search).get('t');
+    if (token) return; // magic-link effect above is handling this
+    const here = location.pathname + location.search;
+    navigate(`/login?returnTo=${encodeURIComponent(here)}`, { replace: true });
+  }, [user, exchanging, location, navigate]);
 
   const helper = useHelper(2000);
   // Deliberately NO teardown on the candidate side — the candidate
@@ -200,6 +243,20 @@ export default function CandidateJoinPage() {
         sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}
       >
         <CircularProgress sx={{ color: BRAND }} aria-label="Loading interview" />
+      </Box>
+    );
+  }
+  if (exchanging) {
+    return (
+      <Box role="status" aria-live="polite" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <CircularProgress sx={{ color: BRAND }} aria-label="Signing you in" />
+      </Box>
+    );
+  }
+  if (exchangeError) {
+    return (
+      <Box sx={{ p: 3, maxWidth: 520, mx: 'auto', mt: 8 }}>
+        <Alert severity="error">{exchangeError} Try clicking the link from your invite email again, or contact your interviewer.</Alert>
       </Box>
     );
   }

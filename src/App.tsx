@@ -204,6 +204,11 @@ function AppRoutes() {
         />
         {/* Public invite acceptance — invitee may not have an account yet */}
         <Route path="/invite/:token" element={<InviteAcceptPage />} />
+        {/* Public candidate join link (from invite emails) — CandidateJoinPage
+            exchanges its own ?t= magic-link token for a session on mount, so
+            it must not sit behind PrivateRoute. Falls back to PrivateRoute's
+            login redirect internally if no/invalid token is present. */}
+        <Route path="/interviews/:id/join" element={<CandidateJoinPage />} />
         {/* Falcon deep-link return page — simple "open desktop app" view */}
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         {/* Full web app with sidebar — nested routes render in AppLayout's <Outlet /> */}
@@ -217,8 +222,6 @@ function AppRoutes() {
           <Route path="interviews/:processId/rounds/:roundId" element={<InterviewDetailPage />} />
           <Route path="interviews/:processId/rounds/:roundId/analysis" element={<PostAnalysisPanel />} />
           <Route path="interviews/:processId/rounds/:roundId/monitor" element={<MonitoringView />} />
-          {/* Candidate join link (from invite emails) — uses the round/session id directly */}
-          <Route path="interviews/:id/join" element={<CandidateJoinPage />} />
           <Route path="users" element={<CompanyManagerRoute><TeamPage /></CompanyManagerRoute>} />
           <Route path="billing" element={<CompanyManagerRoute><BillingPage /></CompanyManagerRoute>} />
           <Route path="plans" element={<CompanyManagerRoute><PlansPage /></CompanyManagerRoute>} />
