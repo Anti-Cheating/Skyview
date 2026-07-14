@@ -47,9 +47,9 @@ export default function AppLayout() {
       shared.push({ id: 'users', label: 'Users', iconName: 'People', route: '/users', badge: null });
       shared.push({ id: 'plans', label: 'Plans', iconName: 'Plans', route: '/plans', badge: null });
       shared.push({ id: 'billing', label: 'Billing', iconName: 'CreditCard', route: '/billing', badge: null });
-      shared.push({ id: 'tokens', label: 'API Tokens', iconName: 'Settings', route: '/tokens', badge: null });
-      shared.push({ id: 'webhooks', label: 'Webhooks', iconName: 'HelpOutline', route: '/webhooks', badge: null });
-      shared.push({ id: 'audit-log', label: 'Audit log', iconName: 'Settings', route: '/audit-log', badge: null });
+      shared.push({ id: 'tokens', label: 'API Tokens', iconName: 'ApiKey', route: '/tokens', badge: null });
+      shared.push({ id: 'webhooks', label: 'Webhooks', iconName: 'Webhook', route: '/webhooks', badge: null });
+      shared.push({ id: 'audit-log', label: 'Audit log', iconName: 'AuditLog', route: '/audit-log', badge: null });
     }
     // Profile is available to every authenticated user — the page itself
     // gates the Owner-only Company section inside.

@@ -21,21 +21,24 @@ import {
   useMediaQuery,
 } from '@mui/material';
 import {
-  Dashboard as DashboardIcon,
-  Settings as SettingsIcon,
-  HelpOutline as HelpOutlineIcon,
-  Person as PersonIcon,
-  People as PeopleIcon,
-  ExitToApp as ExitIcon,
-  VideoCall as VideoCallIcon,
-  CreditCard as CreditCardIcon,
-  RocketLaunch as RocketLaunchIcon,
-  Business as BusinessIcon,
-  VpnKey as VpnKeyIcon,
-  Hub as HubIcon,
-  History as HistoryIcon,
-  Mail as MailIcon,
-} from '@mui/icons-material';
+  MdDashboard,
+  MdVideoCall,
+  MdPeople,
+  MdPerson,
+  MdRocketLaunch,
+  MdCreditCard,
+  MdKey,
+  MdWebhook,
+  MdReceiptLong,
+  MdSettings,
+  MdHelpOutline,
+  MdLogout,
+  MdBusiness,
+  MdVpnKey,
+  MdHub,
+  MdHistory,
+  MdMail,
+} from 'react-icons/md';
 import { motion } from 'framer-motion';
 import { SidebarProps } from './sidebar.types';
 import { TruoyyLogo } from './TruoyyLogo';
@@ -43,23 +46,27 @@ import { TOKENS } from '../../theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCompany } from '../../contexts/CompanyContext';
 
-// Single icon family, only what the app actually renders.
+// One distinct, semantically-appropriate icon per nav item — no duplicates.
+// react-icons (Material family) to match the app's look.
 const iconMap: Record<string, React.ComponentType<any>> = {
-  Dashboard: DashboardIcon,
-  Interviews: VideoCallIcon,
-  VideoCall: VideoCallIcon,
-  Settings: SettingsIcon,
-  HelpOutline: HelpOutlineIcon,
-  Person: PersonIcon,
-  People: PeopleIcon,
-  ExitToApp: ExitIcon,
-  CreditCard: CreditCardIcon,
-  Plans: RocketLaunchIcon,
-  Business: BusinessIcon,
-  VpnKey: VpnKeyIcon,
-  Hub: HubIcon,
-  History: HistoryIcon,
-  Mail: MailIcon,
+  Dashboard: MdDashboard,       // Dashboard
+  Interviews: MdVideoCall,      // Interviews (video calls)
+  VideoCall: MdVideoCall,       // alias
+  People: MdPeople,             // Users / team
+  Person: MdPerson,             // Profile
+  Plans: MdRocketLaunch,        // Plans / upgrade
+  CreditCard: MdCreditCard,     // Billing
+  ApiKey: MdKey,                // API Tokens  (was the Settings gear — duplicate)
+  Webhook: MdWebhook,           // Webhooks    (was HelpOutline "?")
+  AuditLog: MdReceiptLong,      // Audit log   (was the Settings gear — duplicate)
+  Settings: MdSettings,         // generic settings (kept for any future use)
+  HelpOutline: MdHelpOutline,   // help
+  ExitToApp: MdLogout,          // logout
+  Business: MdBusiness,         // Admin · Companies
+  VpnKey: MdVpnKey,             // Admin · Licensing
+  Hub: MdHub,                   // Admin · Operations
+  History: MdHistory,           // Admin · Audit
+  Mail: MdMail,                 // Admin · Contact
 };
 
 const getInitials = (label: string): string => {
@@ -71,7 +78,7 @@ const getInitials = (label: string): string => {
 };
 
 const getIcon = (iconName: string): React.ComponentType<any> =>
-  iconMap[iconName] || DashboardIcon;
+  iconMap[iconName] || MdDashboard;
 
 /**
  * Sidebar — always-open left rail.
@@ -241,7 +248,7 @@ export function Sidebar({
           />
         )}
         <ListItemIcon>
-          <ItemIcon />
+          <ItemIcon size={22} />
         </ListItemIcon>
         <ListItemText primary={item.label} />
         {hasBadge && (
@@ -484,7 +491,7 @@ export function Sidebar({
                 },
               }}
             >
-              <ExitIcon />
+              <MdLogout size={20} />
             </IconButton>
           </Tooltip>
         </Box>
