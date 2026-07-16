@@ -47,11 +47,21 @@ import AuditDetailPage from './components/Settings/AuditDetailPage';
 import AdminContactQueriesPage from './components/Admin/ContactQueriesPage';
 import AdminPlansPage from './components/Admin/PlansPage';
 import { isCompanyManagerRole } from './config/constants';
+import { trackPageview } from './lib/analytics';
 
 /**
  * Detects if Skyview was opened from Falcon (via ?src=falcon param)
  * and stores the source in sessionStorage so login redirects correctly.
  */
+/** Sends a GA page_view on every client-side route change (SPA). */
+function RouteAnalytics() {
+  const location = useLocation();
+  useEffect(() => {
+    trackPageview(location.pathname + location.search);
+  }, [location.pathname, location.search]);
+  return null;
+}
+
 function SourceDetector() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -284,6 +294,7 @@ export default function App() {
           <AuthProvider>
             <CompanyProvider>
               <BrowserRouter>
+                <RouteAnalytics />
                 <AppRoutes />
               </BrowserRouter>
             </CompanyProvider>
