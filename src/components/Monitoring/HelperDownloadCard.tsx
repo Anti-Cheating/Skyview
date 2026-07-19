@@ -78,8 +78,8 @@ export default function HelperDownloadCard({ checking, onRetry }: Props) {
           Install Trueyy Helper
         </CardTitle>
         <Secondary sx={{ color: TOKENS.textSecondary, mb: 2 }}>
-          Trueyy Helper is a small background app that captures your microphone and activity
-          during the interview. Install it once — all future interviews work automatically.
+          Install the desktop app that runs monitoring for this interview. It’s a
+          one-time setup — future interviews connect automatically.
         </Secondary>
 
         {checking ? (
@@ -110,9 +110,8 @@ export default function HelperDownloadCard({ checking, onRetry }: Props) {
         </Box>
 
         <Caption sx={{ display: 'block', color: TOKENS.textMuted, mt: 1.5 }}>
-          Already installed? The helper should be reachable at{' '}
-          <code>http://127.0.0.1:48123</code>. Open this URL in a new
-          tab — if it returns JSON the helper is running. Otherwise install and refresh.
+          Already installed it? Click{' '}
+          <Box component="span" sx={{ fontWeight: 600, color: TOKENS.textSecondary }}>Retry detection</Box>.
         </Caption>
       </Box>
     </Box>

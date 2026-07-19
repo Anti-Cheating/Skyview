@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SearchField } from '../common/SearchField';
 import { useNavigate } from 'react-router-dom';
 import { InterviewListShimmer } from '../common/Shimmer';
 import {
@@ -30,13 +31,10 @@ import {
   DialogActions,
   Button,
   CircularProgress,
-  InputAdornment,
-  TextField,
 } from '@mui/material';
 import {
   EventBusy as EventBusyIcon,
   Add as AddIcon,
-  Search as SearchIcon,
 } from '@mui/icons-material';
 import { AnimatePresence, motion } from 'framer-motion';
 import AppInterviewCard from './AppInterviewCard';
@@ -57,7 +55,7 @@ const PILLS: { value: InterviewListPill; label: string }[] = [
   { value: 'completed', label: 'Completed' },
 ];
 
-export default function AppInterviewList() {
+export default function AppInterviewList({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth();
   const { showError, showSuccess } = useSnackbar();
   const theme = useTheme();
@@ -160,7 +158,10 @@ export default function AppInterviewList() {
   const showShimmer = useDelayedFlag(loading && items.length === 0, 250);
 
   const handleEditInterview = (interview: InterviewSession) => {
-    navigate(`/interviews/${interview.id}/edit`);
+    // Rounds are edited on the parent interview's detail page (via its round
+    // dialog) — the standalone /edit page was removed in the multi-round
+    // refactor. Fall back to the legacy path only if we somehow lack a process.
+    navigate(interview.process_id ? `/interviews/${interview.process_id}` : `/interviews/${interview.id}/edit`);
   };
   const handleDeleteInterview = (interview: InterviewSession) => {
     setPendingDelete(interview);
@@ -282,29 +283,10 @@ export default function AppInterviewList() {
             );
           })}
         </Box>
-        <TextField
-          size="small"
+        <SearchField
           placeholder="Search title, candidate, interviewer…"
           value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
-              </InputAdornment>
-            ),
-          }}
-          sx={{
-            width: { xs: '100%', sm: 280 },
-            '& .MuiOutlinedInput-root': {
-              borderRadius: '8px',
-              fontSize: '0.875rem',
-              bgcolor: '#FFFFFF',
-              '& fieldset': { borderColor: '#E5E7EB' },
-              '&:hover fieldset': { borderColor: '#D1D5DB' },
-              '&.Mui-focused fieldset': { borderColor: '#4CD964', borderWidth: 1 },
-            },
-          }}
+          onChange={setSearchInput}
         />
       </Box>
     );
@@ -319,29 +301,31 @@ export default function AppInterviewList() {
   }
 
   return (
-    <Box sx={{ width: '100%', p: { xs: 2, md: 3 } }}>
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h1" sx={{ color: '#1F2937', mb: 0.5 }}>
-              Interviews
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#6B7280' }}>
-              {userRole === USER_ROLES.CANDIDATE
-                ? 'Manage and join your scheduled interviews'
-                : 'Review and conduct interviews with candidates'}
-            </Typography>
+    <Box sx={{ width: '100%', p: embedded ? 0 : { xs: 2, md: 3 } }}>
+      {!embedded && (
+        <Box sx={{ mb: 4 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="h1" sx={{ color: '#1F2937', mb: 0.5 }}>
+                Interviews
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#6B7280' }}>
+                {userRole === USER_ROLES.CANDIDATE
+                  ? 'Manage and join your scheduled interviews'
+                  : 'Review and conduct interviews with candidates'}
+              </Typography>
+            </Box>
+            {isInterviewer && (
+              <ActionButton
+                startIcon={<AddIcon sx={{ fontSize: 16 }} />}
+                onClick={() => navigate('/interviews/new')}
+              >
+                New Interview
+              </ActionButton>
+            )}
           </Box>
-          {isInterviewer && (
-            <ActionButton
-              startIcon={<AddIcon sx={{ fontSize: 16 }} />}
-              onClick={() => navigate('/interviews/new')}
-            >
-              New Interview
-            </ActionButton>
-          )}
         </Box>
-      </Box>
+      )}
 
       {/* Toolbar renders unconditionally so pills + search stay put
           while the content below transitions to the shimmer. Was

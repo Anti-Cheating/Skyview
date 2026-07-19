@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 import { AuthService } from '../services/auth.service';
 import { startTokenAutoRefresh, stopTokenAutoRefresh } from '../services/api.service';
 import type { User, LoginCredentials, SignupCredentials } from '../types/auth.types';
+import { trackEvent } from '../lib/analytics';
 
 interface AuthContextType {
   user: User | null;
@@ -122,6 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signup = async (credentials: SignupCredentials) => {
     const result = await AuthService.signup(credentials);
+    // Conversion: a new account was created (email/password). Fires the
+    // GA4 `sign_up` key event, attributed across the marketing→app funnel.
+    trackEvent('sign_up', { method: 'email' });
     // Don't set the user on context — verification still pending.
     // Caller routes to /check-inbox where the email address is
     // displayed and the user waits for the link.
@@ -130,6 +134,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const googleLogin = async (idToken: string) => {
     const data = await AuthService.googleLogin(idToken);
+    // Conversion: a brand-new Google user counts as a `sign_up`.
+    if (data.requiresOnboarding) trackEvent('sign_up', { method: 'google' });
     // Set the user immediately — they're authenticated regardless of
     // onboarding state. The route guard handles the rest.
     setUser(data.user);

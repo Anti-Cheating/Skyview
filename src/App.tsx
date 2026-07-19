@@ -12,10 +12,10 @@ import ResetPassword from './components/Auth/ResetPassword';
 import Dashboard from './components/Dashboard/Dashboard';
 import AppLayout from './components/AppLayout/AppLayout';
 import AppDashboard from './components/AppLayout/AppDashboard';
-import ProcessListPage from './components/AppLayout/ProcessListPage';
-import AppInterviewList from './components/AppLayout/AppInterviewList';
+import InterviewsIndex from './components/AppLayout/InterviewsIndex';
 import CreateProcessPage from './components/AppLayout/CreateProcessPage';
 import ProcessDetailPage from './components/AppLayout/ProcessDetailPage';
+import CandidateDetailPage from './components/AppLayout/CandidateDetailPage';
 import InterviewDetailPage from './components/AppLayout/InterviewDetailPage';
 import { PostAnalysisPanel } from './components/PostAnalysis';
 import PreviewPage from './components/PostAnalysis/PreviewPage';
@@ -41,14 +41,27 @@ import AdminBillingPage from './components/Admin/BillingPage';
 import AdminLicensingPage from './components/Admin/LicensingPage';
 import AdminOpsPage from './components/Admin/OpsPage';
 import AdminAuditPage from './components/Admin/AuditPage';
+import AdminAuditDetailPage from './components/Admin/AuditDetailPage';
+import AuditLogPage from './components/Settings/AuditLogPage';
+import AuditDetailPage from './components/Settings/AuditDetailPage';
 import AdminContactQueriesPage from './components/Admin/ContactQueriesPage';
 import AdminPlansPage from './components/Admin/PlansPage';
 import { isCompanyManagerRole } from './config/constants';
+import { trackPageview } from './lib/analytics';
 
 /**
  * Detects if Skyview was opened from Falcon (via ?src=falcon param)
  * and stores the source in sessionStorage so login redirects correctly.
  */
+/** Sends a GA page_view on every client-side route change (SPA). */
+function RouteAnalytics() {
+  const location = useLocation();
+  useEffect(() => {
+    trackPageview(location.pathname + location.search);
+  }, [location.pathname, location.search]);
+  return null;
+}
+
 function SourceDetector() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -149,17 +162,15 @@ function CompanyManagerRoute({ children }: { children: React.ReactNode }) {
 
 /**
  * /interviews is role-aware:
- *  - Company managers (Owner/Admin/System Admin) → the process list (multi-round
- *    management view).
- *  - Everyone else (candidates, members) → their OWN scoped interview cards
- *    (session view, server-filtered to the signed-in user).
- * Restores candidate/member access that the multi-round refactor inadvertently
- * locked behind CompanyManagerRoute (which redirected them to the dashboard).
+ *  - Company managers (Owner/Admin/System Admin) → a view switcher over the
+ *    process list (By interview) and the flat round list (By round).
+ *  - Everyone else (candidates, members) → their OWN scoped round list.
+ * The switcher + role split live in InterviewsIndex.
  */
-function InterviewsIndex() {
-  const { user, isLoading } = useAuth();
+function InterviewsIndexRoute() {
+  const { isLoading } = useAuth();
   if (isLoading) return <LoadingSpinner fullScreen message="Loading..." />;
-  return isCompanyManagerRole(user?.role) ? <ProcessListPage /> : <AppInterviewList />;
+  return <InterviewsIndex />;
 }
 
 /**
@@ -215,9 +226,10 @@ function AppRoutes() {
         <Route path="/" element={<PrivateRoute><AppLayout /></PrivateRoute>}>
           <Route index element={<AppDashboard />} />
           {/* Parent "Interview" (process) — manager-managed list + create */}
-          <Route path="interviews" element={<InterviewsIndex />} />
+          <Route path="interviews" element={<InterviewsIndexRoute />} />
           <Route path="interviews/new" element={<CompanyManagerRoute><CreateProcessPage /></CompanyManagerRoute>} />
           <Route path="interviews/:processId" element={<ProcessDetailPage />} />
+          <Route path="candidates/:candidateId" element={<CompanyManagerRoute><CandidateDetailPage /></CompanyManagerRoute>} />
           {/* Round screens — a round is a session, so these reuse the existing pages */}
           <Route path="interviews/:processId/rounds/:roundId" element={<InterviewDetailPage />} />
           <Route path="interviews/:processId/rounds/:roundId/analysis" element={<PostAnalysisPanel />} />
@@ -229,6 +241,9 @@ function AppRoutes() {
           {/* SDK platform pages — now top-level sidebar items (out of Settings). */}
           <Route path="tokens" element={<CompanyManagerRoute><ApiTokensPage /></CompanyManagerRoute>} />
           <Route path="webhooks" element={<CompanyManagerRoute><WebhooksPage /></CompanyManagerRoute>} />
+          {/* Company audit trail — Owner/Admin; server hides platform-staff rows. */}
+          <Route path="audit-log" element={<CompanyManagerRoute><AuditLogPage /></CompanyManagerRoute>} />
+          <Route path="audit-log/:id" element={<CompanyManagerRoute><AuditDetailPage /></CompanyManagerRoute>} />
           {/* Authenticated 404 — renders inside AppLayout so the user
               keeps the sidebar and can navigate out. */}
           <Route path="*" element={<NotFoundPage />} />
@@ -244,6 +259,7 @@ function AppRoutes() {
           <Route path="licensing" element={<AdminLicensingPage />} />
           <Route path="ops" element={<AdminOpsPage />} />
           <Route path="audit" element={<AdminAuditPage />} />
+          <Route path="audit/:id" element={<AdminAuditDetailPage />} />
           <Route path="contact" element={<AdminContactQueriesPage />} />
           <Route path="plans" element={<AdminPlansPage />} />
           <Route path="profile" element={<ProfilePage />} />
@@ -278,6 +294,7 @@ export default function App() {
           <AuthProvider>
             <CompanyProvider>
               <BrowserRouter>
+                <RouteAnalytics />
                 <AppRoutes />
               </BrowserRouter>
             </CompanyProvider>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { SearchField } from '../common/SearchField';
 import { useNavigate } from 'react-router-dom';
-import { Box, Chip, TextField, InputAdornment } from '@mui/material';
-import { Search as SearchIcon } from '@mui/icons-material';
+import { Box, Chip } from '@mui/material';
 import { TOKENS } from '../../theme';
 import { PageTitle, Secondary, Caption } from '../layout/Typography';
 import { DataTable, type DataTableColumn } from '../common/DataTable';
@@ -134,23 +134,11 @@ export default function CompaniesPage() {
         </Box>
       </Box>
 
-      <Box sx={{ mb: 2, maxWidth: 360 }}>
-        <TextField
-          fullWidth
-          size="small"
+      <Box sx={{ mb: 2 }}>
+        <SearchField
           placeholder="Search companies"
           value={search}
-          onChange={(e) => {
-            setPage(1);
-            setSearch(e.target.value);
-          }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon sx={{ fontSize: 18, color: TOKENS.textSecondary }} />
-              </InputAdornment>
-            ),
-          }}
+          onChange={(v) => { setPage(1); setSearch(v); }}
         />
       </Box>
 

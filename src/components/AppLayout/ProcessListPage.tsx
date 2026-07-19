@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { SearchField } from '../common/SearchField';
 import { useNavigate } from 'react-router-dom';
-import { Box, Chip, TextField, InputAdornment } from '@mui/material';
-import { Search as SearchIcon, Add as AddIcon } from '@mui/icons-material';
+import { Box, Chip } from '@mui/material';
+import { Add as AddIcon } from '@mui/icons-material';
 import { TOKENS } from '../../theme';
 import { PageTitle, Secondary, Caption } from '../layout/Typography';
 import { ActionButton } from '../common/ActionButton';
@@ -27,7 +28,7 @@ function StatusPill({ status }: { status: ProcessListItem['status'] }) {
   );
 }
 
-export default function ProcessListPage() {
+export default function ProcessListPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const { showError } = useSnackbar();
   const [rows, setRows] = useState<ProcessListItem[]>([]);
@@ -115,45 +116,35 @@ export default function ProcessListPage() {
   );
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 2,
-          mb: 3,
-        }}
-      >
-        <Box>
-          <PageTitle sx={{ color: TOKENS.textPrimary, mb: 0.5 }}>Interviews</PageTitle>
-          <Secondary sx={{ color: TOKENS.textSecondary }}>
-            Each interview groups a candidate's rounds for a role.
-          </Secondary>
+    <Box sx={{ p: embedded ? 0 : { xs: 2, md: 3 } }}>
+      {!embedded && (
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 2,
+            mb: 3,
+          }}
+        >
+          <Box>
+            <PageTitle sx={{ color: TOKENS.textPrimary, mb: 0.5 }}>Interviews</PageTitle>
+            <Secondary sx={{ color: TOKENS.textSecondary }}>
+              Each interview groups a candidate's rounds for a role.
+            </Secondary>
+          </Box>
+          <ActionButton onClick={() => navigate('/interviews/new')} startIcon={<AddIcon />}>
+            New interview
+          </ActionButton>
         </Box>
-        <ActionButton onClick={() => navigate('/interviews/new')} startIcon={<AddIcon />}>
-          New interview
-        </ActionButton>
-      </Box>
+      )}
 
-      <Box sx={{ mb: 2, maxWidth: 360 }}>
-        <TextField
-          fullWidth
-          size="small"
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+        <SearchField
           placeholder="Search candidate, email, or role"
           value={search}
-          onChange={(e) => {
-            setPage(1);
-            setSearch(e.target.value);
-          }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon sx={{ fontSize: 18, color: TOKENS.textSecondary }} />
-              </InputAdornment>
-            ),
-          }}
+          onChange={(v) => { setPage(1); setSearch(v); }}
         />
       </Box>
 
