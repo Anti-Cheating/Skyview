@@ -232,6 +232,10 @@ export default function CandidateJoinPage() {
   useEffect(() => {
     if (consent !== 'given') return;
     if (!helper.installed) return;
+    // Don't bind an outdated helper — a session would block its silent
+    // self-update (the daemon defers swaps while a session is active).
+    // The install step is showing the update card at this point anyway.
+    if (helper.outdated) return;
     if (!interview || !interviewId || !user?.id) return;
     // Never bind the helper to a terminal session — it can't be joined.
     if (['CANCELLED', 'COMPLETED', 'ENDED'].includes(interview.status)) return;
@@ -259,7 +263,7 @@ export default function CandidateJoinPage() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [consent, helper.installed, interview, interviewId, user?.id, helper.status?.session_id]);
+  }, [consent, helper.installed, helper.outdated, interview, interviewId, user?.id, helper.status?.session_id]);
 
   // ── Step 3: Open Meeting ──────────────────────────────────────────
   const handleOpenMeeting = useCallback(() => {
@@ -376,9 +380,15 @@ export default function CandidateJoinPage() {
   // Which of the 4 steps is active. Install + permissions self-complete
   // from a returning candidate's machine, so re-consent (and repeat
   // interviews) land straight on the last incomplete step.
+  //
+  // `outdated` re-enters the install step in "update" mode: the daemon
+  // normally self-updates within seconds of waking (then briefly drops
+  // off /health while launchd re-spawns it — installed stays sticky),
+  // so a candidate usually never sees it. It only surfaces when the
+  // silent update failed or the installed build predates the updater.
   const currentStep: JoinStep =
     consent !== 'given' ? 'consent'
-    : !helper.installed ? 'install'
+    : !helper.installed || helper.outdated ? 'install'
     : !allPermissions ? 'permissions'
     : 'join';
 
@@ -460,7 +470,12 @@ export default function CandidateJoinPage() {
             )}
 
             {currentStep === 'install' && (
-              <HelperDownloadCard checking={helper.checking} onRetry={() => helper.refresh()} />
+              <HelperDownloadCard
+                checking={helper.checking}
+                onRetry={() => helper.refresh()}
+                mode={helper.installed && helper.outdated ? 'update' : 'install'}
+                latestVersion={helper.latestVersion}
+              />
             )}
 
             {currentStep === 'permissions' && (

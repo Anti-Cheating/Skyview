@@ -1,18 +1,30 @@
 /**
  * HelperDownloadCard — shown when the Trueyy Helper daemon is not
  * reachable on 127.0.0.1:48123. The user hasn't installed it yet (or
- * it's not running). Gives them the single-button download.
+ * it's not running). Gives them the OS-appropriate download(s), with
+ * the OS logo and — on macOS — a choice of Apple Silicon vs Intel (the
+ * browser can't tell them apart, so we offer both).
+ *
+ * mode="update": the helper IS installed but confirmed older than the
+ * published release and its silent self-update hasn't landed — same
+ * buttons (Cortex's /downloads/helper/* always 302s to the newest pkg),
+ * different copy.
  */
 
+import type { ReactNode } from 'react';
 import { Box, CircularProgress } from '@mui/material';
 import {
   Download as DownloadIcon,
   Refresh as RefreshIcon,
+  Apple as AppleIcon,
+  Microsoft as WindowsIcon,
 } from '@mui/icons-material';
 import { getHelperDownloadUrl, detectHelperPlatform } from '../../services/helperBridge';
 import { TOKENS } from '../../theme';
 import { CardTitle, Secondary, Caption } from '../layout/Typography';
 import { ActionButton } from '../common/ActionButton';
+
+type DownloadOption = { label: string; url: string; icon: ReactNode };
 
 const BRAND = TOKENS.brand;
 const LIGHT_BG = TOKENS.bgCard;
@@ -23,15 +35,42 @@ interface Props {
   checking?: boolean;
   /** Force-refresh the health check. Used by the "Retry detection" button. */
   onRetry?: () => void;
+  /** 'install' (default) = helper missing; 'update' = installed but outdated. */
+  mode?: 'install' | 'update';
+  /** Newest published version — shown in the update copy when known. */
+  latestVersion?: string | null;
 }
 
-export default function HelperDownloadCard({ checking, onRetry }: Props) {
+export default function HelperDownloadCard({ checking, onRetry, mode = 'install', latestVersion }: Props) {
   const platform = detectHelperPlatform();
-  const url = getHelperDownloadUrl(platform);
-  const downloadLabel =
-    platform === 'windows' ? 'Download for Windows'
-    : platform === 'mac'    ? 'Download for macOS'
-    :                         'Download installer';
+  const updating = mode === 'update';
+
+  // Browser can't distinguish Apple Silicon from Intel, so macOS offers both
+  // as equal-weight buttons (each downloads its build directly). Windows is a
+  // single x64 build. Unknown OS → offer everything.
+  const win: DownloadOption = {
+    label: 'Download for Windows',
+    url: getHelperDownloadUrl('windows'),
+    icon: <WindowsIcon sx={{ fontSize: 16 }} />,
+  };
+  const macSilicon: DownloadOption = {
+    label: 'Apple Silicon',
+    url: getHelperDownloadUrl('mac', 'arm64'),
+    icon: <AppleIcon sx={{ fontSize: 16 }} />,
+  };
+  const macIntel: DownloadOption = {
+    label: 'Intel',
+    url: getHelperDownloadUrl('mac', 'x86_64'),
+    icon: <AppleIcon sx={{ fontSize: 16 }} />,
+  };
+  const options: DownloadOption[] =
+    platform === 'windows' ? [win]
+    : platform === 'mac'   ? [macSilicon, macIntel]
+    : [win,
+       { ...macSilicon, label: 'Mac · Apple Silicon' },
+       { ...macIntel, label: 'Mac · Intel' }];
+
+  const HeaderIcon = platform === 'mac' ? AppleIcon : platform === 'windows' ? WindowsIcon : DownloadIcon;
 
   return (
     <Box
@@ -68,18 +107,29 @@ export default function HelperDownloadCard({ checking, onRetry }: Props) {
             mb: 1.5,
           }}
         >
-          <DownloadIcon sx={{ fontSize: 22 }} />
+          <HeaderIcon sx={{ fontSize: 22 }} />
         </Box>
 
         {/* Section heading rendered as a real <h2>. The page-level
             <h1> already exists in MonitoringView (or CandidateJoinPage's
             header), and this card is a section under it. */}
         <CardTitle component="h2" sx={{ m: 0, mb: 0.75 }}>
-          Install Trueyy Helper
+          {updating ? 'Update Trueyy Helper' : 'Install Trueyy Helper'}
         </CardTitle>
         <Secondary sx={{ color: TOKENS.textSecondary, mb: 2 }}>
-          Install the desktop app that runs monitoring for this interview. It’s a
-          one-time setup — future interviews connect automatically.
+          {updating ? (
+            <>
+              A newer version of the monitoring app
+              {latestVersion ? ` (v${latestVersion})` : ''} is required for this
+              interview. It usually updates itself within a few seconds. If this
+              message stays, download and run the installer again.
+            </>
+          ) : (
+            <>
+              Install the desktop app that runs monitoring for this interview. It’s a
+              one-time setup. Future interviews connect automatically.
+            </>
+          )}
         </Secondary>
 
         {checking ? (
@@ -92,12 +142,15 @@ export default function HelperDownloadCard({ checking, onRetry }: Props) {
         ) : null}
 
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <ActionButton
-            startIcon={<DownloadIcon sx={{ fontSize: 16 }} />}
-            href={url}
-          >
-            {downloadLabel}
-          </ActionButton>
+          {options.map((opt) => (
+            <ActionButton
+              key={opt.label}
+              startIcon={opt.icon}
+              href={opt.url}
+            >
+              {opt.label}
+            </ActionButton>
+          ))}
           {onRetry && (
             <ActionButton
               variant="secondary"
@@ -110,7 +163,7 @@ export default function HelperDownloadCard({ checking, onRetry }: Props) {
         </Box>
 
         <Caption sx={{ display: 'block', color: TOKENS.textMuted, mt: 1.5 }}>
-          Already installed it? Click{' '}
+          {updating ? 'Already updated it? Click ' : 'Already installed it? Click '}
           <Box component="span" sx={{ fontWeight: 600, color: TOKENS.textSecondary }}>Retry detection</Box>.
         </Caption>
       </Box>
