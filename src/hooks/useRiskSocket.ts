@@ -48,10 +48,18 @@ export interface ImageAnalysisResult {
   thumbnail_urls: string[];
 }
 
+export interface PulseAppInfo {
+  app_name: string;
+  window_title: string;
+  is_excluded: boolean;
+}
+
 export interface PulseDetection {
   categoryId: string;
   categoryLabel: string;
   apps: string[];
+  /** Per-app detail: app name + window title + hidden-from-recording flag. */
+  appInfos?: PulseAppInfo[];
   matchedKeywords: string[];
 }
 

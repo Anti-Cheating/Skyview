@@ -177,6 +177,15 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
           for (const app of detection.apps) {
             if (!existing.apps.includes(app)) existing.apps.push(app);
           }
+          // Merge per-app detail too, keyed by app name.
+          if (detection.appInfos?.length) {
+            existing.appInfos = existing.appInfos ?? [];
+            for (const info of detection.appInfos) {
+              if (!existing.appInfos.some((i) => i.app_name === info.app_name)) {
+                existing.appInfos.push(info);
+              }
+            }
+          }
         }
       }
     }
@@ -292,11 +301,14 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                 gap: 0.5,
               }}
             >
-              {detection.apps.map((app) => {
-                const firstSeen = appFirstSeen.current.get(app);
+              {(detection.appInfos?.length
+                ? detection.appInfos
+                : detection.apps.map((a) => ({ app_name: a, window_title: '', is_excluded: false }))
+              ).map((info) => {
+                const firstSeen = appFirstSeen.current.get(info.app_name);
                 return (
                   <Box
-                    key={app}
+                    key={info.app_name}
                     sx={{
                       px: 1,
                       py: 0.25,
@@ -304,20 +316,24 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                       bgcolor: `${config.color}15`,
                       border: `1px solid ${config.color}30`,
                       display: 'flex',
-                      alignItems: 'center',
-                      gap: 0.5,
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: 0.1,
                     }}
                   >
-                    <Typography
-                      sx={{
-                        fontSize: '0.725rem',
-                        fontWeight: 600,
-                        color: '#1F2937',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {app}
-                    </Typography>
+                    {/* APP NAME (big) - window_title (small) */}
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, flexWrap: 'wrap' }}>
+                      <Typography
+                        sx={{ fontSize: '0.8rem', fontWeight: 700, color: '#1F2937' }}
+                      >
+                        {info.app_name}
+                      </Typography>
+                      <Typography
+                        sx={{ fontSize: '0.65rem', fontWeight: 400, color: '#6B7280' }}
+                      >
+                        - {info.window_title || 'No title'}
+                      </Typography>
+                    </Box>
                     {firstSeen && (
                       <Typography
                         sx={{
