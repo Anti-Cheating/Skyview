@@ -159,18 +159,25 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
   const activityCounts = new Map<string, number>();
   const seenCategories = new Set<string>();
 
-  for (const alert of alerts) {
+  // Tracks current open/closed status for each app name (lowercase)
+  const appOpenStatus = new Map<string, boolean>();
+
+  // Sort alerts chronologically to trace state transitions accurately
+  const sortedAlerts = [...alerts].sort((x, y) => new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime());
+
+  for (const alert of sortedAlerts) {
     for (const detection of alert.detections) {
       // Track first-seen time per app
       for (const app of detection.apps) {
         if (!appFirstSeen.current.has(app)) {
           appFirstSeen.current.set(app, alert.timestamp);
         }
+        appOpenStatus.set(app.toLowerCase(), true);
       }
 
       if (!seenCategories.has(detection.categoryId)) {
         seenCategories.add(detection.categoryId);
-        allDetections.push(detection);
+        allDetections.push(JSON.parse(JSON.stringify(detection))); // deep copy so we don't modify raw hook state
       } else {
         const existing = allDetections.find((d) => d.categoryId === detection.categoryId);
         if (existing) {
@@ -190,6 +197,11 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
       }
     }
     for (const activity of alert.activities) {
+      if (activity.startsWith("app_closed:")) {
+        const appName = activity.substring("app_closed:".length).toLowerCase();
+        appOpenStatus.set(appName, false);
+        continue;
+      }
       activityCounts.set(activity, (activityCounts.get(activity) || 0) + 1);
     }
   }
@@ -306,6 +318,7 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                 : detection.apps.map((a) => ({ app_name: a, window_title: '', is_excluded: false }))
               ).map((info) => {
                 const firstSeen = appFirstSeen.current.get(info.app_name);
+                const isOpen = appOpenStatus.get(info.app_name.toLowerCase()) !== false;
                 return (
                   <Box
                     key={info.app_name}
@@ -313,23 +326,24 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                       px: 1,
                       py: 0.25,
                       borderRadius: '4px',
-                      bgcolor: `${config.color}15`,
-                      border: `1px solid ${config.color}30`,
+                      bgcolor: isOpen ? `${config.color}15` : '#F3F4F6',
+                      border: isOpen ? `1px solid ${config.color}30` : '1px solid #D1D5DB',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'flex-start',
                       gap: 0.1,
+                      opacity: isOpen ? 1 : 0.65,
                     }}
                   >
                     {/* APP NAME (big) - window_title (small) */}
                     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, flexWrap: 'wrap' }}>
                       <Typography
-                        sx={{ fontSize: '0.8rem', fontWeight: 700, color: '#1F2937' }}
+                        sx={{ fontSize: '0.8rem', fontWeight: 700, color: isOpen ? '#1F2937' : '#6B7280' }}
                       >
-                        {info.app_name}
+                        {info.app_name} {!isOpen && '(CLOSED)'}
                       </Typography>
                       <Typography
-                        sx={{ fontSize: '0.65rem', fontWeight: 400, color: '#6B7280' }}
+                        sx={{ fontSize: '0.65rem', fontWeight: 400, color: isOpen ? '#6B7280' : '#9CA3AF' }}
                       >
                         - {info.window_title || 'No title'}
                       </Typography>
