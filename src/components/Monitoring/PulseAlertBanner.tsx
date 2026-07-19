@@ -183,7 +183,7 @@ function accumulateAppDurations(sortedAlerts: PulseAlert[]): Map<string, AppDura
 
     for (const activity of alert.activities) {
       if (!activity.startsWith('app_closed:')) continue;
-      const key = activity.substring('app_closed:'.length);
+      const key = activity.substring('app_closed:'.length).toLowerCase();
       const state = stateByApp.get(key);
       if (state && state.isOpen && state.cycleStartMs !== null) {
         state.totalMs += ts - state.cycleStartMs;

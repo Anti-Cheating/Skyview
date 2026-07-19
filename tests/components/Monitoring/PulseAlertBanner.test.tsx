@@ -221,4 +221,22 @@ describe('PulseAlertBanner — duration accumulation', () => {
 
     expect(screen.getByText(/4 min/)).toBeInTheDocument();
   });
+
+  test('accumulates correctly even when app_closed casing differs from the open detection\'s app name', () => {
+    const alerts: PulseAlert[] = [
+      { detections: [detection(['cursor'])], activities: [], timestamp: '2026-07-19T10:00:00.000Z' },
+      { detections: [], activities: ['app_closed:Cursor'], timestamp: '2026-07-19T10:03:00.000Z' },
+      // A later, unrelated event. If the close-path lookup missed (casing
+      // bug), the app never actually closes internally and its cycle keeps
+      // accruing all the way to this last timestamp (50 min) instead of
+      // stopping at the intended close (3 min).
+      { detections: [], activities: ['clipboard_paste'], timestamp: '2026-07-19T10:50:00.000Z' },
+    ];
+
+    render(<PulseAlertBanner alerts={alerts} />);
+
+    expect(screen.getByText(/3 min/)).toBeInTheDocument();
+    expect(screen.queryByText(/50 min/)).not.toBeInTheDocument();
+    expect(screen.getByText(/CLOSED/)).toBeInTheDocument();
+  });
 });
