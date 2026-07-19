@@ -182,3 +182,43 @@ describe('PulseAlertBanner', () => {
     expect(screen.getByText('Mystery combo')).toBeInTheDocument();
   });
 });
+
+function detection(apps: string[]): PulseAlert['detections'][number] {
+  return {
+    categoryId: 'ai_tools',
+    categoryLabel: 'AI Tools',
+    apps,
+    matchedKeywords: [],
+  };
+}
+
+describe('PulseAlertBanner — duration accumulation', () => {
+  test('accumulates total open time across multiple open/close cycles, not time-since-first-seen', () => {
+    const alerts: PulseAlert[] = [
+      // Cycle 1: open at :00, closed at :02 (2 min = 120000ms)
+      { detections: [detection(['Cursor'])], activities: [], timestamp: '2026-07-19T10:00:00.000Z' },
+      { detections: [], activities: ['app_closed:cursor'], timestamp: '2026-07-19T10:02:00.000Z' },
+      // Cycle 2: open at :10, closed at :13 (3 min = 180000ms)
+      { detections: [detection(['Cursor'])], activities: [], timestamp: '2026-07-19T10:10:00.000Z' },
+      { detections: [], activities: ['app_closed:cursor'], timestamp: '2026-07-19T10:13:00.000Z' },
+    ];
+
+    render(<PulseAlertBanner alerts={alerts} />);
+
+    // Total accumulated = 2 min + 3 min = 5 min, not 13 min (time from first open to last close)
+    expect(screen.getByText(/5 min/)).toBeInTheDocument();
+    expect(screen.queryByText(/13 min/)).not.toBeInTheDocument();
+  });
+
+  test('a still-open app accumulates up to the last event timestamp, not Date.now() (correct for post-interview replay)', () => {
+    const alerts: PulseAlert[] = [
+      { detections: [detection(['Cursor'])], activities: [], timestamp: '2026-07-19T10:00:00.000Z' },
+      // No close event — last known event is 4 minutes later.
+      { detections: [detection(['Cursor'])], activities: [], timestamp: '2026-07-19T10:04:00.000Z' },
+    ];
+
+    render(<PulseAlertBanner alerts={alerts} />);
+
+    expect(screen.getByText(/4 min/)).toBeInTheDocument();
+  });
+});
