@@ -82,6 +82,7 @@ const DARK_TEXT_MUTED = TEXT_MUTED;
 
 function getRiskColor(risk: string): string {
   switch (risk?.toLowerCase()) {
+    case 'severe': return '#7f1d1d';
     case 'critical': return '#dc2626';
     case 'high': return '#ef4444';
     case 'medium': return '#f59e0b';

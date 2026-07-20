@@ -240,3 +240,97 @@ describe('PulseAlertBanner — duration accumulation', () => {
     expect(screen.getByText(/CLOSED/)).toBeInTheDocument();
   });
 });
+
+describe('PulseAlertBanner — appInfos', () => {
+  test('renders window_title from appInfos alongside the app name', () => {
+    const alerts: PulseAlert[] = [
+      {
+        detections: [
+          {
+            categoryId: 'ai_tools',
+            categoryLabel: 'AI Tools',
+            apps: ['ChatGPT'],
+            appInfos: [{ app_name: 'ChatGPT', window_title: 'New chat - ChatGPT', is_excluded: false }],
+            matchedKeywords: [],
+          },
+        ],
+        activities: [],
+        timestamp: TS,
+      },
+    ];
+    render(<PulseAlertBanner alerts={alerts} />);
+    expect(screen.getByText(/New chat - ChatGPT/)).toBeInTheDocument();
+  });
+
+  test('merges appInfos across pulses for the same category, deduped by app_name', () => {
+    const alerts: PulseAlert[] = [
+      {
+        detections: [
+          {
+            categoryId: 'ai_tools',
+            categoryLabel: 'AI Tools',
+            apps: ['ChatGPT'],
+            appInfos: [{ app_name: 'ChatGPT', window_title: 'Chat one', is_excluded: false }],
+            matchedKeywords: [],
+          },
+        ],
+        activities: [],
+        timestamp: TS,
+      },
+      {
+        detections: [
+          {
+            categoryId: 'ai_tools',
+            categoryLabel: 'AI Tools',
+            apps: ['Claude', 'ChatGPT'],
+            appInfos: [
+              { app_name: 'Claude', window_title: 'Claude chat', is_excluded: false },
+              { app_name: 'ChatGPT', window_title: 'Chat one (updated)', is_excluded: false },
+            ],
+            matchedKeywords: [],
+          },
+        ],
+        activities: [],
+        timestamp: '2026-07-05T00:00:05.000Z',
+      },
+    ];
+    render(<PulseAlertBanner alerts={alerts} />);
+    // First-seen appInfo entry wins on dedup — not overwritten by the later pulse.
+    expect(screen.getByText(/Chat one$/)).toBeInTheDocument();
+    expect(screen.getByText(/Claude chat/)).toBeInTheDocument();
+  });
+
+  test('no appInfos on the payload falls back to bare app names with "No title"', () => {
+    const alerts: PulseAlert[] = [
+      {
+        detections: [{ categoryId: 'ai_tools', categoryLabel: 'AI Tools', apps: ['ChatGPT'], matchedKeywords: [] }],
+        activities: [],
+        timestamp: TS,
+      },
+    ];
+    render(<PulseAlertBanner alerts={alerts} />);
+    expect(screen.getByText('ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText(/No title/)).toBeInTheDocument();
+  });
+
+  test('is_excluded is present in the data but never rendered in the DOM', () => {
+    const alerts: PulseAlert[] = [
+      {
+        detections: [
+          {
+            categoryId: 'ai_tools',
+            categoryLabel: 'AI Tools',
+            apps: ['ChatGPT'],
+            appInfos: [{ app_name: 'ChatGPT', window_title: 'Hidden window', is_excluded: true }],
+            matchedKeywords: [],
+          },
+        ],
+        activities: [],
+        timestamp: TS,
+      },
+    ];
+    const { container } = render(<PulseAlertBanner alerts={alerts} />);
+    expect(screen.getByText(/Hidden window/)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/excluded/i);
+  });
+});

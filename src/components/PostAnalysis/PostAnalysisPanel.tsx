@@ -295,6 +295,10 @@ interface DetectedAppCategory {
 interface PostAnalysis {
   id: string; session_id: string;
   overall_score: number; risk_level: string; confidence?: string;
+  /** True when the backend's final synthesis LLM call failed/returned
+   *  unparseable output (overall_score was null) — overall_score/risk_level
+   *  above are placeholders and must not be rendered as a real verdict. */
+  analysis_failed: boolean;
   keystroke_summary: string; voice_summary: string;
   app_summary?: string; image_summary: string;
   full_transcript: string;
@@ -309,14 +313,19 @@ interface PostAnalysis {
 }
 
 function normalizeAnalysis(raw: Record<string, unknown>): PostAnalysis {
-  const overall = Number(raw.overall_score ?? 0);
+  // overall_score === null means the final synthesis LLM call failed or
+  // returned unparseable output (see Cortex postAnalysisService.ts) — that
+  // is NOT a real "0/Low" verdict, so it must never be coerced into one.
+  const analysisFailed = raw.overall_score === null || raw.risk_level === "ANALYSIS_FAILED";
+  const overall = typeof raw.overall_score === "number" ? raw.overall_score : 0;
   const toScore = (v: unknown) => (typeof v === "number" ? v : null);
   return {
     id: String(raw.id ?? ""),
     session_id: String(raw.session_id ?? ""),
     overall_score: overall,
     risk_score: Number(raw.risk_score ?? overall),
-    risk_level: String(raw.risk_level ?? "Low"),
+    risk_level: analysisFailed ? "ANALYSIS_FAILED" : String(raw.risk_level ?? "Low"),
+    analysis_failed: analysisFailed,
     confidence: raw.confidence != null ? String(raw.confidence) : undefined,
     keystroke_summary: String(raw.keystroke_summary ?? ""),
     voice_summary: String(raw.voice_summary ?? ""),
@@ -497,10 +506,19 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   if (analysis.status === "pending") {
     return <div className="pa-state"><div className="pa-spinner" /><p>Analysis is being processed…</p></div>;
   }
+  if (analysis.analysis_failed) {
+    return (
+      <div className="pa-state">
+        <p>Analysis could not be completed for this session.</p>
+        <p className="pa-card-note">The synthesis step failed or returned an unreadable result — no risk score is available. Please retry the analysis.</p>
+      </div>
+    );
+  }
 
   // ── Derived ──
   const getRiskColor = (r: string) => {
     switch (r.toUpperCase()) {
+      case "SEVERE":   return "#7F1D1D";
       case "CRITICAL": return "#DC2626";
       case "HIGH":     return "#F97316";
       case "MEDIUM":   return "#FACC15";
