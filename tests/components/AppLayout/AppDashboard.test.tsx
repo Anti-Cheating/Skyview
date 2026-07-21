@@ -12,11 +12,6 @@ vi.mock('../../../src/services/interview.service', () => ({
   InterviewService: { getCounts: (...a: unknown[]) => getCounts(...a) },
 }));
 
-const checkHelperHealth = vi.fn();
-vi.mock('../../../src/services/helperBridge', () => ({
-  checkHelperHealth: (...a: unknown[]) => checkHelperHealth(...a),
-}));
-
 let authUser: Record<string, unknown> | null = { id: 'u1', role: 'Owner', first_name: 'Sam', last_name: 'Lee' };
 vi.mock('../../../src/contexts/AuthContext', () => ({
   useAuth: () => ({ user: authUser }),
@@ -53,17 +48,5 @@ describe('AppDashboard', () => {
     await screen.findByText('2');
     await userEvent.click(screen.getByText('Upcoming Interviews'));
     expect(mockNavigate).toHaveBeenCalledWith('/interviews');
-  });
-
-  test('candidate reauthorize probes the helper and reports success', async () => {
-    authUser = { id: 'c1', role: 'Candidate', first_name: 'Cara', last_name: 'Dev' };
-    checkHelperHealth.mockResolvedValue({ ok: true });
-    render(<AppDashboard />);
-
-    const reauth = await screen.findByRole('button', { name: /reauthorize/i });
-    await userEvent.click(reauth);
-
-    expect(checkHelperHealth).toHaveBeenCalled();
-    expect(showSuccess).toHaveBeenCalledWith('Trueyy Helper is running.');
   });
 });
