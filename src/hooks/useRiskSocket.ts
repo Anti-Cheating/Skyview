@@ -46,6 +46,7 @@ export interface ImageAnalysisResult {
   image_signals: string[];
   image_evidence: string[];
   thumbnail_urls: string[];
+  per_image?: { index: number; bullets: string[] }[];
 }
 
 export interface PulseAppInfo {

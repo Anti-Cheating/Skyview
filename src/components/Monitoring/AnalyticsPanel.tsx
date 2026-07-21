@@ -285,7 +285,19 @@ export function ImageAnalysisCard({ result: ia, onExpand }: { result: ImageAnaly
         </Box>
         {ia.summary && <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.5, mb: 0.5 }}>{ia.summary}</Typography>}
         {ia.thumbnail_urls?.length > 0 && (
-          <ThumbnailCarousel urls={ia.thumbnail_urls} onClickThumb={(i) => onExpand(ia.thumbnail_urls, i)} />
+          <ThumbnailCarousel
+            urls={ia.thumbnail_urls}
+            onClickThumb={(i) => onExpand(ia.thumbnail_urls, i)}
+            // per_image only lines up 1:1 with thumbnail_urls when the vision
+            // call analyzed every image (small batches) — larger batches send
+            // a representative subset, so counts can mismatch. Only attach
+            // bullets when they align, to avoid mislabeling a screenshot.
+            bullets={
+              ia.per_image?.length === ia.thumbnail_urls.length
+                ? ia.thumbnail_urls.map((_, i) => ia.per_image?.find((p) => p.index === i + 1)?.bullets || [])
+                : undefined
+            }
+          />
         )}
         {ia.image_signals?.length > 0 && (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
@@ -1253,7 +1265,7 @@ export function ScreenshotLightbox({
 
 // ── Thumbnail carousel — arrows only when content overflows ──────────
 
-function ThumbnailCarousel({ urls, onClickThumb }: { urls: string[]; onClickThumb: (i: number) => void }) {
+function ThumbnailCarousel({ urls, onClickThumb, bullets }: { urls: string[]; onClickThumb: (i: number) => void; bullets?: string[][] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(false);
@@ -1303,20 +1315,30 @@ function ThumbnailCarousel({ urls, onClickThumb }: { urls: string[]; onClickThum
         }}
       >
         {urls.map((url, i) => (
-          <Box
-            key={i}
-            component="img"
-            src={url}
-            alt=""
-            onClick={() => onClickThumb(i)}
-            sx={{
-              width: 160, minWidth: 160, height: 100,
-              objectFit: 'cover', borderRadius: '8px',
-              border: `1px solid ${DARK_BORDER}`, cursor: 'pointer',
-              '&:hover': { opacity: 0.85, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' },
-              transition: 'opacity 0.15s, box-shadow 0.15s',
-            }}
-          />
+          <Box key={i} sx={{ width: 160, minWidth: 160 }}>
+            <Box
+              component="img"
+              src={url}
+              alt=""
+              onClick={() => onClickThumb(i)}
+              sx={{
+                width: 160, height: 100,
+                objectFit: 'cover', borderRadius: '8px',
+                border: `1px solid ${DARK_BORDER}`, cursor: 'pointer',
+                '&:hover': { opacity: 0.85, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' },
+                transition: 'opacity 0.15s, box-shadow 0.15s',
+              }}
+            />
+            {bullets?.[i] && bullets[i].length > 0 && (
+              <Box component="ul" sx={{ m: 0, mt: 0.4, pl: 1.4, listStyle: 'disc' }}>
+                {bullets[i].map((b, bi) => (
+                  <Typography key={bi} component="li" sx={{ fontSize: '0.6rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.35 }}>
+                    {b}
+                  </Typography>
+                ))}
+              </Box>
+            )}
+          </Box>
         ))}
       </Box>
       {showRight && (
