@@ -1,4 +1,3 @@
-import { useState, useEffect, useRef } from 'react';
 import { Box, Typography } from '@mui/material';
 import {
   SmartToy as AiIcon,
@@ -131,9 +130,8 @@ function getActivityConfig(activity: string) {
   };
 }
 
-function formatDuration(firstSeenISO: string): string {
-  const diffMs = Date.now() - new Date(firstSeenISO).getTime();
-  const diffSec = Math.floor(diffMs / 1000);
+function formatDuration(ms: number): string {
+  const diffSec = Math.floor(ms / 1000);
   if (diffSec < 60) return `${diffSec}s`;
   const diffMin = Math.floor(diffSec / 60);
   if (diffMin < 60) return `${diffMin} min`;
@@ -141,46 +139,117 @@ function formatDuration(firstSeenISO: string): string {
   return `${diffHr}h ${diffMin % 60}m`;
 }
 
+interface AppDuration {
+  totalMs: number;
+  isOpen: boolean;
+  cycleStartMs: number | null;
+  cycleEndMs: number | null;
+  openCount: number;
+}
+
+/**
+ * Walks the chronological alert stream once and, per app, sums the
+ * duration of every open→close cycle (not just time since first seen).
+ * A still-open app accrues up to the LAST event's timestamp — not
+ * Date.now() — so this produces the same correct total whether it's
+ * called live (new alerts keep extending "last event") or during
+ * post-interview replay (alerts stop arriving once the interview ended,
+ * so the total stays fixed at the real last-observed instant instead of
+ * growing the longer someone views the report later).
+ */
+function accumulateAppDurations(sortedAlerts: PulseAlert[]): Map<string, AppDuration> {
+  const stateByApp = new Map<string, AppDuration>();
+  let lastTimestampMs = 0;
+
+  for (const alert of sortedAlerts) {
+    const ts = new Date(alert.timestamp).getTime();
+    if (ts > lastTimestampMs) lastTimestampMs = ts;
+
+    for (const detection of alert.detections) {
+      for (const app of detection.apps) {
+        const key = app.toLowerCase();
+        let state = stateByApp.get(key);
+        if (!state) {
+          state = { totalMs: 0, isOpen: false, cycleStartMs: null, cycleEndMs: null, openCount: 0 };
+          stateByApp.set(key, state);
+        }
+        if (!state.isOpen) {
+          state.isOpen = true;
+          state.cycleStartMs = ts;
+          state.openCount += 1;
+        }
+      }
+    }
+
+    for (const activity of alert.activities) {
+      if (!activity.startsWith('app_closed:')) continue;
+      const key = activity.substring('app_closed:'.length).toLowerCase();
+      const state = stateByApp.get(key);
+      if (state && state.isOpen && state.cycleStartMs !== null) {
+        state.totalMs += ts - state.cycleStartMs;
+        state.cycleEndMs = ts;
+        state.isOpen = false;
+      }
+    }
+  }
+
+  for (const state of stateByApp.values()) {
+    if (state.isOpen && state.cycleStartMs !== null) {
+      state.totalMs += lastTimestampMs - state.cycleStartMs;
+    }
+  }
+
+  return stateByApp;
+}
+
 export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBannerProps) {
-  const [, setTick] = useState(0);
-
-  // Track first-seen timestamp per app (persists across re-renders)
-  const appFirstSeen = useRef<Map<string, string>>(new Map());
-
-  // Re-render every 15s so durations update
-  useEffect(() => {
-    if (alerts.length === 0) return;
-    const interval = setInterval(() => setTick((t) => t + 1), 15000);
-    return () => clearInterval(interval);
-  }, [alerts.length]);
-
   // Aggregate all detections across all alerts
   const allDetections: PulseDetection[] = [];
   const activityCounts = new Map<string, number>();
   const seenCategories = new Set<string>();
 
-  for (const alert of alerts) {
+  // Tracks current open/closed status for each app name (lowercase)
+  const appOpenStatus = new Map<string, boolean>();
+
+  // Sort alerts chronologically to trace state transitions accurately
+  const sortedAlerts = [...alerts].sort((x, y) => new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime());
+
+  // Per-app accumulated open time across every open/close cycle this session.
+  const appDurations = accumulateAppDurations(sortedAlerts);
+
+  for (const alert of sortedAlerts) {
     for (const detection of alert.detections) {
-      // Track first-seen time per app
       for (const app of detection.apps) {
-        if (!appFirstSeen.current.has(app)) {
-          appFirstSeen.current.set(app, alert.timestamp);
-        }
+        appOpenStatus.set(app.toLowerCase(), true);
       }
 
       if (!seenCategories.has(detection.categoryId)) {
         seenCategories.add(detection.categoryId);
-        allDetections.push(detection);
+        allDetections.push(JSON.parse(JSON.stringify(detection))); // deep copy so we don't modify raw hook state
       } else {
         const existing = allDetections.find((d) => d.categoryId === detection.categoryId);
         if (existing) {
           for (const app of detection.apps) {
             if (!existing.apps.includes(app)) existing.apps.push(app);
           }
+          // Merge per-app detail too, keyed by app name.
+          if (detection.appInfos?.length) {
+            existing.appInfos = existing.appInfos ?? [];
+            for (const info of detection.appInfos) {
+              if (!existing.appInfos.some((i) => i.app_name === info.app_name)) {
+                existing.appInfos.push(info);
+              }
+            }
+          }
         }
       }
     }
     for (const activity of alert.activities) {
+      if (activity.startsWith("app_closed:")) {
+        const appName = activity.substring("app_closed:".length).toLowerCase();
+        appOpenStatus.set(appName, false);
+        continue;
+      }
       activityCounts.set(activity, (activityCounts.get(activity) || 0) + 1);
     }
   }
@@ -292,33 +361,42 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                 gap: 0.5,
               }}
             >
-              {detection.apps.map((app) => {
-                const firstSeen = appFirstSeen.current.get(app);
+              {(detection.appInfos?.length
+                ? detection.appInfos
+                : detection.apps.map((a) => ({ app_name: a, window_title: '', is_excluded: false }))
+              ).map((info) => {
+                const duration = appDurations.get(info.app_name.toLowerCase());
+                const isOpen = appOpenStatus.get(info.app_name.toLowerCase()) !== false;
                 return (
                   <Box
-                    key={app}
+                    key={info.app_name}
                     sx={{
                       px: 1,
                       py: 0.25,
                       borderRadius: '4px',
-                      bgcolor: `${config.color}15`,
-                      border: `1px solid ${config.color}30`,
+                      bgcolor: isOpen ? `${config.color}15` : '#F3F4F6',
+                      border: isOpen ? `1px solid ${config.color}30` : '1px solid #D1D5DB',
                       display: 'flex',
-                      alignItems: 'center',
-                      gap: 0.5,
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: 0.1,
+                      opacity: isOpen ? 1 : 0.65,
                     }}
                   >
-                    <Typography
-                      sx={{
-                        fontSize: '0.725rem',
-                        fontWeight: 600,
-                        color: '#1F2937',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {app}
-                    </Typography>
-                    {firstSeen && (
+                    {/* APP NAME (big) - window_title (small) */}
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, flexWrap: 'wrap' }}>
+                      <Typography
+                        sx={{ fontSize: '0.8rem', fontWeight: 700, color: isOpen ? '#1F2937' : '#6B7280' }}
+                      >
+                        {info.app_name} {!isOpen && '(CLOSED)'}
+                      </Typography>
+                      <Typography
+                        sx={{ fontSize: '0.65rem', fontWeight: 400, color: isOpen ? '#6B7280' : '#9CA3AF' }}
+                      >
+                        - {info.window_title || 'No title'}
+                      </Typography>
+                    </Box>
+                    {duration && duration.cycleStartMs !== null && (
                       <Typography
                         sx={{
                           fontSize: '0.6rem',
@@ -327,7 +405,12 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        since {formatDateTime(firstSeen)} ({formatDuration(firstSeen)})
+                        {isOpen
+                          ? `open since ${formatDateTime(new Date(duration.cycleStartMs).toISOString())}`
+                          : `${formatDateTime(new Date(duration.cycleStartMs).toISOString())} – ${formatDateTime(new Date(duration.cycleEndMs!).toISOString())}`}
+                        {' · '}
+                        {formatDuration(duration.totalMs)} total
+                        {duration.openCount > 1 ? ` (${duration.openCount}×)` : ''}
                       </Typography>
                     )}
                   </Box>

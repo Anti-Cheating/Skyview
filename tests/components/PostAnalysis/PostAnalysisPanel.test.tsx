@@ -72,4 +72,16 @@ describe('PostAnalysisPanel', () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(rawAnalysis.full_transcript);
     expect(await screen.findByText('Copied!')).toBeInTheDocument();
   });
+
+  test('a failed backend synthesis (overall_score: null) shows an "analysis incomplete" state, not a fake Score: 0 (regression)', async () => {
+    getPostAnalysis.mockResolvedValue({
+      success: true,
+      data: { ...rawAnalysis, overall_score: null, risk_level: 'ANALYSIS_FAILED' },
+    });
+    render(<PostAnalysisPanel />);
+    expect(await screen.findByText(/Analysis could not be completed/i)).toBeInTheDocument();
+    // Must never silently coerce the null into a real-looking "0" verdict.
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
+    expect(screen.queryByText('ANALYSIS_FAILED')).not.toBeInTheDocument();
+  });
 });
