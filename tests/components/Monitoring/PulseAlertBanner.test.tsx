@@ -182,3 +182,155 @@ describe('PulseAlertBanner', () => {
     expect(screen.getByText('Mystery combo')).toBeInTheDocument();
   });
 });
+
+function detection(apps: string[]): PulseAlert['detections'][number] {
+  return {
+    categoryId: 'ai_tools',
+    categoryLabel: 'AI Tools',
+    apps,
+    matchedKeywords: [],
+  };
+}
+
+describe('PulseAlertBanner — duration accumulation', () => {
+  test('accumulates total open time across multiple open/close cycles, not time-since-first-seen', () => {
+    const alerts: PulseAlert[] = [
+      // Cycle 1: open at :00, closed at :02 (2 min = 120000ms)
+      { detections: [detection(['Cursor'])], activities: [], timestamp: '2026-07-19T10:00:00.000Z' },
+      { detections: [], activities: ['app_closed:cursor'], timestamp: '2026-07-19T10:02:00.000Z' },
+      // Cycle 2: open at :10, closed at :13 (3 min = 180000ms)
+      { detections: [detection(['Cursor'])], activities: [], timestamp: '2026-07-19T10:10:00.000Z' },
+      { detections: [], activities: ['app_closed:cursor'], timestamp: '2026-07-19T10:13:00.000Z' },
+    ];
+
+    render(<PulseAlertBanner alerts={alerts} />);
+
+    // Total accumulated = 2 min + 3 min = 5 min, not 13 min (time from first open to last close)
+    expect(screen.getByText(/5 min/)).toBeInTheDocument();
+    expect(screen.queryByText(/13 min/)).not.toBeInTheDocument();
+  });
+
+  test('a still-open app accumulates up to the last event timestamp, not Date.now() (correct for post-interview replay)', () => {
+    const alerts: PulseAlert[] = [
+      { detections: [detection(['Cursor'])], activities: [], timestamp: '2026-07-19T10:00:00.000Z' },
+      // No close event — last known event is 4 minutes later.
+      { detections: [detection(['Cursor'])], activities: [], timestamp: '2026-07-19T10:04:00.000Z' },
+    ];
+
+    render(<PulseAlertBanner alerts={alerts} />);
+
+    expect(screen.getByText(/4 min/)).toBeInTheDocument();
+  });
+
+  test('accumulates correctly even when app_closed casing differs from the open detection\'s app name', () => {
+    const alerts: PulseAlert[] = [
+      { detections: [detection(['cursor'])], activities: [], timestamp: '2026-07-19T10:00:00.000Z' },
+      { detections: [], activities: ['app_closed:Cursor'], timestamp: '2026-07-19T10:03:00.000Z' },
+      // A later, unrelated event. If the close-path lookup missed (casing
+      // bug), the app never actually closes internally and its cycle keeps
+      // accruing all the way to this last timestamp (50 min) instead of
+      // stopping at the intended close (3 min).
+      { detections: [], activities: ['clipboard_paste'], timestamp: '2026-07-19T10:50:00.000Z' },
+    ];
+
+    render(<PulseAlertBanner alerts={alerts} />);
+
+    expect(screen.getByText(/3 min/)).toBeInTheDocument();
+    expect(screen.queryByText(/50 min/)).not.toBeInTheDocument();
+    expect(screen.getByText(/CLOSED/)).toBeInTheDocument();
+  });
+});
+
+describe('PulseAlertBanner — appInfos', () => {
+  test('renders window_title from appInfos alongside the app name', () => {
+    const alerts: PulseAlert[] = [
+      {
+        detections: [
+          {
+            categoryId: 'ai_tools',
+            categoryLabel: 'AI Tools',
+            apps: ['ChatGPT'],
+            appInfos: [{ app_name: 'ChatGPT', window_title: 'New chat - ChatGPT', is_excluded: false }],
+            matchedKeywords: [],
+          },
+        ],
+        activities: [],
+        timestamp: TS,
+      },
+    ];
+    render(<PulseAlertBanner alerts={alerts} />);
+    expect(screen.getByText(/New chat - ChatGPT/)).toBeInTheDocument();
+  });
+
+  test('merges appInfos across pulses for the same category, deduped by app_name', () => {
+    const alerts: PulseAlert[] = [
+      {
+        detections: [
+          {
+            categoryId: 'ai_tools',
+            categoryLabel: 'AI Tools',
+            apps: ['ChatGPT'],
+            appInfos: [{ app_name: 'ChatGPT', window_title: 'Chat one', is_excluded: false }],
+            matchedKeywords: [],
+          },
+        ],
+        activities: [],
+        timestamp: TS,
+      },
+      {
+        detections: [
+          {
+            categoryId: 'ai_tools',
+            categoryLabel: 'AI Tools',
+            apps: ['Claude', 'ChatGPT'],
+            appInfos: [
+              { app_name: 'Claude', window_title: 'Claude chat', is_excluded: false },
+              { app_name: 'ChatGPT', window_title: 'Chat one (updated)', is_excluded: false },
+            ],
+            matchedKeywords: [],
+          },
+        ],
+        activities: [],
+        timestamp: '2026-07-05T00:00:05.000Z',
+      },
+    ];
+    render(<PulseAlertBanner alerts={alerts} />);
+    // First-seen appInfo entry wins on dedup — not overwritten by the later pulse.
+    expect(screen.getByText(/Chat one$/)).toBeInTheDocument();
+    expect(screen.getByText(/Claude chat/)).toBeInTheDocument();
+  });
+
+  test('no appInfos on the payload falls back to bare app names with "No title"', () => {
+    const alerts: PulseAlert[] = [
+      {
+        detections: [{ categoryId: 'ai_tools', categoryLabel: 'AI Tools', apps: ['ChatGPT'], matchedKeywords: [] }],
+        activities: [],
+        timestamp: TS,
+      },
+    ];
+    render(<PulseAlertBanner alerts={alerts} />);
+    expect(screen.getByText('ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText(/No title/)).toBeInTheDocument();
+  });
+
+  test('is_excluded is present in the data but never rendered in the DOM', () => {
+    const alerts: PulseAlert[] = [
+      {
+        detections: [
+          {
+            categoryId: 'ai_tools',
+            categoryLabel: 'AI Tools',
+            apps: ['ChatGPT'],
+            appInfos: [{ app_name: 'ChatGPT', window_title: 'Hidden window', is_excluded: true }],
+            matchedKeywords: [],
+          },
+        ],
+        activities: [],
+        timestamp: TS,
+      },
+    ];
+    const { container } = render(<PulseAlertBanner alerts={alerts} />);
+    expect(screen.getByText(/Hidden window/)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/excluded/i);
+  });
+});
