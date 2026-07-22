@@ -202,27 +202,66 @@ function accumulateAppDurations(sortedAlerts: PulseAlert[]): Map<string, AppDura
   return stateByApp;
 }
 
+interface AppEventRow {
+  app: string;
+  ts: number;
+  kind: 'open' | 'close';
+}
+
+/**
+ * Walks the chronological alert stream once and emits one row per
+ * open/close TRANSITION (not a mutated per-app pill) — every open and
+ * every close is its own event, stacked in order, matching the same
+ * "one row per event" principle as the window Timeline. Shares the same
+ * open/close detection logic as accumulateAppDurations but returns a flat
+ * event list instead of aggregated per-app totals.
+ */
+function buildAppEventRows(sortedAlerts: PulseAlert[]): AppEventRow[] {
+  const rows: AppEventRow[] = [];
+  const openApps = new Set<string>();
+
+  for (const alert of sortedAlerts) {
+    const ts = new Date(alert.timestamp).getTime();
+
+    for (const detection of alert.detections) {
+      for (const app of detection.apps) {
+        const key = app.toLowerCase();
+        if (!openApps.has(key)) {
+          openApps.add(key);
+          rows.push({ app, ts, kind: 'open' });
+        }
+      }
+    }
+
+    for (const activity of alert.activities) {
+      if (!activity.startsWith('app_closed:')) continue;
+      const key = activity.substring('app_closed:'.length).toLowerCase();
+      if (openApps.has(key)) {
+        openApps.delete(key);
+        rows.push({ app: activity.substring('app_closed:'.length), ts, kind: 'close' });
+      }
+    }
+  }
+
+  return rows;
+}
+
 export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBannerProps) {
   // Aggregate all detections across all alerts
   const allDetections: PulseDetection[] = [];
   const activityCounts = new Map<string, number>();
   const seenCategories = new Set<string>();
 
-  // Tracks current open/closed status for each app name (lowercase)
-  const appOpenStatus = new Map<string, boolean>();
-
   // Sort alerts chronologically to trace state transitions accurately
   const sortedAlerts = [...alerts].sort((x, y) => new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime());
 
   // Per-app accumulated open time across every open/close cycle this session.
   const appDurations = accumulateAppDurations(sortedAlerts);
+  // Flat chronological open/close event list (one row per transition).
+  const appEventRows = buildAppEventRows(sortedAlerts);
 
   for (const alert of sortedAlerts) {
     for (const detection of alert.detections) {
-      for (const app of detection.apps) {
-        appOpenStatus.set(app.toLowerCase(), true);
-      }
-
       if (!seenCategories.has(detection.categoryId)) {
         seenCategories.add(detection.categoryId);
         allDetections.push(JSON.parse(JSON.stringify(detection))); // deep copy so we don't modify raw hook state
@@ -245,11 +284,7 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
       }
     }
     for (const activity of alert.activities) {
-      if (activity.startsWith("app_closed:")) {
-        const appName = activity.substring("app_closed:".length).toLowerCase();
-        appOpenStatus.set(appName, false);
-        continue;
-      }
+      if (activity.startsWith("app_closed:")) continue;
       activityCounts.set(activity, (activityCounts.get(activity) || 0) + 1);
     }
   }
@@ -350,72 +385,45 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
               </Box>
             </Box>
 
-            {/* App list — always visible */}
-            <Box
-              sx={{
-                px: 1,
-                pb: 0.75,
-                pt: 0,
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 0.5,
-              }}
-            >
-              {(detection.appInfos?.length
-                ? detection.appInfos
-                : detection.apps.map((a) => ({ app_name: a, window_title: '', is_excluded: false }))
-              ).map((info) => {
-                const duration = appDurations.get(info.app_name.toLowerCase());
-                const isOpen = appOpenStatus.get(info.app_name.toLowerCase()) !== false;
-                return (
-                  <Box
-                    key={info.app_name}
-                    sx={{
-                      px: 1,
-                      py: 0.25,
-                      borderRadius: '4px',
-                      bgcolor: isOpen ? `${config.color}15` : '#F3F4F6',
-                      border: isOpen ? `1px solid ${config.color}30` : '1px solid #D1D5DB',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-start',
-                      gap: 0.1,
-                      opacity: isOpen ? 1 : 0.65,
-                    }}
-                  >
-                    {/* APP NAME (big) - window_title (small) */}
-                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, flexWrap: 'wrap' }}>
-                      <Typography
-                        sx={{ fontSize: '0.8rem', fontWeight: 700, color: isOpen ? '#1F2937' : '#6B7280' }}
-                      >
-                        {info.app_name} {!isOpen && '(CLOSED)'}
+            {/* App open/close event log — one row per transition, stacked
+                chronologically. Opened and closed are separate rows; an
+                earlier "opened" row is never overwritten or grayed out by
+                a later "closed" row for the same app — both stay visible
+                as history, matching the window Timeline's principle. */}
+            <Box sx={{ px: 1, pb: 0.75, pt: 0, display: 'flex', flexDirection: 'column' }}>
+              {(() => {
+                const categoryAppNames = new Set(
+                  (detection.appInfos?.length ? detection.appInfos.map((i) => i.app_name) : detection.apps).map((a) =>
+                    a.toLowerCase()
+                  )
+                );
+                const infoByApp = new Map(
+                  (detection.appInfos ?? []).map((i) => [i.app_name.toLowerCase(), i])
+                );
+                const rows = appEventRows
+                  .filter((r) => categoryAppNames.has(r.app.toLowerCase()))
+                  .sort((a, b) => a.ts - b.ts);
+                return rows.map((row, i) => {
+                  const info = infoByApp.get(row.app.toLowerCase());
+                  const duration = appDurations.get(row.app.toLowerCase());
+                  const label =
+                    row.kind === 'open'
+                      ? `opened ${row.app}${info?.window_title ? ` — "${info.window_title}"` : ''}`
+                      : `closed ${row.app}${
+                          duration ? ` — open ${formatDuration(duration.totalMs)}` : ''
+                        }`;
+                  return (
+                    <Box key={`${row.app}-${row.kind}-${i}`} sx={{ display: 'flex', gap: 0.6, alignItems: 'baseline', py: 0.2 }}>
+                      <Typography sx={{ fontSize: '0.6rem', color: '#9CA3AF', fontFamily: 'monospace', flexShrink: 0, width: 62 }}>
+                        {formatDateTime(new Date(row.ts).toISOString())}
                       </Typography>
-                      <Typography
-                        sx={{ fontSize: '0.65rem', fontWeight: 400, color: isOpen ? '#6B7280' : '#9CA3AF' }}
-                      >
-                        - {info.window_title || 'No title'}
+                      <Typography sx={{ fontSize: '0.7rem', fontWeight: row.kind === 'open' ? 700 : 500, color: row.kind === 'open' ? '#1F2937' : '#6B7280' }}>
+                        {label}
                       </Typography>
                     </Box>
-                    {duration && duration.cycleStartMs !== null && (
-                      <Typography
-                        sx={{
-                          fontSize: '0.6rem',
-                          fontWeight: 500,
-                          color: '#9CA3AF',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {isOpen
-                          ? `open since ${formatDateTime(new Date(duration.cycleStartMs).toISOString())}`
-                          : `${formatDateTime(new Date(duration.cycleStartMs).toISOString())} – ${formatDateTime(new Date(duration.cycleEndMs!).toISOString())}`}
-                        {' · '}
-                        {formatDuration(duration.totalMs)} total
-                        {duration.openCount > 1 ? ` (${duration.openCount}×)` : ''}
-                      </Typography>
-                    )}
-                  </Box>
-                );
-              })}
+                  );
+                });
+              })()}
             </Box>
           </Box>
         );

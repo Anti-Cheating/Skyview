@@ -16,6 +16,22 @@ export interface Correlation {
   impact: 'weak' | 'moderate' | 'strong';
 }
 
+export interface EvidenceCitation {
+  claim: string;
+  source?: string;
+  timestamp?: string;
+  confidence?: 'weak' | 'moderate' | 'strong' | string;
+}
+
+export interface TimelineEntry {
+  ts: number;
+  kind: 'APP' | 'KEYSTROKE' | 'VOICE' | string;
+  /** Action label only — char count for copy/paste/type, never the actual
+   *  text. Full content only ever appears in Evidence / the narrative. */
+  detail: string;
+  speakerRole?: 'interviewer' | 'candidate' | string;
+}
+
 export interface WindowResult {
   window_id: string;
   session_id: string;
@@ -32,6 +48,12 @@ export interface WindowResult {
   };
   correlations?: Correlation[];
   timeline_note?: string;
+  /** Cause->effect narrative over the merged timeline. */
+  narrative?: string;
+  /** Evidence citations backing the score. */
+  evidence?: EvidenceCitation[];
+  /** The merged chronological timeline itself. */
+  timeline?: TimelineEntry[];
 }
 
 export interface ImageAnalysisResult {

@@ -217,75 +217,6 @@ const RiskGauge: React.FC<{ score: number; level: string; riskColor: string }> =
   );
 };
 
-// ── Score breakdown cards (each modality independent 0-100) ──────────────────
-interface ModalityRow {
-  label: string;
-  score: number | null;
-  summary: string;
-}
-
-const scoreColor = (s: number) => {
-  const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
-  const rgb = (r: number, g: number, b: number) => `rgb(${r},${g},${b})`;
-  if (s >= 70) {
-    const t = Math.min((s - 70) / 30, 1);
-    return rgb(lerp(248, 153, t), lerp(113, 27, t), lerp(113, 27, t));
-  }
-  if (s >= 45) {
-    const t = (s - 45) / 24;
-    return rgb(lerp(253, 249, t), lerp(186, 115, t), lerp(116, 22, t));
-  }
-  if (s >= 20) {
-    const t = (s - 20) / 24;
-    return rgb(lerp(254, 234, t), lerp(240, 179, t), lerp(138, 8, t));
-  }
-  const t = Math.min(s / 19, 1);
-  return rgb(lerp(134, 22, t), lerp(239, 163, t), lerp(172, 74, t));
-};
-
-const ScoreBreakdown: React.FC<{ rows: ModalityRow[] }> = ({ rows }) => {
-  const [animated, setAnimated] = useState(false);
-  const [hovered, setHovered] = useState<string | null>(null);
-  useEffect(() => { const t = setTimeout(() => setAnimated(true), 150); return () => clearTimeout(t); }, []);
-
-  return (
-    <div className="sb-grid">
-      {rows.map(({ label, score, summary }) => {
-        const val = score ?? 0;
-        const barColor = score !== null ? scoreColor(val) : "#D1D5DB";
-        const isHovered = hovered === label;
-        return (
-          <div
-            key={label}
-            className="sb-card"
-            onMouseEnter={() => setHovered(label)}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div className="sb-card-header">
-              <span className="sb-label">{label}</span>
-              <span className="sb-score" style={{ color: barColor }}>
-                {score !== null ? val : "—"}
-              </span>
-            </div>
-            <div className="sb-track">
-              <div
-                className="sb-fill"
-                style={{
-                  width: animated ? `${val}%` : "0%",
-                  background: barColor,
-                  transition: animated ? "width 0.9s cubic-bezier(0.34,1.1,0.64,1)" : "none",
-                }}
-              />
-            </div>
-            {isHovered && summary && (
-              <div className="sb-tooltip">{summary}</div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface DetectedAppCategory {
@@ -528,14 +459,6 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   };
   const riskColor = getRiskColor(analysis.risk_level);
 
-  const modalityRows: ModalityRow[] = [
-    { label: "Keystroke", score: analysis.keystroke_score, summary: analysis.keystroke_summary },
-    { label: "Voice",     score: analysis.voice_score,     summary: analysis.voice_summary },
-    { label: "Image",     score: analysis.image_score,     summary: analysis.image_summary },
-    { label: "App Usage", score: analysis.app_score,       summary: analysis.app_summary ?? "" },
-  ];
-  const hasModalityScores = modalityRows.some(r => r.score !== null);
-
   const candidateP = session?.interview_session_participants?.find(p => p.candidate_id && p.candidate);
   const interviewerP = session?.interview_session_participants?.find(p => p.interviewer_id && p.interviewer);
   const candidate = candidateP?.candidate;
@@ -629,22 +552,12 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
         </div>
       </header>
 
-      {/* ── Score + Donut ────────────────────────────────────────────────── */}
-      <div className="pa-charts-row">
-        <section className="pa-card pa-gauge-card">
-          <h3 className="pa-card-title">Overall Score</h3>
-          <RiskGauge score={analysis.risk_score} level={analysis.risk_level} riskColor={riskColor} />
-          <p className="pa-card-note">Aggregated across voice, keystrokes and app usage.</p>
-        </section>
-
-        <section className="pa-card pa-donut-card">
-          <h3 className="pa-card-title">Score Breakdown</h3>
-          {hasModalityScores
-            ? <ScoreBreakdown rows={modalityRows} />
-            : <p className="pa-body pa-body-sm" style={{ textAlign: "center", paddingTop: "2rem" }}>No modality score data available.</p>
-          }
-        </section>
-      </div>
+      {/* ── Overall Score (full width) ───────────────────────────────────── */}
+      <section className="pa-card pa-gauge-card">
+        <h3 className="pa-card-title">Overall Score</h3>
+        <RiskGauge score={analysis.risk_score} level={analysis.risk_level} riskColor={riskColor} />
+        <p className="pa-card-note">Aggregated across voice, keystrokes and app usage.</p>
+      </section>
 
       {/* ── Summary ──────────────────────────────────────────────────────── */}
       <section className="pa-card pa-summary-card">
@@ -667,30 +580,6 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
           <Bullets className="pa-body pa-body-sm" text={analysis.app_summary} empty="No app usage data recorded." />
         </section>
       </div>
-
-      {/* ── App categories ───────────────────────────────────────────────── */}
-      {analysis.detected_app_categories?.length > 0 && (
-        <section className="pa-card">
-          <h3 className="pa-card-title">Detected Application Categories</h3>
-          <div className="pa-cats">
-            {analysis.detected_app_categories.map(cat => (
-              <div key={cat.categoryId} className="pa-cat"
-                style={{ borderLeftColor: getRiskColor(cat.riskLevel) }}>
-                <div className="pa-cat-header">
-                  <span className="pa-cat-name">{cat.categoryLabel}</span>
-                  <span className="pa-cat-risk" style={{ color: getRiskColor(cat.riskLevel) }}>
-                    {cat.riskLevel}
-                  </span>
-                </div>
-                <p className="pa-cat-score">Risk score {cat.riskScore}/100</p>
-                <div className="pa-cat-apps">
-                  {cat.apps.map(a => <span key={a} className="pa-app-tag">{a}</span>)}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* ── Transcript ───────────────────────────────────────────────────── */}
       <section className="pa-card">
