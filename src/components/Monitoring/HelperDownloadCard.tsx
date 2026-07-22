@@ -1,9 +1,9 @@
 /**
  * HelperDownloadCard — shown when the Trueyy Helper daemon is not
  * reachable on 127.0.0.1:48123. The user hasn't installed it yet (or
- * it's not running). Gives them the OS-appropriate download(s), with
- * the OS logo and — on macOS — a choice of Apple Silicon vs Intel (the
- * browser can't tell them apart, so we offer both).
+ * it's not running). Gives them the OS-appropriate download with the
+ * OS logo — a single Mac (Apple Silicon / arm64) build and a single
+ * Windows (x64) build.
  *
  * mode="update": the helper IS installed but confirmed older than the
  * published release and its silent self-update hasn't landed — same
@@ -45,30 +45,23 @@ export default function HelperDownloadCard({ checking, onRetry, mode = 'install'
   const platform = detectHelperPlatform();
   const updating = mode === 'update';
 
-  // Browser can't distinguish Apple Silicon from Intel, so macOS offers both
-  // as equal-weight buttons (each downloads its build directly). Windows is a
-  // single x64 build. Unknown OS → offer everything.
+  // Only an arm64 (Apple Silicon) macOS build is published, so macOS gets a
+  // single download button. Windows is a single x64 build. Unknown OS → offer
+  // both platforms' builds.
   const win: DownloadOption = {
     label: 'Download for Windows',
     url: getHelperDownloadUrl('windows'),
     icon: <WindowsIcon sx={{ fontSize: 16 }} />,
   };
-  const macSilicon: DownloadOption = {
-    label: 'Apple Silicon',
+  const mac: DownloadOption = {
+    label: 'Download for Mac',
     url: getHelperDownloadUrl('mac', 'arm64'),
-    icon: <AppleIcon sx={{ fontSize: 16 }} />,
-  };
-  const macIntel: DownloadOption = {
-    label: 'Intel',
-    url: getHelperDownloadUrl('mac', 'x86_64'),
     icon: <AppleIcon sx={{ fontSize: 16 }} />,
   };
   const options: DownloadOption[] =
     platform === 'windows' ? [win]
-    : platform === 'mac'   ? [macSilicon, macIntel]
-    : [win,
-       { ...macSilicon, label: 'Mac · Apple Silicon' },
-       { ...macIntel, label: 'Mac · Intel' }];
+    : platform === 'mac'   ? [mac]
+    : [win, { ...mac, label: 'Download for Mac' }];
 
   const HeaderIcon = platform === 'mac' ? AppleIcon : platform === 'windows' ? WindowsIcon : DownloadIcon;
 
