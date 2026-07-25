@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Tabs, Tab, CircularProgress, Chip, Tooltip } from '@mui/material';
+import {
+  Box, Tabs, Tab, CircularProgress, Chip, Tooltip,
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField, Typography,
+} from '@mui/material';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import { motion } from 'framer-motion';
 import { TOKENS } from '../../theme';
 import { PageTitle, CardTitle, Caption, Secondary } from '../layout/Typography';
 import { ActionButton } from '../common/ActionButton';
 import { BillingService } from '../../services/billing.service';
+import { ContactService } from '../../services/contact.service';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import type { Plan, Subscription } from '../../types/billing.types';
 
@@ -51,6 +55,10 @@ export default function PlansPage() {
   const [scriptError, setScriptError] = useState(false);
   const [interval, setIntervalTab] = useState<'monthly' | 'yearly'>('monthly');
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
+  // "Contact sales" (Enterprise) — files a contact query, company auto-filled.
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactMsg, setContactMsg] = useState('');
+  const [contactBusy, setContactBusy] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -97,6 +105,21 @@ export default function PlansPage() {
   }, [plans, interval, currentPlanKey, currentPlan]);
 
   const anyBusy = busyPlan !== null;
+
+  const submitContact = async () => {
+    if (!contactMsg.trim()) { showError('Please add a short message.'); return; }
+    setContactBusy(true);
+    try {
+      await ContactService.raise(contactMsg.trim());
+      showSuccess('Thanks — our team will reach out shortly.');
+      setContactOpen(false);
+      setContactMsg('');
+    } catch (e: any) {
+      showError(e?.message || 'Could not send your message');
+    } finally {
+      setContactBusy(false);
+    }
+  };
 
   const handleSelectPlan = async (plan: Plan) => {
     if (plan.plan_key === currentPlanKey) return;
@@ -197,6 +220,10 @@ export default function PlansPage() {
               const isCurrent = plan.plan_key === currentPlanKey;
               const isPending = plan.plan_key === pendingPlanKey;
               const isBusy = busyPlan === plan.plan_key;
+              // Enterprise is a "talk to us" plan — its numbers (₹0, 0 interviews)
+              // are placeholders set on the sales call, so render it as a
+              // contact card rather than a self-serve one.
+              const isEnterprise = plan.tier === 'enterprise';
               return (
                 <Box
                   key={plan.id}
@@ -231,43 +258,78 @@ export default function PlansPage() {
                       )}
                     </Box>
                     <Box sx={{ fontSize: '1.75rem', fontWeight: 700, color: TOKENS.brand, mb: 0.5 }}>
-                      {!plan.is_active ? 'Custom' : plan.amount === 0 || plan.amount == null ? '₹0' : `₹${(plan.amount / 100).toLocaleString('en-IN')}`}
+                      {isEnterprise || !plan.is_active ? 'Custom' : plan.amount === 0 || plan.amount == null ? '₹0' : `₹${(plan.amount / 100).toLocaleString('en-IN')}`}
                     </Box>
                     <Caption sx={{ color: TOKENS.textSecondary }}>
-                      {!plan.is_active ? 'Negotiated pricing' : plan.amount === 0 || plan.amount == null ? 'No card required' : plan.interval === 'yearly' ? 'per year' : 'per month'}
+                      {isEnterprise ? 'Contact us for pricing' : !plan.is_active ? 'Negotiated pricing' : plan.amount === 0 || plan.amount == null ? 'No card required' : plan.interval === 'yearly' ? 'per year' : 'per month'}
                     </Caption>
                   </Box>
 
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
-                    <Caption sx={{ color: TOKENS.textSecondary, fontWeight: 500 }}>✓ {plan.interviews_per_cycle} interviews / cycle</Caption>
-                    <Caption sx={{ color: TOKENS.textSecondary, fontWeight: 500 }}>✓ {plan.minutes_per_interview} min per interview</Caption>
-                    <Caption sx={{ color: TOKENS.textSecondary, fontWeight: 500 }}>✓ {plan.max_seats === null ? 'Unlimited seats' : `${plan.max_seats} team seats`}</Caption>
+                    {/* Enterprise skips the auto-derived numeric lines (its
+                        interviews/min are placeholders) and shows only its
+                        curated feature bullets. */}
+                    {!isEnterprise && (
+                      <>
+                        <Caption sx={{ color: TOKENS.textSecondary, fontWeight: 500 }}>✓ {plan.interviews_per_cycle} interviews / cycle</Caption>
+                        <Caption sx={{ color: TOKENS.textSecondary, fontWeight: 500 }}>✓ {plan.minutes_per_interview} min per interview</Caption>
+                        <Caption sx={{ color: TOKENS.textSecondary, fontWeight: 500 }}>✓ {plan.max_seats === null ? 'Unlimited seats' : `${plan.max_seats} team seats`}</Caption>
+                      </>
+                    )}
                     {Array.isArray(plan.features) && plan.features.map((feature: string, idx: number) => (
                       <Caption key={idx} sx={{ color: TOKENS.textSecondary, fontWeight: 500 }}>✓ {feature}</Caption>
                     ))}
                   </Box>
 
-                  <ActionButton
-                    onClick={() => isPending ? handleCompletePayment(plan) : handleSelectPlan(plan)}
-                    loading={isBusy}
-                    disabled={isCurrent || (anyBusy && !isBusy)}
-                    sx={{
-                      width: '100%',
-                      ...(isPending && {
-                        bgcolor: '#FEF3C7',
-                        color: '#B45309',
-                        '&:hover': { bgcolor: '#FDE68A' },
-                      }),
-                    }}
-                  >
-                    {isCurrent ? 'Current plan' : isPending ? 'Complete payment' : isBusy ? 'Opening…' : plan.plan_key === 'trial' ? 'Start free' : 'Select'}
-                  </ActionButton>
+                  {isEnterprise && !isCurrent ? (
+                    <ActionButton
+                      onClick={() => setContactOpen(true)}
+                      disabled={anyBusy}
+                      sx={{ width: '100%' }}
+                    >
+                      Contact sales
+                    </ActionButton>
+                  ) : (
+                    <ActionButton
+                      onClick={() => isPending ? handleCompletePayment(plan) : handleSelectPlan(plan)}
+                      loading={isBusy}
+                      disabled={isCurrent || (anyBusy && !isBusy)}
+                      sx={{
+                        width: '100%',
+                        ...(isPending && {
+                          bgcolor: '#FEF3C7',
+                          color: '#B45309',
+                          '&:hover': { bgcolor: '#FDE68A' },
+                        }),
+                      }}
+                    >
+                      {isCurrent ? 'Current plan' : isPending ? 'Complete payment' : isBusy ? 'Opening…' : plan.plan_key === 'trial' ? 'Start free' : 'Select'}
+                    </ActionButton>
+                  )}
                 </Box>
               );
             })}
           </Box>
         </motion.div>
       )}
+
+      <Dialog open={contactOpen} onClose={contactBusy ? undefined : () => setContactOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ color: TOKENS.textPrimary, fontWeight: 700 }}>Talk to sales</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: TOKENS.textSecondary, mb: 2, fontSize: '0.85rem' }}>
+            Tell us a bit about what you need and our team will get back to you.
+          </Typography>
+          <TextField
+            autoFocus fullWidth multiline minRows={3} size="small" label="Message"
+            placeholder="e.g. We run ~200 interviews / month and want the Enterprise plan."
+            value={contactMsg} onChange={(e) => setContactMsg(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <ActionButton variant="secondary" onClick={() => setContactOpen(false)} disabled={contactBusy}>Cancel</ActionButton>
+          <ActionButton onClick={submitContact} loading={contactBusy}>Send</ActionButton>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

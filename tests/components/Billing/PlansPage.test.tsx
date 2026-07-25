@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Plan } from '../../../src/types/billing.types';
 
@@ -24,6 +24,11 @@ vi.mock('../../../src/services/billing.service', () => ({
   },
 }));
 
+const raiseContact = vi.fn();
+vi.mock('../../../src/services/contact.service', () => ({
+  ContactService: { raise: (...a: unknown[]) => raiseContact(...a) },
+}));
+
 import PlansPage from '../../../src/components/Billing/PlansPage';
 
 const trial: Plan = {
@@ -39,6 +44,12 @@ const growthYearly: Plan = {
   interval: 'yearly', interviews_per_cycle: 50, minutes_per_interview: 90, max_seats: null, is_active: true,
   features: ['Priority support', 'SSO'],
 };
+const enterprise: Plan = {
+  id: 'ent', plan_key: 'enterprise', name: 'Enterprise', tier: 'enterprise',
+  amount: null as unknown as number, currency: 'INR', interval: null,
+  interviews_per_cycle: 0, minutes_per_interview: 100, max_seats: null, is_active: true,
+  features: ['Self-hosted in your cluster', 'SDK integration', 'Dedicated support'],
+};
 
 let rzpOpts: any;
 const rzpOpen = vi.fn();
@@ -53,6 +64,7 @@ beforeEach(() => {
   verifySubscription.mockReset().mockResolvedValue(undefined);
   rzpOpts = undefined;
   rzpOpen.mockReset();
+  raiseContact.mockReset().mockResolvedValue(undefined);
   (window as any).Razorpay = vi.fn(function (this: any, o: any) { rzpOpts = o; this.open = rzpOpen; });
 });
 
@@ -233,5 +245,45 @@ describe('PlansPage — custom plans & trial visibility', () => {
     render(<PlansPage />);
     await screen.findByText('Starter');
     expect(screen.queryByText('Trial (InCruiter)')).not.toBeInTheDocument();
+  });
+});
+
+describe('PlansPage — Enterprise “contact us” card', () => {
+  test('shows Custom / contact pricing, not ₹0 or 0 interviews', async () => {
+    listPlans.mockResolvedValue([trial, starter, enterprise]);
+    render(<PlansPage />);
+    expect(await screen.findByText('Enterprise')).toBeInTheDocument();
+
+    // no placeholder zeros
+    expect(screen.queryByText('✓ 0 interviews / cycle')).not.toBeInTheDocument();
+    expect(screen.queryByText('✓ 100 min per interview')).not.toBeInTheDocument();
+    // contact-us treatment
+    expect(screen.getByText('Contact us for pricing')).toBeInTheDocument();
+    // curated feature bullets still render
+    expect(screen.getByText('✓ Self-hosted in your cluster')).toBeInTheDocument();
+    expect(screen.getByText('✓ SDK integration')).toBeInTheDocument();
+  });
+
+  test('“Contact sales” opens a dialog and files a contact query (company auto-attached server-side)', async () => {
+    listPlans.mockResolvedValue([trial, starter, enterprise]);
+    render(<PlansPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /contact sales/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText('Message'), 'We want the Enterprise plan.');
+    await userEvent.click(within(dialog).getByRole('button', { name: /^send$/i }));
+
+    await vi.waitFor(() => expect(raiseContact).toHaveBeenCalledWith('We want the Enterprise plan.'));
+    expect(showSuccess).toHaveBeenCalledWith('Thanks — our team will reach out shortly.');
+  });
+
+  test('“Contact sales” blocks an empty message', async () => {
+    listPlans.mockResolvedValue([trial, starter, enterprise]);
+    render(<PlansPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /contact sales/i }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: /^send$/i }));
+    expect(showError).toHaveBeenCalledWith('Please add a short message.');
+    expect(raiseContact).not.toHaveBeenCalled();
   });
 });

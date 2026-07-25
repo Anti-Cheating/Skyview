@@ -2,6 +2,7 @@ export interface Plan {
   id: string;
   plan_key: string;
   name: string;
+  tier?: string; // 'trial' | 'starter' | 'growth' | 'enterprise' | 'custom'
   amount: number;       // paise (₹1 = 100)
   currency: string;
   interval: string | null;  // 'monthly' | 'yearly' | null (for trial)
