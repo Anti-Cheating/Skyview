@@ -17,7 +17,7 @@ import PlansPage from '../../../src/components/Admin/PlansPage';
 const plan = {
   id: 'plan-1', plan_key: 'starter_monthly', name: 'Starter', tier: 'starter', interval: 'monthly',
   amount: 499900, currency: 'INR', interviews_per_cycle: 100, minutes_per_interview: 45, max_seats: 20,
-  is_active: true, features: ['Priority support'], companies_subscribed: 3,
+  is_active: true, sdk_access: false, features: ['Priority support'], companies_subscribed: 3,
 };
 
 beforeEach(() => {
@@ -85,6 +85,17 @@ describe('PlansPage', () => {
     await vi.waitFor(() => expect(showSuccess).toHaveBeenCalledWith('Plan updated.'));
   });
 
+  test('Edit: toggling SDK access is sent in the payload', async () => {
+    render(<PlansPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /edit/i }));
+    const dialog = await screen.findByRole('dialog');
+    // second switch is SDK access (first is Active)
+    const sdkSwitch = within(dialog).getByRole('switch', { name: /SDK access|No SDK access/i });
+    await userEvent.click(sdkSwitch);
+    await userEvent.click(within(dialog).getByRole('button', { name: /save/i }));
+    expect(AdminService.updatePlan).toHaveBeenCalledWith('plan-1', expect.objectContaining({ sdk_access: true }));
+  });
+
   test('Edit: removing a feature drops it from the payload', async () => {
     render(<PlansPage />);
     await userEvent.click(await screen.findByRole('button', { name: /edit/i }));
@@ -126,6 +137,24 @@ describe('PlansPage', () => {
       })),
     );
     await vi.waitFor(() => expect(showSuccess).toHaveBeenCalledWith('Custom plan created.'));
+  });
+
+  test('Create: SDK access can be enabled on a custom plan', async () => {
+    render(<PlansPage />);
+    await screen.findByText('Starter');
+    await userEvent.click(screen.getByRole('button', { name: /create custom plan/i }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText('Plan key'), 'sdk_partner');
+    await userEvent.type(within(dialog).getByLabelText('Name'), 'SDK Partner');
+    await userEvent.type(within(dialog).getByLabelText('Interviews / cycle'), '1000');
+    await userEvent.click(within(dialog).getByRole('switch', { name: /SDK access|No SDK access/i }));
+    await userEvent.click(within(dialog).getByRole('button', { name: /^create$/i }));
+
+    await vi.waitFor(() =>
+      expect(AdminService.createPlan).toHaveBeenCalledWith(expect.objectContaining({
+        plan_key: 'sdk_partner', tier: 'custom', sdk_access: true,
+      })),
+    );
   });
 
   test('Create: blank amount/seats clear to null (unlimited / free); default hidden', async () => {

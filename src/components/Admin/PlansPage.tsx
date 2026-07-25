@@ -23,6 +23,7 @@ interface PlanRow {
   minutes_per_interview: number;
   max_seats: number | null;
   is_active: boolean;
+  sdk_access: boolean;
   features: string[] | null;
   /** Edit-safety guardrail: how many companies sit on this plan right now. */
   companies_subscribed: number;
@@ -42,12 +43,13 @@ interface FormState {
   max_seats: string;         // '' = unlimited
   features: string[];
   is_active: boolean;
+  sdk_access: boolean;
 }
 
 const EMPTY_FORM: FormState = {
   plan_key: '', name: '', amount: '', interval: '',
   interviews_per_cycle: '', minutes_per_interview: '100', max_seats: '',
-  features: [], is_active: false,
+  features: [], is_active: false, sdk_access: false,
 };
 
 export default function PlansPage() {
@@ -93,6 +95,7 @@ export default function PlansPage() {
       max_seats: p.max_seats == null ? '' : String(p.max_seats),
       features: Array.isArray(p.features) ? [...p.features] : [],
       is_active: p.is_active,
+      sdk_access: p.sdk_access ?? false,
     });
     setErr(null);
     setMode('edit');
@@ -132,6 +135,7 @@ export default function PlansPage() {
       interviews_per_cycle: interviews,
       minutes_per_interview: minutes,
       is_active: form.is_active,
+      sdk_access: form.sdk_access,
       interval: form.interval || null,
       amount: amountRupees === null ? null : Math.round(amountRupees * 100), // rupees → paise
       max_seats: seats,
@@ -181,6 +185,17 @@ export default function PlansPage() {
             <Chip label="Active" size="small" sx={{ height: 22, fontSize: '0.7rem', fontWeight: 600, bgcolor: 'rgba(76,217,100,0.14)', color: '#047857' }} />
           ) : (
             <Chip label="Hidden" size="small" variant="outlined" sx={{ height: 22, fontSize: '0.7rem', fontWeight: 600, borderColor: TOKENS.border, color: TOKENS.textSecondary }} />
+          ),
+      },
+      {
+        key: 'sdk',
+        header: 'SDK',
+        width: 80,
+        render: (p) =>
+          p.sdk_access ? (
+            <Chip label="SDK" size="small" sx={{ height: 22, fontSize: '0.7rem', fontWeight: 600, bgcolor: 'rgba(59,130,246,0.14)', color: '#1D4ED8' }} />
+          ) : (
+            <Box sx={{ color: TOKENS.textMuted }}>—</Box>
           ),
       },
       {
@@ -291,6 +306,10 @@ export default function PlansPage() {
             <FormControlLabel
               control={<Switch checked={form.is_active} onChange={(e) => setF('is_active', e.target.checked)} />}
               label={form.is_active ? 'Active — shown in the public catalog' : 'Hidden — attach to companies via Assign plan'}
+            />
+            <FormControlLabel
+              control={<Switch checked={form.sdk_access} onChange={(e) => setF('sdk_access', e.target.checked)} />}
+              label={form.sdk_access ? 'SDK access — company can mint API keys + use /v1' : 'No SDK access (public tiers)'}
             />
           </Stack>
         </DialogContent>
