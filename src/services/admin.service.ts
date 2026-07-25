@@ -25,6 +25,8 @@ export const AdminService = {
   companySecurity: (id: string) => ApiService.get(`/admin/companies/${id}/security`),
   suspendCompany: (id: string) => ApiService.post(`/admin/companies/${id}/suspend`),
   adjustQuota: (id: string, add: number) => ApiService.post(`/admin/companies/${id}/quota-adjust`, { add }),
+  assignPlan: (id: string, body: { plan_id?: string; plan_key?: string }) =>
+    ApiService.post(`/admin/companies/${id}/assign-plan`, body),
 
   // ── billing ──
   billingSummary: () => ApiService.get('/admin/billing/summary'),

@@ -19,14 +19,14 @@ beforeEach(() => {
 });
 
 describe('HelperDownloadCard', () => {
-  test('macOS → Apple Silicon + Intel links with the matching arch URLs, and the "which Mac?" hint', () => {
+  test('macOS → a single Mac link (arm64 — the only published build)', () => {
     render(<HelperDownloadCard />);
     expect(screen.getByRole('heading', { name: 'Install Trueyy Helper' })).toBeInTheDocument();
 
-    const silicon = screen.getByRole('link', { name: /apple silicon/i });
-    expect(silicon).toHaveAttribute('href', 'https://downloads.trueyy.com/helper-mac?arch=arm64');
-    const intel = screen.getByRole('link', { name: /intel/i });
-    expect(intel).toHaveAttribute('href', 'https://downloads.trueyy.com/helper-mac?arch=x86_64');
+    const mac = screen.getByRole('link', { name: /download for mac/i });
+    expect(mac).toHaveAttribute('href', 'https://downloads.trueyy.com/helper-mac?arch=arm64');
+    // Intel was dropped when the pipeline went arm64-only
+    expect(screen.queryByRole('link', { name: /intel/i })).not.toBeInTheDocument();
   });
 
   test('Windows → a single Windows link (x64, no arch param)', () => {
@@ -36,14 +36,13 @@ describe('HelperDownloadCard', () => {
     expect(dl).toHaveAttribute('href', 'https://downloads.trueyy.com/helper-windows');
   });
 
-  test('unknown OS → offers Windows + both Mac arches', () => {
+  test('unknown OS → offers Windows + the single Mac build', () => {
     platform = 'unknown';
     render(<HelperDownloadCard />);
     expect(screen.getByRole('link', { name: /download for windows/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /apple silicon/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /download for mac/i })).toHaveAttribute(
       'href', 'https://downloads.trueyy.com/helper-mac?arch=arm64');
-    expect(screen.getByRole('link', { name: /intel/i })).toHaveAttribute(
-      'href', 'https://downloads.trueyy.com/helper-mac?arch=x86_64');
+    expect(screen.queryByRole('link', { name: /intel/i })).not.toBeInTheDocument();
   });
 
   test('checking shows the "already installed" spinner text', () => {

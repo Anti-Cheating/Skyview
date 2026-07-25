@@ -42,6 +42,9 @@ export default function PlansPage() {
   const { showSuccess, showError } = useSnackbar();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [currentPlanKey, setCurrentPlanKey] = useState<string>('');
+  /** The full plan we're on — needed to render a card for hidden/custom plans
+   *  that the public catalog (is_active=true) doesn't include. */
+  const [currentPlan, setCurrentPlan] = useState<Plan | null>(null);
   const [pendingPlanKey, setPendingPlanKey] = useState<string>('');
   const [pendingSub, setPendingSub] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,6 +63,7 @@ export default function PlansPage() {
         setPlans(planList);
         const isConfirmed = sub && ['trial', 'active', 'charged'].includes(sub.status);
         setCurrentPlanKey(isConfirmed ? sub.plan.plan_key : '');
+        setCurrentPlan(isConfirmed ? sub.plan : null);
         setPendingPlanKey(sub?.status === 'created' ? sub.plan.plan_key : '');
         setPendingSub(sub?.status === 'created' ? sub : null);
         if (!scriptOk) setScriptError(true);
@@ -69,17 +73,28 @@ export default function PlansPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Trial (no interval) always shows; paid plans filter by the active tab. Sort by tier.
-  const visiblePlans = useMemo(
-    () =>
-      plans
-        .filter((p) => !p.interval || p.interval === interval)
-        .sort((a, b) => {
-          const order: Record<string, number> = { trial: 0, starter: 1, growth: 2 };
-          return (order[a.plan_key.split('_')[0]] ?? 999) - (order[b.plan_key.split('_')[0]] ?? 999);
-        }),
-    [plans, interval]
-  );
+  // Catalog rules:
+  //  - Paid plans filter by the monthly/yearly tab; interval-less plans pass.
+  //  - Trial is an ENTRY state, not a choice: once a company is on any other
+  //    plan (paid / custom / enterprise) there is no path back, so hide it.
+  //    (The backend already no-ops re-trials; this removes the dead button.)
+  //  - A company on a hidden/custom plan (is_active=false — not in the
+  //    catalog) still needs to see what they're on: synthesize their card
+  //    from the subscription's plan and pin it first, marked as custom.
+  const visiblePlans = useMemo(() => {
+    const pastTrial = currentPlanKey !== '' && currentPlanKey !== 'trial';
+    const list = plans
+      .filter((p) => !p.interval || p.interval === interval)
+      .filter((p) => !(p.plan_key === 'trial' && pastTrial))
+      .sort((a, b) => {
+        const order: Record<string, number> = { trial: 0, starter: 1, growth: 2 };
+        return (order[a.plan_key.split('_')[0]] ?? 999) - (order[b.plan_key.split('_')[0]] ?? 999);
+      });
+    if (currentPlan && !plans.some((p) => p.plan_key === currentPlan.plan_key)) {
+      list.unshift(currentPlan); // hidden/custom plan — only ever their own
+    }
+    return list;
+  }, [plans, interval, currentPlanKey, currentPlan]);
 
   const anyBusy = busyPlan !== null;
 
@@ -200,6 +215,9 @@ export default function PlansPage() {
                   <Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                       <CardTitle sx={{ color: TOKENS.textPrimary }}>{plan.name}</CardTitle>
+                      {!plan.is_active && (
+                        <Chip label="Custom" size="small" variant="outlined" sx={{ borderColor: TOKENS.brand, color: TOKENS.brand, fontWeight: 700, fontSize: '0.6rem', height: 18 }} />
+                      )}
                       {isCurrent && (
                         <Chip label="Current" size="small" sx={{ bgcolor: TOKENS.brand, color: '#fff', fontWeight: 700, fontSize: '0.6rem', height: 18 }} />
                       )}
@@ -213,10 +231,10 @@ export default function PlansPage() {
                       )}
                     </Box>
                     <Box sx={{ fontSize: '1.75rem', fontWeight: 700, color: TOKENS.brand, mb: 0.5 }}>
-                      {plan.amount === 0 ? '₹0' : `₹${(plan.amount / 100).toLocaleString('en-IN')}`}
+                      {!plan.is_active ? 'Custom' : plan.amount === 0 || plan.amount == null ? '₹0' : `₹${(plan.amount / 100).toLocaleString('en-IN')}`}
                     </Box>
                     <Caption sx={{ color: TOKENS.textSecondary }}>
-                      {plan.amount === 0 ? 'No card required' : plan.interval === 'yearly' ? 'per year' : 'per month'}
+                      {!plan.is_active ? 'Negotiated pricing' : plan.amount === 0 || plan.amount == null ? 'No card required' : plan.interval === 'yearly' ? 'per year' : 'per month'}
                     </Caption>
                   </Box>
 

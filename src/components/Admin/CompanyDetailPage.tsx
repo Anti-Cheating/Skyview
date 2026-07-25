@@ -16,6 +16,7 @@ import { DataTable, type DataTableColumn } from '../common/DataTable';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { AdminService } from '../../services/admin.service';
 import ActionDialog from './ActionDialog';
+import PlanDialog from './PlanDialog';
 
 interface CompanyInfo {
   id: string; name: string; slug: string; status: string; created_at: string;
@@ -139,6 +140,7 @@ export default function CompanyDetailPage() {
 
   const [action, setAction] = useState<'quota' | 'suspend' | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
 
   const runAction = async (value: string) => {
     if (action === 'quota') {
@@ -258,6 +260,7 @@ export default function CompanyDetailPage() {
           )}
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
+          <ActionButton variant="secondary" onClick={() => setAssignOpen(true)}>Assign plan</ActionButton>
           <ActionButton variant="secondary" onClick={() => setAction('quota')}>Adjust quota</ActionButton>
           <ActionButton variant="secondary" onClick={() => setAction('suspend')}>Suspend</ActionButton>
         </Box>
@@ -375,6 +378,13 @@ export default function CompanyDetailPage() {
         busy={actionBusy}
         onClose={() => setAction(null)}
         onConfirm={runAction}
+      />
+      <PlanDialog
+        open={assignOpen}
+        companyId={id}
+        companyName={c?.name}
+        onClose={() => setAssignOpen(false)}
+        onDone={() => { showSuccess('Plan assigned.'); refresh(); }}
       />
     </Box>
   );

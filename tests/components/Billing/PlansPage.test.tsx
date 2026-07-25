@@ -171,3 +171,67 @@ describe('PlansPage', () => {
     expect(screen.getByText('✓ Unlimited seats')).toBeInTheDocument();
   });
 });
+
+// ── hidden/custom plans + trial visibility ─────────────────────────────
+
+const customPlan: Plan = {
+  id: 'pc', plan_key: 'custom-incruiter', name: 'Trial (InCruiter)', amount: 0, currency: 'INR',
+  interval: null, interviews_per_cycle: 25, minutes_per_interview: 60, max_seats: 10,
+  is_active: false, // hidden — never part of the public catalog
+  features: ['Dedicated support'],
+};
+
+describe('PlansPage — custom plans & trial visibility', () => {
+  test('a company on a hidden custom plan sees its card, marked Custom + Current', async () => {
+    getSubscription.mockResolvedValue({ status: 'trial', plan: customPlan } as any);
+    render(<PlansPage />);
+
+    // The synthesized card renders from the subscription's plan
+    expect(await screen.findByText('Trial (InCruiter)')).toBeInTheDocument();
+    // "Custom" renders twice by design: the chip AND the price slot
+    expect(screen.getAllByText('Custom')).toHaveLength(2);
+    expect(screen.getByText('Negotiated pricing')).toBeInTheDocument();
+    expect(screen.getByText('✓ 25 interviews / cycle')).toBeInTheDocument();
+    expect(screen.getByText('✓ 10 team seats')).toBeInTheDocument();
+    expect(screen.getByText('✓ Dedicated support')).toBeInTheDocument();
+
+    // It IS the current plan: button disabled, no way to "select" it
+    expect(screen.getByRole('button', { name: /current plan/i })).toBeDisabled();
+  });
+
+  test('the Trial card is hidden for a company past trial (custom plan)', async () => {
+    getSubscription.mockResolvedValue({ status: 'trial', plan: customPlan } as any);
+    render(<PlansPage />);
+    await screen.findByText('Trial (InCruiter)');
+    // catalog still contains trial+starter, but Trial must not render
+    expect(screen.queryByText('Free Trial')).not.toBeInTheDocument();
+    expect(screen.getByText('Starter')).toBeInTheDocument(); // upgrades stay visible
+  });
+
+  test('the Trial card is hidden for a company on a paid plan', async () => {
+    getSubscription.mockResolvedValue({ status: 'active', plan: starter } as any);
+    render(<PlansPage />);
+    await screen.findByText('Starter');
+    expect(screen.queryByText('Free Trial')).not.toBeInTheDocument();
+  });
+
+  test('the Trial card still shows for a company ON trial, marked current', async () => {
+    getSubscription.mockResolvedValue({ status: 'trial', plan: trial } as any);
+    render(<PlansPage />);
+    expect(await screen.findByText('Free Trial')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /current plan/i })).toBeDisabled();
+  });
+
+  test('the Trial card shows for a fresh company with no subscription', async () => {
+    getSubscription.mockResolvedValue(null);
+    render(<PlansPage />);
+    expect(await screen.findByText('Free Trial')).toBeInTheDocument();
+  });
+
+  test('other companies never see someone else’s hidden plan (not in catalog, not their sub)', async () => {
+    getSubscription.mockResolvedValue({ status: 'active', plan: starter } as any);
+    render(<PlansPage />);
+    await screen.findByText('Starter');
+    expect(screen.queryByText('Trial (InCruiter)')).not.toBeInTheDocument();
+  });
+});
