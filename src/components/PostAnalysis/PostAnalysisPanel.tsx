@@ -10,24 +10,41 @@ import type { InterviewSession } from "../../types/interview.types";
 import "./PostAnalysisPanel.css";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-/** Render a summary (newline-joined "- bullet" string) as a clean list instead
- * of one flat paragraph. A short leading "Label:" is shown in bold so sections
- * read as headings. Same data, nicer layout. */
-function renderBullet(line: string) {
-  const m = line.match(/^([^:]{2,28}):\s+(.+)$/s);
-  return m ? (<><strong>{m[1]}:</strong> {m[2]}</>) : <>{line}</>;
-}
-function Bullets({ text, empty, className }: { text?: string; empty: string; className?: string }) {
-  const lines = String(text ?? "")
-    .split("\n")
-    .map((l) => l.replace(/^\s*[-•*]\s*/, "").trim())
-    .filter(Boolean);
-  if (lines.length === 0) return <p className={className}>{empty}</p>;
-  if (lines.length === 1) return <p className={className}>{renderBullet(lines[0]!)}</p>;
+function ContentSummarySections({ sections }: { sections: { heading: string; bullets: string[] }[] }) {
+  if (sections.length === 0) return <p className="pa-body">No summary available.</p>;
   return (
-    <ul className={className} style={{ margin: 0, paddingLeft: 18 }}>
-      {lines.map((l, i) => (
-        <li key={i} style={{ margin: "3px 0" }}>{renderBullet(l)}</li>
+    <div className="pa-topic-sections">
+      {sections.map((s, i) => (
+        <div key={i} className="pa-topic-section">
+          <h4 className="pa-topic-heading">{s.heading}</h4>
+          <ul className="pa-body" style={{ margin: 0, paddingLeft: 18 }}>
+            {s.bullets.map((b, j) => (
+              <li key={j} style={{ margin: "3px 0" }}>{b}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const SEVERITY_COLOR: Record<string, string> = { HIGH: "#DC2626", MEDIUM: "#F97316", LOW: "#9CA3AF" };
+
+// Note: each finding still carries `timestamps` in the data (the anti-
+// hallucination guardrail lives there — see resolveChunkFindings /
+// filterFindingSummaryTimestamps in postAnalysisService.ts), but v1
+// deliberately does not render them — no [Jump→] target exists yet.
+function FindingSummaryList({ findings }: { findings: { severity: string; description: string; timestamps: string[] }[] }) {
+  if (findings.length === 0) return <p className="pa-body">No flagged behavior detected.</p>;
+  return (
+    <ul className="pa-finding-list">
+      {findings.map((f, i) => (
+        <li key={i} className="pa-finding-item">
+          <span className="pa-finding-severity" style={{ color: SEVERITY_COLOR[f.severity] ?? "#9CA3AF" }}>
+            {f.severity}
+          </span>
+          <span className="pa-finding-desc">{f.description}</span>
+        </li>
       ))}
     </ul>
   );
@@ -236,6 +253,9 @@ interface PostAnalysis {
   keystroke_score: number | null; voice_score: number | null;
   image_score: number | null; app_score: number | null;
   risk_score: number; final_summary: string;
+  score_reason: string;
+  content_summary: { heading: string; bullets: string[] }[];
+  finding_summary: { severity: "HIGH" | "MEDIUM" | "LOW"; description: string; timestamps: string[] }[];
   detected_app_categories: DetectedAppCategory[];
   created_at: string; status?: string;
   /** Consent coverage windows (GDPR): which portions of the interview
@@ -268,6 +288,13 @@ function normalizeAnalysis(raw: Record<string, unknown>): PostAnalysis {
     image_score: toScore(raw.image_score),
     app_score: toScore(raw.app_score),
     final_summary: String(raw.final_summary ?? ""),
+    score_reason: String(raw.score_reason ?? ""),
+    content_summary: Array.isArray(raw.content_summary)
+      ? (raw.content_summary as { heading: string; bullets: string[] }[])
+      : [],
+    finding_summary: Array.isArray(raw.finding_summary)
+      ? (raw.finding_summary as { severity: "HIGH" | "MEDIUM" | "LOW"; description: string; timestamps: string[] }[])
+      : [],
     detected_app_categories: Array.isArray(raw.detected_app_categories)
       ? (raw.detected_app_categories as DetectedAppCategory[])
       : [],
@@ -556,30 +583,20 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
       <section className="pa-card pa-gauge-card">
         <h3 className="pa-card-title">Overall Score</h3>
         <RiskGauge score={analysis.risk_score} level={analysis.risk_level} riskColor={riskColor} />
-        <p className="pa-card-note">Aggregated across voice, keystrokes and app usage.</p>
+        <p className="pa-card-note">{analysis.score_reason || "Aggregated across voice, keystrokes and app usage."}</p>
       </section>
 
-      {/* ── Summary ──────────────────────────────────────────────────────── */}
+      {/* ── Summary — content only, topic-segmented from the transcript ──── */}
       <section className="pa-card pa-summary-card">
         <h3 className="pa-card-title">Interview Summary</h3>
-        <Bullets className="pa-body" text={analysis.final_summary} empty="No summary available." />
+        <ContentSummarySections sections={analysis.content_summary} />
       </section>
 
-      {/* ── Signal cards ─────────────────────────────────────────────────── */}
-      <div className="pa-signals">
-        <section className="pa-card pa-signal-card">
-          <h3 className="pa-card-title">Voice Analysis</h3>
-          <Bullets className="pa-body pa-body-sm" text={analysis.voice_summary} empty="No voice data recorded." />
-        </section>
-        <section className="pa-card pa-signal-card">
-          <h3 className="pa-card-title">Keystroke Analysis</h3>
-          <Bullets className="pa-body pa-body-sm" text={analysis.keystroke_summary} empty="No keystroke data recorded." />
-        </section>
-        <section className="pa-card pa-signal-card">
-          <h3 className="pa-card-title">App Usage</h3>
-          <Bullets className="pa-body pa-body-sm" text={analysis.app_summary} empty="No app usage data recorded." />
-        </section>
-      </div>
+      {/* ── Finding Summary — flagged behavior only, session-wide, grouped ── */}
+      <section className="pa-card pa-summary-card">
+        <h3 className="pa-card-title">Finding Summary</h3>
+        <FindingSummaryList findings={analysis.finding_summary} />
+      </section>
 
       {/* ── Transcript ───────────────────────────────────────────────────── */}
       <section className="pa-card">

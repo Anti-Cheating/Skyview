@@ -694,3 +694,41 @@
   .pa-hero-meta { gap: 12px 32px; }
   .pa-hero-badges { flex-direction: row; align-items: flex-start; }
 }
+
+/* ─── Interview Summary (topic sections) + Finding Summary ───────────── */
+.pa-topic-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pa-topic-heading {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+.pa-finding-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pa-finding-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.pa-finding-severity {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  min-width: 52px;
+}
+.pa-finding-desc {
+  flex: 1 1 300px;
+  color: #1F2937;
+}
