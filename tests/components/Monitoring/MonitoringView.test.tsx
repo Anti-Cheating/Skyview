@@ -128,4 +128,11 @@ describe('MonitoringView', () => {
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/interviews'));
     expect(deactivate).toHaveBeenCalledWith('round-1');
   });
+
+  test('leaving the page does not end the session', async () => {
+    const { unmount } = render(<MonitoringView />);
+    await screen.findByRole('heading', { name: 'Frontend Engineer' });
+    unmount();
+    expect(deactivate).not.toHaveBeenCalled();
+  });
 });

@@ -46,7 +46,7 @@ const LIGHT_BORDER = TOKENS.border;
 const BRAND = TOKENS.brand;
 
 export default function MonitoringView() {
-  const { roundId } = useParams<{ roundId: string }>();
+  const { processId, roundId } = useParams<{ processId: string; roundId: string }>();
   const interviewId = roundId;
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -75,7 +75,7 @@ export default function MonitoringView() {
 
   // Cortex is the single authority on session lifecycle. On mount we
   // flip SCHEDULED → ACTIVE; a 10s heartbeat refreshes a Redis TTL;
-  // unmount / beforeunload flips ACTIVE → COMPLETED so the daemon stops.
+  // tab close (beforeunload) or an explicit End flips ACTIVE → COMPLETED.
   useEffect(() => {
     if (!interviewId) return;
     let cancelled = false;
@@ -153,10 +153,10 @@ export default function MonitoringView() {
       } catch {/* ignore */}
     };
     window.addEventListener('beforeunload', beaconDeactivate);
-    return () => {
-      window.removeEventListener('beforeunload', beaconDeactivate);
-      InterviewService.deactivate(interviewId).catch(() => {});
-    };
+    // Unmount does NOT deactivate: navigating away (dashboard, breadcrumb,
+    // back arrow) must leave the session ACTIVE so the interviewer can come
+    // back. Ending is explicit — the End Interview dialog or scheduled-end.
+    return () => window.removeEventListener('beforeunload', beaconDeactivate);
   }, [interviewId]);
 
   // Re-emit intent on (re)connect if Cortex tells us the session has no
@@ -294,14 +294,13 @@ export default function MonitoringView() {
     else riskData.emitStopAnalysis();
   };
 
+  // Leaving pauses capture but keeps the session ACTIVE and the on-intent
+  // stored, so re-entering resumes whatever was running. Only End clears it.
   const handleExit = () => {
     if (transcriptionOn) riskData.emitStopTranscription();
     if (analysisOn) riskData.emitStopAnalysis();
-    if (interviewId) {
-      sessionStorage.setItem(`skyview:txn:${interviewId}`, '0');
-      sessionStorage.setItem(`skyview:anl:${interviewId}`, '0');
-    }
-    navigate('/interviews');
+    // Back lands on the round we came from, not the interviews list.
+    navigate(`/interviews/${processId}/rounds/${roundId}`);
   };
 
   // Explicit, deliberate end — the primary "I'm done" action. Gated by a
@@ -399,11 +398,10 @@ export default function MonitoringView() {
         <IconButton
           onClick={handleExit}
           size="small"
-          // Was unlabelled — exits the monitoring session and navigates
-          // back to the interviews list. Spelling it out also tells the
-          // user that this isn't a "browser back" — it actually ends
-          // the session server-side.
-          aria-label="Exit monitoring and return to interviews"
+          // Leaves the monitoring view without ending the session — the
+          // interviewer can re-enter from the round page. Only End
+          // Interview finalizes.
+          aria-label="Leave monitoring and return to interviews"
           sx={{
             color: '#6B7280',
             '&:hover': { bgcolor: 'rgba(0,0,0,0.04)', color: '#1F2937' },

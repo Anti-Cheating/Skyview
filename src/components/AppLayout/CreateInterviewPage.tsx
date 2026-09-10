@@ -20,7 +20,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { FormField } from '../common/FormField';
 import { ActionButton } from '../common/ActionButton';
-import { INPUT_SX, LABEL_SX } from '../common/formTokens';
+import { LABEL_SX, DATETIME_SLOT_PROPS } from '../common/formTokens';
 import { TOKENS } from '../../theme';
 
 const DURATIONS = [
@@ -542,9 +542,9 @@ export default function CreateInterviewPage() {
                     value={startDateTime}
                     onChange={(val) => setStartDateTime(val)}
                     disabled={loading || success}
-                    disablePast
-                    minutesStep={15}
-                    slotProps={{ textField: { fullWidth: true, size: 'small', sx: INPUT_SX } }}
+                    minDate={dayjs()}
+                    timeSteps={{ hours: 1, minutes: 1 }}
+                    slotProps={DATETIME_SLOT_PROPS}
                   />
                 </LocalizationProvider>
               </Box>

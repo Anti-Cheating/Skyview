@@ -70,4 +70,32 @@ describe('DataTable', () => {
     );
     expect(screen.getByTestId('ChevronLeftIcon').closest('button')).toBeDisabled();
   });
+  test('onRowClick fires from anywhere in the row, but not from a control inside it', async () => {
+    const onRowClick = vi.fn();
+    const onAction = vi.fn();
+    const withAction: DataTableColumn<Row>[] = [
+      ...columns,
+      { key: 'actions', header: 'Actions', render: () => <button onClick={onAction}>Delete</button> },
+    ];
+    render(<DataTable columns={withAction} rows={rows} rowKey={rowKey} onRowClick={onRowClick} />);
+
+    // A plain cell — the whole row is the target.
+    await userEvent.click(screen.getByText('SDE-2'));
+    expect(onRowClick).toHaveBeenCalledWith(rows[1], 1);
+
+    // The action button belongs to itself, not the row.
+    onRowClick.mockClear();
+    await userEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
+    expect(onAction).toHaveBeenCalled();
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+
+  test('a clickable row is reachable by keyboard', async () => {
+    const onRowClick = vi.fn();
+    render(<DataTable columns={columns} rows={rows} rowKey={rowKey} onRowClick={onRowClick} />);
+    const row = screen.getByText('Alice').closest('tr') as HTMLElement;
+    row.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(onRowClick).toHaveBeenCalledWith(rows[0], 0);
+  });
 });

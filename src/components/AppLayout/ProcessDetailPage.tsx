@@ -13,9 +13,10 @@ import { TOKENS } from '../../theme';
 import { PageTitle, Secondary, Caption, CardTitle } from '../layout/Typography';
 import { ActionButton } from '../common/ActionButton';
 import { FormField } from '../common/FormField';
-import { INPUT_SX, LABEL_SX } from '../common/formTokens';
+import { LABEL_SX, DATETIME_SLOT_PROPS } from '../common/formTokens';
 import { DataTable, type DataTableColumn } from '../common/DataTable';
 import { Breadcrumb } from '../common/Breadcrumb';
+import { StatusTag } from '../common/StatusTag';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { ProcessService } from '../../services/process.service';
@@ -107,11 +108,7 @@ export default function ProcessDetailPage() {
         key: 'round',
         header: 'Round',
         render: (r) => (
-          <Box
-            component="button"
-            onClick={() => navigate(`/interviews/${processId}/rounds/${r.id}`)}
-            sx={{ background: 'none', border: 'none', p: 0, cursor: 'pointer', textAlign: 'left', color: TOKENS.textPrimary, fontWeight: 600, '&:hover': { color: TOKENS.brand } }}
-          >
+          <Box sx={{ color: TOKENS.textPrimary, fontWeight: 600 }}>
             {r.round_order} · {r.round_name}
           </Box>
         ),
@@ -191,7 +188,6 @@ export default function ProcessDetailPage() {
   }
 
   const candidateName = `${candidate.first_name} ${candidate.last_name}`.trim() || candidate.email;
-  const done = data.status === 'COMPLETED';
 
   return (
     <Box sx={{ p: { xs: 2, md: 3 } }}>
@@ -223,7 +219,7 @@ export default function ProcessDetailPage() {
         {/* Metadata */}
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, rowGap: 1.75, columnGap: 4 }}>
           <DetailRow label="Role" value={data.role} />
-          <DetailRow label="Status" node={<StatusInline done={done} />} />
+          <DetailRow label="Status" node={<StatusTag status={data.status} />} />
           <DetailRow label="Rounds" value={`${data.rounds.filter((r) => r.status === 'COMPLETED').length}/${data.rounds.length} completed`} />
           <DetailRow label="Created by" value={data.created_by_name ?? '—'} />
           <DetailRow label="Created on" value={new Date(data.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} />
@@ -235,7 +231,13 @@ export default function ProcessDetailPage() {
         <CardTitle sx={{ color: TOKENS.textPrimary }}>Rounds</CardTitle>
         <ActionButton onClick={() => setAddOpen(true)} startIcon={<AddIcon />}>Add round</ActionButton>
       </Box>
-      <DataTable<RoundSummary> columns={columns} rows={data.rounds} rowKey={(r) => r.id} emptyText="No rounds." />
+      <DataTable<RoundSummary>
+        columns={columns}
+        rows={data.rounds}
+        rowKey={(r) => r.id}
+        onRowClick={(r) => navigate(`/interviews/${processId}/rounds/${r.id}`)}
+        emptyText="No rounds."
+      />
 
       {addOpen && (
         <RoundDialog
@@ -295,22 +297,6 @@ function initialsOf(c: { first_name: string; last_name: string; email: string })
   const a = c.first_name?.[0] ?? '';  
   const b = c.last_name?.[0] ?? '';
   return (a + b).toUpperCase() || c.email[0]?.toUpperCase() || '?';
-}
-
-function StatusInline({ done }: { done: boolean }) {
-  return (
-    <Chip
-      label={done ? 'Completed' : 'In progress'}
-      size="small"
-      sx={{
-        height: 22,
-        fontSize: '0.7rem',
-        fontWeight: 600,
-        bgcolor: done ? 'rgba(76,217,100,0.14)' : 'rgba(59,130,246,0.12)',
-        color: done ? '#047857' : '#2563EB',
-      }}
-    />
-  );
 }
 
 function DetailRow({ label, value, node }: { label: string; value?: string; node?: ReactNode }) {
@@ -429,7 +415,7 @@ function RoundDialog({
             <Box>
               <Box sx={LABEL_SX}><span>Schedule</span><Box component="span" sx={{ color: TOKENS.errorLight, fontWeight: 700 }}>*</Box></Box>
               <LocalizationProvider dateAdapter={AdapterDayjs}>
-                <DateTimePicker value={startDateTime} onChange={(v) => setStartDateTime(v)} disabled={saving} disablePast minutesStep={15} slotProps={{ textField: { fullWidth: true, size: 'small', sx: INPUT_SX } }} />
+                <DateTimePicker value={startDateTime} onChange={(v) => setStartDateTime(v)} disabled={saving} minDate={dayjs()} timeSteps={{ hours: 1, minutes: 1 }} slotProps={DATETIME_SLOT_PROPS} />
               </LocalizationProvider>
             </Box>
             <FormField label="Duration" required select value={String(duration)} onChange={(e) => setDuration(Number(e.target.value))} disabled={saving}>

@@ -136,6 +136,49 @@ export class InvitesService {
     return ApiService.delete(`/invites/${inviteId}`, undefined, 'auth');
   }
 
+  // ── Membership management ─────────────────────────────────────────
+  // Role changes and ownership transfer are Owner-only server-side; the
+  // UI hides them for everyone else, but the guard that matters is Cortex's.
+
+  /** PATCH /companies/:id/members/:userId/role — Owner only. */
+  static async changeRole(
+    companyId: string,
+    userId: string,
+    role: InviteRole
+  ): Promise<ApiResponse<{ role: InviteRole }>> {
+    return ApiService.patch<{ role: InviteRole }>(
+      `/companies/${companyId}/members/${userId}/role`,
+      { role },
+      undefined,
+      'auth'
+    );
+  }
+
+  /** POST /companies/:id/transfer-ownership — Owner only; caller becomes Admin. */
+  static async transferOwnership(
+    companyId: string,
+    toUserId: string
+  ): Promise<ApiResponse<{ owner_id: string }>> {
+    return ApiService.post<{ owner_id: string }>(
+      `/companies/${companyId}/transfer-ownership`,
+      { toUserId },
+      undefined,
+      'auth'
+    );
+  }
+
+  /** DELETE /companies/:id/members/:userId — Owner: Admin or Member; Admin: Member. */
+  static async removeMember(
+    companyId: string,
+    userId: string
+  ): Promise<ApiResponse<{ id: string }>> {
+    return ApiService.delete<{ id: string }>(
+      `/companies/${companyId}/members/${userId}`,
+      undefined,
+      'auth'
+    );
+  }
+
   /** POST /invites/:id/resend */
   static async resend(inviteId: string): Promise<ApiResponse<unknown>> {
     return ApiService.post(`/invites/${inviteId}/resend`, undefined, undefined, 'auth');
