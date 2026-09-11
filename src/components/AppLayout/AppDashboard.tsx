@@ -19,7 +19,6 @@ import {
   Typography,
   Card,
   CardContent,
-  Button,
   useTheme,
 } from '@mui/material';
 import {
@@ -27,14 +26,11 @@ import {
   Event as EventIcon,
   History as HistoryIcon,
   TrendingUp as TrendingUpIcon,
-  Extension as ExtensionIcon,
 } from '@mui/icons-material';
 import { DashboardShimmer } from '../common/Shimmer';
 import { useAuth } from '../../contexts/AuthContext';
-import { useSnackbar } from '../../contexts/SnackbarContext';
 import { USER_ROLES } from '../../config/constants';
 import { getUserDisplayName } from '../../utils/user.utils';
-import { checkHelperHealth } from '../../services/helperBridge';
 
 interface StatCardProps {
   title: string;
@@ -110,7 +106,6 @@ function StatCard({ title, value, icon, bgColor, onClick }: StatCardProps) {
 
 export default function AppDashboard() {
   const { user } = useAuth();
-  const { showError, showSuccess } = useSnackbar();
   const theme = useTheme();
   const navigate = useNavigate();
 
@@ -158,38 +153,7 @@ export default function AppDashboard() {
   // through the loading path so this is a no-op for them.
   const showShimmer = useDelayedFlag(loading, 250);
 
-  // `helperInstalled` is a historical name kept because the dashboard
-  // template UI still renders chips around it. It now reflects whether
-  // the Trueyy Helper daemon is reachable on localhost:48123.
-  const [helperInstalled, setHelperInstalled] = useState<boolean | null>(null);
-  const [reauthBusy, setReauthBusy] = useState(false);
-
   const userRole = user?.role || USER_ROLES.CANDIDATE;
-  const isCandidate = userRole === USER_ROLES.CANDIDATE;
-
-  // Do NOT auto-probe the helper on dashboard mount. The daemon runs
-  // under launchd socket activation — any /health request wakes it, which
-  // burns resources when the user is just browsing their interview list.
-  // Helper status is verified on the join page (where it actually matters)
-  // or via the explicit "Reauthorize" button below.
-
-  const handleReauthorize = async () => {
-    // Helper picks up the current JWT on each /session/join; there's no
-    // persistent auth to re-send. This action is kept as a health check.
-    setReauthBusy(true);
-    try {
-      const health = await checkHelperHealth();
-      if (health?.ok) {
-        setHelperInstalled(true);
-        showSuccess('Trueyy Helper is running.');
-      } else {
-        setHelperInstalled(false);
-        showError('Trueyy Helper is not running. Install it or check that it started at login.');
-      }
-    } finally {
-      setReauthBusy(false);
-    }
-  };
 
   // Shimmer only when the cache has nothing AND we've waited 250ms —
   // return-visits render instantly from cached counts.
@@ -258,70 +222,6 @@ export default function AppDashboard() {
           </Box>
         </Box>
       </Box>
-
-      {/* Trueyy Extension status — candidates only */}
-      {isCandidate && (
-        <Box
-          sx={{
-            mb: 4,
-            p: 2.5,
-            borderRadius: '14px',
-            border: '1px solid #E5E7EB',
-            bgcolor: '#FFFFFF',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
-          }}
-        >
-          <Box
-            sx={{
-              width: 44,
-              height: 44,
-              borderRadius: '12px',
-              bgcolor: helperInstalled ? 'rgba(76, 217, 100, 0.15)' : 'rgba(245, 158, 11, 0.12)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <ExtensionIcon
-              sx={{
-                fontSize: 22,
-                color: helperInstalled ? theme.palette.primary.main : '#F59E0B',
-              }}
-            />
-          </Box>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="h3" sx={{ color: '#1F2937' }}>
-              Trueyy Chrome Extension
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#6B7280' }}>
-              {helperInstalled === null
-                ? 'Click Reauthorize to verify the helper is installed and running.'
-                : helperInstalled
-                ? 'Installed and connected. You\'re ready to join an extension-type interview.'
-                : 'Not detected. Install the helper, then click Reauthorize to verify.'}
-            </Typography>
-          </Box>
-          <Button
-            onClick={handleReauthorize}
-            disabled={reauthBusy}
-            variant="outlined"
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              borderRadius: '10px',
-              borderColor: '#E5E7EB',
-              color: '#1F2937',
-              '&:hover': { bgcolor: '#F3F4F6', borderColor: '#D1D5DB' },
-              flexShrink: 0,
-            }}
-          >
-            {reauthBusy ? 'Connecting…' : 'Reauthorize'}
-          </Button>
-        </Box>
-      )}
 
       {/* Stat Cards — semantic icon palette:
           • Upcoming = brand green   (positive, in-flight)

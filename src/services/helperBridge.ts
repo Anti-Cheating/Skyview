@@ -8,20 +8,18 @@
  * is the helper daemon, not a Chrome extension.
  */
 
+import { ENV } from '../config/env';
+
 const HELPER_BASE = 'http://127.0.0.1:48123';
 
-// Per-OS download URLs for the helper installer. Each candidate gets the
-// right artifact automatically. Fallbacks point at downloads.trueyy.com —
-// set VITE_HELPER_DOWNLOAD_URL_MAC / _WIN in your env to override for
-// staging or CDN moves without a code change.
-const env = (import.meta as { env?: Record<string, string> }).env || {};
-const HELPER_DOWNLOAD_URL_MAC =
-  env.VITE_HELPER_DOWNLOAD_URL_MAC ||
-  env.VITE_HELPER_DOWNLOAD_URL ||           // legacy single-URL var (Mac-era)
-  'https://downloads.trueyy.com/TrueyyHelper-1.0.0.pkg';
-const HELPER_DOWNLOAD_URL_WIN =
-  env.VITE_HELPER_DOWNLOAD_URL_WIN ||
-  'https://downloads.trueyy.com/TrueyyHelperSetup-1.0.0.exe';
+// Helper installer download URLs — served by Cortex's /downloads/helper/*
+// redirect, which 302s to the NEWEST artifact in R2 (via helper/<os>/latest.json;
+// mac is notarized, win is the unsigned .zip). Derived from the same
+// VITE_AUTH_API_URL the rest of the app uses — no separate env var, no
+// hardcoded host.
+const API_BASE = ENV.AUTH_API_URL.replace(/\/+$/, '');
+const HELPER_DOWNLOAD_URL_MAC = `${API_BASE}/downloads/helper/mac`;
+const HELPER_DOWNLOAD_URL_WIN = `${API_BASE}/downloads/helper/win`;
 
 export type HelperPlatform = 'mac' | 'windows' | 'unknown';
 
@@ -43,6 +41,25 @@ export interface HelperHealth {
   ok: boolean;
   version?: string;
   running_session?: string | null;
+  /** Self-updater state: idle | checking | downloading | verifying | swapped | error:<reason> */
+  update_state?: string;
+}
+
+/**
+ * The raw R2 helper/<os>/latest.json, proxied by Cortex at
+ * GET /downloads/helper/{mac,win}/manifest. One entry per CPU arch.
+ */
+export interface HelperManifest {
+  platform?: string;
+  updated_at?: string;
+  builds?: Record<string, {
+    version: string;
+    url: string;
+    sha256: string;
+    /** Present once a release ships the self-update tarball. */
+    update_url?: string;
+    update_sha256?: string;
+  }>;
 }
 
 export interface HelperStatus {
@@ -260,14 +277,90 @@ export async function pushHelperToken(token: string): Promise<boolean> {
   }
 }
 
-export function getHelperDownloadUrl(platform?: HelperPlatform): string {
+/** macOS CPU architectures we ship a build for. */
+export type HelperArch = 'arm64' | 'x86_64';
+
+export function getHelperDownloadUrl(platform?: HelperPlatform, arch?: HelperArch): string {
   const p = platform ?? detectHelperPlatform();
-  if (p === 'windows') return HELPER_DOWNLOAD_URL_WIN;
-  // Mac + unknown → Mac installer (falls back gracefully; unknown is rare
-  // enough that pointing them at the Mac .pkg + a support link is fine).
-  return HELPER_DOWNLOAD_URL_MAC;
+  if (p === 'windows') return HELPER_DOWNLOAD_URL_WIN; // single x64 build — no arch param
+  // Mac (or unknown → mac). The browser can't reliably tell Apple Silicon from
+  // Intel, so the UI offers both and passes the arch here; Cortex's
+  // /downloads/helper/mac?arch= 302s to the matching .pkg (defaults arm64).
+  return arch ? `${HELPER_DOWNLOAD_URL_MAC}?arch=${arch}` : HELPER_DOWNLOAD_URL_MAC;
 }
 
 export function isHelperReachable(health: HelperHealth | null): boolean {
   return !!health?.ok;
+}
+
+/**
+ * Fetches the published-version manifest from Cortex for THIS OS — mac →
+ * /downloads/helper/mac/manifest, windows → /downloads/helper/win/manifest.
+ * Used as the fallback "helper outdated" gate: the daemon normally self-updates
+ * silently (helper_update.py on both OSes), but if that failed — or the
+ * installed build predates the updater — the join flow can compare versions
+ * and route the candidate back to the download card.
+ *
+ * Pass a platform to override detection (tests / SSR). Returns null on any
+ * failure (unknown OS, manifest not yet published, network error) so callers
+ * treat "unknown" as "not outdated" and never block a join on this.
+ */
+export async function fetchHelperManifest(
+  platform?: HelperPlatform,
+): Promise<HelperManifest | null> {
+  const os = (platform ?? detectHelperPlatform()) === 'windows' ? 'win' : 'mac';
+  try {
+    const resp = await fetch(`${API_BASE}/downloads/helper/${os}/manifest`, {
+      method: 'GET',
+      credentials: 'omit',
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as HelperManifest;
+  } catch {
+    return null;
+  }
+}
+
+/** Numeric dotted-version compare: -1 | 0 | 1. Non-numeric parts ignored. */
+export function compareHelperVersions(a: string, b: string): number {
+  const parse = (v: string) => (v.match(/\d+/g) || []).map(Number);
+  const [pa, pb] = [parse(a), parse(b)];
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const [x, y] = [pa[i] ?? 0, pb[i] ?? 0];
+    if (x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
+}
+
+/**
+ * Newest version across all arch builds in the manifest. The browser
+ * can't reliably tell arm64 from x86_64, and both arches ship the same
+ * release version anyway — the max is the right gate either way.
+ */
+export function getLatestHelperVersion(manifest: HelperManifest | null): string | null {
+  const builds = manifest?.builds;
+  if (!builds) return null;
+  let latest: string | null = null;
+  for (const b of Object.values(builds)) {
+    if (b?.version && (!latest || compareHelperVersions(b.version, latest) > 0)) {
+      latest = b.version;
+    }
+  }
+  return latest;
+}
+
+/**
+ * True only when we positively know the installed helper is older than
+ * the published release. Unknown version / unreachable manifest / a
+ * mid-self-update helper all return false — this gate must never
+ * false-positive a healthy candidate out of their interview.
+ */
+export function isHelperOutdated(
+  health: HelperHealth | null,
+  manifest: HelperManifest | null
+): boolean {
+  if (!health?.ok || !health.version) return false;
+  const latest = getLatestHelperVersion(manifest);
+  if (!latest) return false;
+  return compareHelperVersions(health.version, latest) < 0;
 }
