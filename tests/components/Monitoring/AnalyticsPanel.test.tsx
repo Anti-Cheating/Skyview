@@ -335,19 +335,18 @@ describe('AnalyticsPanel', () => {
     expect(screen.getAllByText('Connecting...').length).toBeGreaterThan(0);
   });
 
-  test('Analysis tab renders a single WindowCard (auto-expanded latest) with full breakdown', async () => {
+  test('Analysis tab renders a single WindowCard (auto-expanded latest) with Timeline + Evidence', async () => {
     const detailed = win({
       risk: 'critical',
       score: 95,
       confidence: 'medium',
       summary: 'Heavy AI-tool usage detected across the window.',
-      per_modality: {
-        app_metadata: modality({ risk_level: 'critical', risk_score: 90, signals: ['ai_tool_open'], evidence: ['ChatGPT window visible'], summary: 'AI tool foreground' }),
-        keystroke: modality({ risk_level: 'high', risk_score: 80 }),
-        voice: modality({ risk_level: 'no', risk_score: 5 }),
-      },
-      correlations: [
-        { finding: 'Paste burst followed app switch', signals_involved: ['paste', 'app_switch'], impact: 'moderate' },
+      timeline: [
+        { ts: Date.parse('2026-07-05T10:00:05Z'), kind: 'APP', detail: 'ChatGPT foreground' },
+        { ts: Date.parse('2026-07-05T10:00:10Z'), kind: 'KEYSTROKE', detail: 'paste 320 chars' },
+      ],
+      evidence: [
+        { claim: 'ChatGPT window visible', source: 'app_metadata', confidence: 'strong' },
       ],
       timeline_note: 'Spike right after the coding question was asked.',
     });
@@ -355,21 +354,17 @@ describe('AnalyticsPanel', () => {
     await userEvent.click(screen.getAllByRole('tab')[1]);
 
     expect(screen.getByText('Auto Analysis')).toBeInTheDocument();
-    // Summary text shows both in the RollingSummaryCard and the WindowCard.
+    // Summary shows in both the RollingSummaryCard and the WindowCard.
     expect(screen.getAllByText(/Heavy AI-tool usage/).length).toBeGreaterThan(0);
-    // Breakdown modality labels present (auto-expanded since latest)
-    expect(screen.getByText('Apps')).toBeInTheDocument();
-    expect(screen.getByText('Keystrokes')).toBeInTheDocument();
-    expect(screen.getByText('Voice')).toBeInTheDocument();
-    // Correlations + timeline note
-    expect(screen.getByText(/Paste burst followed app switch/)).toBeInTheDocument();
+    // The card auto-expands (latest) → Timeline + Evidence sub-section headers
+    // carry their counts, e.g. "Timeline (2)" / "Evidence (1)".
+    expect(screen.getByText(/Timeline \(2\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Evidence \(1\)/)).toBeInTheDocument();
+    // timeline_note renders only when there's no narrative (this row has none).
     expect(screen.getByText(/Spike right after the coding question/)).toBeInTheDocument();
 
-    // Expand a ModalityCard to reveal its signals/evidence/summary
-    await userEvent.click(screen.getByText('Apps'));
-    expect(screen.getByText('AI tool foreground')).toBeInTheDocument();
-    expect(screen.getAllByText("Signals").length).toBeGreaterThan(0);
-    expect(screen.getByText('Evidence')).toBeInTheDocument();
+    // Sub-sections are collapsed by default — expand Evidence to reveal the citation.
+    await userEvent.click(screen.getByText(/Evidence \(1\)/));
     expect(screen.getByText('ChatGPT window visible')).toBeInTheDocument();
   });
 
@@ -498,7 +493,7 @@ describe('AnalyticsPanel', () => {
     renderPanel({ pulseAlerts: alerts });
     // Alerts tab is the default (activeTab 0)
     expect(screen.getByText('AI Tools')).toBeInTheDocument();
-    expect(screen.getByText('ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText(/ChatGPT/)).toBeInTheDocument();
     expect(screen.getByText('Paste Detected')).toBeInTheDocument();
     expect(screen.getByText('Screenshot taken')).toBeInTheDocument();
     // Badge count on the Alerts tab ("1") also appears as an app-count badge,

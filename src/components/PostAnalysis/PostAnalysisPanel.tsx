@@ -18,13 +18,28 @@ function ContentSummarySections({ sections }: { sections: { heading: string; bul
         <div key={i} className="pa-topic-section">
           <h4 className="pa-topic-heading">{s.heading}</h4>
           <ul className="pa-body" style={{ margin: 0, paddingLeft: 18 }}>
-            {s.bullets.map((b, j) => (
+            {(s.bullets ?? []).map((b, j) => (
               <li key={j} style={{ margin: "3px 0" }}>{b}</li>
             ))}
           </ul>
         </div>
       ))}
     </div>
+  );
+}
+
+// Legacy fallback: older analyses populate `final_summary` (freeform text /
+// newline- or bullet-delimited) instead of the structured `content_summary`.
+function FinalSummaryText({ text }: { text: string }) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^[-•*]\s*/, "").trim())
+    .filter(Boolean);
+  if (lines.length <= 1) return <p className="pa-body">{text.trim()}</p>;
+  return (
+    <ul className="pa-body" style={{ margin: 0, paddingLeft: 18 }}>
+      {lines.map((l, i) => <li key={i} style={{ margin: "3px 0" }}>{l}</li>)}
+    </ul>
   );
 }
 
@@ -40,8 +55,8 @@ function FindingSummaryList({ findings }: { findings: { severity: string; descri
     <ul className="pa-finding-list">
       {findings.map((f, i) => (
         <li key={i} className="pa-finding-item">
-          <span className="pa-finding-severity" style={{ color: SEVERITY_COLOR[f.severity] ?? "#9CA3AF" }}>
-            {f.severity}
+          <span className="pa-finding-severity" style={{ color: SEVERITY_COLOR[f.severity?.toUpperCase()] ?? "#9CA3AF" }}>
+            {f.severity?.toUpperCase()}
           </span>
           <span className="pa-finding-desc">{f.description}</span>
         </li>
@@ -84,8 +99,8 @@ function parseTranscript(raw: string): ChatEntry[] {
 
     const windowMatch = part.match(/^\[Window\s*(\d+)\]$/i);
     if (windowMatch) {
-      // Skip window markers — don't show them in the chat
-      currentRole = null;
+      // Skip the marker itself, but keep the current speaker so text that
+      // follows "[Window N]" before the next role tag isn't dropped.
       i++;
       continue;
     }
@@ -264,10 +279,9 @@ interface PostAnalysis {
 }
 
 function normalizeAnalysis(raw: Record<string, unknown>): PostAnalysis {
-  // overall_score === null means the final synthesis LLM call failed or
-  // returned unparseable output (see Cortex postAnalysisService.ts) — that
-  // is NOT a real "0/Low" verdict, so it must never be coerced into one.
-  const analysisFailed = raw.overall_score === null || raw.risk_level === "ANALYSIS_FAILED";
+  // Anything that isn't a real number (null OR undefined OR non-numeric)
+  // means the synthesis step produced no score — never a "0/Low" verdict.
+  const analysisFailed = typeof raw.overall_score !== "number" || raw.risk_level === "ANALYSIS_FAILED";
   const overall = typeof raw.overall_score === "number" ? raw.overall_score : 0;
   const toScore = (v: unknown) => (typeof v === "number" ? v : null);
   return {
@@ -290,7 +304,13 @@ function normalizeAnalysis(raw: Record<string, unknown>): PostAnalysis {
     final_summary: String(raw.final_summary ?? ""),
     score_reason: String(raw.score_reason ?? ""),
     content_summary: Array.isArray(raw.content_summary)
-      ? (raw.content_summary as { heading: string; bullets: string[] }[])
+      ? (raw.content_summary as unknown[])
+          .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
+          .map((s) => ({
+            heading: typeof s.heading === "string" ? s.heading : String(s.heading ?? ""),
+            bullets: Array.isArray(s.bullets) ? s.bullets.map((b) => String(b)) : [],
+          }))
+          .filter((s) => s.heading || s.bullets.length > 0)
       : [],
     finding_summary: Array.isArray(raw.finding_summary)
       ? (raw.finding_summary as { severity: "HIGH" | "MEDIUM" | "LOW"; description: string; timestamps: string[] }[])
@@ -337,6 +357,8 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => { if (copyTimer.current) clearTimeout(copyTimer.current); }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -357,10 +379,16 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
         ]);
         if (cancelled) return;
         if (analysisRes.success && analysisRes.data) {
-          setAnalysis(normalizeAnalysis(analysisRes.data));
+          const normalized = normalizeAnalysis(analysisRes.data);
+          setAnalysis(normalized);
           if (sessionRes.success && sessionRes.data) setSession(sessionRes.data);
           setError(null);
           setLoading(false);
+          // A 200 whose row is still "pending" means analysis is running —
+          // keep polling instead of parking on the spinner forever.
+          if (normalized.status === "pending" && attempt < 24) {
+            pollTimer = setTimeout(() => load(attempt + 1), 5000);
+          }
         } else {
           setError(analysisRes.message || "Failed to fetch analysis");
           setLoading(false);
@@ -420,7 +448,8 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
     try {
       await navigator.clipboard.writeText(raw);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
     } catch (_) {
       // fallback
       const ta = document.createElement("textarea");
@@ -430,7 +459,8 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
       document.execCommand("copy");
       ta.remove();
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -589,7 +619,9 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
       {/* ── Summary — content only, topic-segmented from the transcript ──── */}
       <section className="pa-card pa-summary-card">
         <h3 className="pa-card-title">Interview Summary</h3>
-        <ContentSummarySections sections={analysis.content_summary} />
+        {analysis.content_summary.length === 0 && analysis.final_summary.trim()
+          ? <FinalSummaryText text={analysis.final_summary} />
+          : <ContentSummarySections sections={analysis.content_summary} />}
       </section>
 
       {/* ── Finding Summary — flagged behavior only, session-wide, grouped ── */}
@@ -597,6 +629,30 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
         <h3 className="pa-card-title">Finding Summary</h3>
         <FindingSummaryList findings={analysis.finding_summary} />
       </section>
+
+      {/* ── Detected Application Categories ─────────────────────────────── */}
+      {analysis.detected_app_categories.length > 0 && (
+        <section className="pa-card">
+          <h3 className="pa-card-title">Detected Application Categories</h3>
+          <div className="pa-cats">
+            {analysis.detected_app_categories.map((cat) => (
+              <div key={cat.categoryId} className="pa-cat"
+                style={{ borderLeftColor: getRiskColor(cat.riskLevel) }}>
+                <div className="pa-cat-header">
+                  <span className="pa-cat-name">{cat.categoryLabel}</span>
+                  <span className="pa-cat-risk" style={{ color: getRiskColor(cat.riskLevel) }}>
+                    {cat.riskLevel}
+                  </span>
+                </div>
+                <p className="pa-cat-score">Risk score {cat.riskScore}/100</p>
+                <div className="pa-cat-apps">
+                  {cat.apps.map((a) => <span key={a} className="pa-app-tag">{a}</span>)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Transcript ───────────────────────────────────────────────────── */}
       <section className="pa-card">

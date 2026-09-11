@@ -215,7 +215,7 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
             <SubSection label="Timeline" count={result.timeline!.length}>
               <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                 {result.timeline!.map((e, i) => (
-                  <TimelineRow key={i} time={new Date(e.ts).toISOString().slice(11, 19)} kind={e.kind} detail={e.detail} />
+                  <TimelineRow key={i} time={formatClock(e.ts)} kind={e.kind} detail={e.detail} />
                 ))}
               </Box>
             </SubSection>
@@ -1164,7 +1164,7 @@ export function ScreenshotLightbox({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  });
+  }, [index, urls.length]);
 
   const arrowBtn = {
     position: 'absolute' as const, top: '50%', transform: 'translateY(-50%)',

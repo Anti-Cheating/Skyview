@@ -139,106 +139,54 @@ function formatDuration(ms: number): string {
   return `${diffHr}h ${diffMin % 60}m`;
 }
 
-interface AppDuration {
-  totalMs: number;
-  isOpen: boolean;
-  cycleStartMs: number | null;
-  cycleEndMs: number | null;
-  openCount: number;
-}
-
-/**
- * Walks the chronological alert stream once and, per app, sums the
- * duration of every open→close cycle (not just time since first seen).
- * A still-open app accrues up to the LAST event's timestamp — not
- * Date.now() — so this produces the same correct total whether it's
- * called live (new alerts keep extending "last event") or during
- * post-interview replay (alerts stop arriving once the interview ended,
- * so the total stays fixed at the real last-observed instant instead of
- * growing the longer someone views the report later).
- */
-function accumulateAppDurations(sortedAlerts: PulseAlert[]): Map<string, AppDuration> {
-  const stateByApp = new Map<string, AppDuration>();
-  let lastTimestampMs = 0;
-
-  for (const alert of sortedAlerts) {
-    const ts = new Date(alert.timestamp).getTime();
-    if (ts > lastTimestampMs) lastTimestampMs = ts;
-
-    for (const detection of alert.detections) {
-      for (const app of detection.apps) {
-        const key = app.toLowerCase();
-        let state = stateByApp.get(key);
-        if (!state) {
-          state = { totalMs: 0, isOpen: false, cycleStartMs: null, cycleEndMs: null, openCount: 0 };
-          stateByApp.set(key, state);
-        }
-        if (!state.isOpen) {
-          state.isOpen = true;
-          state.cycleStartMs = ts;
-          state.openCount += 1;
-        }
-      }
-    }
-
-    for (const activity of alert.activities) {
-      if (!activity.startsWith('app_closed:')) continue;
-      const key = activity.substring('app_closed:'.length).toLowerCase();
-      const state = stateByApp.get(key);
-      if (state && state.isOpen && state.cycleStartMs !== null) {
-        state.totalMs += ts - state.cycleStartMs;
-        state.cycleEndMs = ts;
-        state.isOpen = false;
-      }
-    }
-  }
-
-  for (const state of stateByApp.values()) {
-    if (state.isOpen && state.cycleStartMs !== null) {
-      state.totalMs += lastTimestampMs - state.cycleStartMs;
-    }
-  }
-
-  return stateByApp;
-}
-
 interface AppEventRow {
   app: string;
   ts: number;
   kind: 'open' | 'close';
+  categoryId: string;
+  /** For 'close' rows: length of the open→close cycle that just ended. */
+  cycleMs?: number;
 }
 
 /**
  * Walks the chronological alert stream once and emits one row per
  * open/close TRANSITION (not a mutated per-app pill) — every open and
  * every close is its own event, stacked in order, matching the same
- * "one row per event" principle as the window Timeline. Shares the same
- * open/close detection logic as accumulateAppDurations but returns a flat
- * event list instead of aggregated per-app totals.
+ * "one row per event" principle as the window Timeline.
  */
 function buildAppEventRows(sortedAlerts: PulseAlert[]): AppEventRow[] {
   const rows: AppEventRow[] = [];
-  const openApps = new Set<string>();
+  const openByKey = new Map<string, number>();
 
   for (const alert of sortedAlerts) {
     const ts = new Date(alert.timestamp).getTime();
 
     for (const detection of alert.detections) {
       for (const app of detection.apps) {
-        const key = app.toLowerCase();
-        if (!openApps.has(key)) {
-          openApps.add(key);
-          rows.push({ app, ts, kind: 'open' });
+        const key = `${detection.categoryId}|${app.toLowerCase()}`;
+        if (!openByKey.has(key)) {
+          openByKey.set(key, ts);
+          rows.push({ app, ts, kind: 'open', categoryId: detection.categoryId });
         }
       }
     }
 
     for (const activity of alert.activities) {
       if (!activity.startsWith('app_closed:')) continue;
-      const key = activity.substring('app_closed:'.length).toLowerCase();
-      if (openApps.has(key)) {
-        openApps.delete(key);
-        rows.push({ app: activity.substring('app_closed:'.length), ts, kind: 'close' });
+      const appName = activity.substring('app_closed:'.length);
+      const appKey = appName.toLowerCase();
+      // A close event carries no category — close the app in every category
+      // it's currently open under.
+      for (const [key, cycleStartMs] of openByKey) {
+        if (!key.endsWith(`|${appKey}`)) continue;
+        openByKey.delete(key);
+        rows.push({
+          app: appName,
+          ts,
+          kind: 'close',
+          categoryId: key.slice(0, -(appKey.length + 1)),
+          cycleMs: ts - cycleStartMs,
+        });
       }
     }
   }
@@ -255,8 +203,6 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
   // Sort alerts chronologically to trace state transitions accurately
   const sortedAlerts = [...alerts].sort((x, y) => new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime());
 
-  // Per-app accumulated open time across every open/close cycle this session.
-  const appDurations = accumulateAppDurations(sortedAlerts);
   // Flat chronological open/close event list (one row per transition).
   const appEventRows = buildAppEventRows(sortedAlerts);
 
@@ -392,25 +338,19 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                 as history, matching the window Timeline's principle. */}
             <Box sx={{ px: 1, pb: 0.75, pt: 0, display: 'flex', flexDirection: 'column' }}>
               {(() => {
-                const categoryAppNames = new Set(
-                  (detection.appInfos?.length ? detection.appInfos.map((i) => i.app_name) : detection.apps).map((a) =>
-                    a.toLowerCase()
-                  )
-                );
                 const infoByApp = new Map(
                   (detection.appInfos ?? []).map((i) => [i.app_name.toLowerCase(), i])
                 );
                 const rows = appEventRows
-                  .filter((r) => categoryAppNames.has(r.app.toLowerCase()))
+                  .filter((r) => r.categoryId === detection.categoryId)
                   .sort((a, b) => a.ts - b.ts);
                 return rows.map((row, i) => {
                   const info = infoByApp.get(row.app.toLowerCase());
-                  const duration = appDurations.get(row.app.toLowerCase());
                   const label =
                     row.kind === 'open'
                       ? `opened ${row.app}${info?.window_title ? ` — "${info.window_title}"` : ''}`
                       : `closed ${row.app}${
-                          duration ? ` — open ${formatDuration(duration.totalMs)}` : ''
+                          row.cycleMs != null ? ` — open ${formatDuration(row.cycleMs)}` : ''
                         }`;
                   return (
                     <Box key={`${row.app}-${row.kind}-${i}`} sx={{ display: 'flex', gap: 0.6, alignItems: 'baseline', py: 0.2 }}>

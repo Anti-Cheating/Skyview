@@ -29,8 +29,8 @@ describe('PulseAlertBanner', () => {
     ];
     render(<PulseAlertBanner alerts={alerts} />);
     expect(screen.getByText('AI Tools')).toBeInTheDocument();
-    expect(screen.getByText('ChatGPT')).toBeInTheDocument();
-    expect(screen.getByText('Claude')).toBeInTheDocument();
+    expect(screen.getByText('opened ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText('opened Claude')).toBeInTheDocument();
   });
 
   test('renders an activity with an occurrence count', () => {
@@ -104,7 +104,7 @@ describe('PulseAlertBanner', () => {
     ];
     render(<PulseAlertBanner alerts={alerts} />);
     expect(screen.getByText('AI Sub')).toBeInTheDocument();
-    expect(screen.getByText('ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText('opened ChatGPT')).toBeInTheDocument();
   });
 
   test('same category across two pulses merges its apps (else branch)', () => {
@@ -122,34 +122,48 @@ describe('PulseAlertBanner', () => {
     ];
     render(<PulseAlertBanner alerts={alerts} />);
     // Deduped union across both pulses.
-    expect(screen.getByText('ChatGPT')).toBeInTheDocument();
-    expect(screen.getByText('Claude')).toBeInTheDocument();
+    expect(screen.getByText('opened ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText('opened Claude')).toBeInTheDocument();
   });
 
-  test('duration labels cover seconds / minutes / hours branches', () => {
-    const now = Date.now();
-    const iso = (msAgo: number) => new Date(now - msAgo).toISOString();
+  test('duration labels cover seconds / minutes / hours branches on close events', () => {
+    const base = new Date('2026-07-05T00:00:00.000Z').getTime();
     const alerts: PulseAlert[] = [
       {
         detections: [{ categoryId: 'search_engines', categoryLabel: 'Search', apps: ['Recent'], matchedKeywords: [] }],
         activities: [],
-        timestamp: iso(30 * 1000), // seconds
+        timestamp: new Date(base).toISOString(),
+      },
+      {
+        detections: [],
+        activities: ['app_closed:Recent'],
+        timestamp: new Date(base + 30 * 1000).toISOString(), // 30s
       },
       {
         detections: [{ categoryId: 'messaging', categoryLabel: 'Messaging', apps: ['MinsAgo'], matchedKeywords: [] }],
         activities: [],
-        timestamp: iso(5 * 60 * 1000), // minutes
+        timestamp: new Date(base).toISOString(),
+      },
+      {
+        detections: [],
+        activities: ['app_closed:MinsAgo'],
+        timestamp: new Date(base + 5 * 60 * 1000).toISOString(), // 5 min
       },
       {
         detections: [{ categoryId: 'ai_tools', categoryLabel: 'AI Tools', apps: ['HoursAgo'], matchedKeywords: [] }],
         activities: [],
-        timestamp: iso(2 * 60 * 60 * 1000), // hours
+        timestamp: new Date(base).toISOString(),
+      },
+      {
+        detections: [],
+        activities: ['app_closed:HoursAgo'],
+        timestamp: new Date(base + (2 * 60 + 15) * 60 * 1000).toISOString(), // 2h 15m
       },
     ];
     render(<PulseAlertBanner alerts={alerts} />);
-    expect(screen.getByText('Recent')).toBeInTheDocument();
-    expect(screen.getByText('MinsAgo')).toBeInTheDocument();
-    expect(screen.getByText('HoursAgo')).toBeInTheDocument();
+    expect(screen.getByText(/closed Recent — open 30s/)).toBeInTheDocument();
+    expect(screen.getByText(/closed MinsAgo — open 5 min/)).toBeInTheDocument();
+    expect(screen.getByText(/closed HoursAgo — open 2h 15m/)).toBeInTheDocument();
   });
 
   test('an unknown activity falls back to a humanised label', () => {
@@ -205,12 +219,13 @@ describe('PulseAlertBanner — duration accumulation', () => {
 
     render(<PulseAlertBanner alerts={alerts} />);
 
-    // Total accumulated = 2 min + 3 min = 5 min, not 13 min (time from first open to last close)
-    expect(screen.getByText(/5 min/)).toBeInTheDocument();
+    // Each cycle's close row reports its own duration (2 min and 3 min), not time from first open to last close (13 min)
+    expect(screen.getByText(/open 2 min/)).toBeInTheDocument();
+    expect(screen.getByText(/open 3 min/)).toBeInTheDocument();
     expect(screen.queryByText(/13 min/)).not.toBeInTheDocument();
   });
 
-  test('a still-open app accumulates up to the last event timestamp, not Date.now() (correct for post-interview replay)', () => {
+  test('a still-open app emits an open event row and no close row', () => {
     const alerts: PulseAlert[] = [
       { detections: [detection(['Cursor'])], activities: [], timestamp: '2026-07-19T10:00:00.000Z' },
       // No close event — last known event is 4 minutes later.
@@ -219,7 +234,8 @@ describe('PulseAlertBanner — duration accumulation', () => {
 
     render(<PulseAlertBanner alerts={alerts} />);
 
-    expect(screen.getByText(/4 min/)).toBeInTheDocument();
+    expect(screen.getByText('opened Cursor')).toBeInTheDocument();
+    expect(screen.queryByText(/closed Cursor/)).not.toBeInTheDocument();
   });
 
   test('accumulates correctly even when app_closed casing differs from the open detection\'s app name', () => {
@@ -235,9 +251,9 @@ describe('PulseAlertBanner — duration accumulation', () => {
 
     render(<PulseAlertBanner alerts={alerts} />);
 
-    expect(screen.getByText(/3 min/)).toBeInTheDocument();
+    expect(screen.getByText(/open 3 min/)).toBeInTheDocument();
     expect(screen.queryByText(/50 min/)).not.toBeInTheDocument();
-    expect(screen.getByText(/CLOSED/)).toBeInTheDocument();
+    expect(screen.getByText(/closed Cursor/)).toBeInTheDocument();
   });
 });
 
@@ -296,11 +312,11 @@ describe('PulseAlertBanner — appInfos', () => {
     ];
     render(<PulseAlertBanner alerts={alerts} />);
     // First-seen appInfo entry wins on dedup — not overwritten by the later pulse.
-    expect(screen.getByText(/Chat one$/)).toBeInTheDocument();
+    expect(screen.getByText(/Chat one/)).toBeInTheDocument();
     expect(screen.getByText(/Claude chat/)).toBeInTheDocument();
   });
 
-  test('no appInfos on the payload falls back to bare app names with "No title"', () => {
+  test('no appInfos on the payload falls back to bare app names without window title', () => {
     const alerts: PulseAlert[] = [
       {
         detections: [{ categoryId: 'ai_tools', categoryLabel: 'AI Tools', apps: ['ChatGPT'], matchedKeywords: [] }],
@@ -309,8 +325,8 @@ describe('PulseAlertBanner — appInfos', () => {
       },
     ];
     render(<PulseAlertBanner alerts={alerts} />);
-    expect(screen.getByText('ChatGPT')).toBeInTheDocument();
-    expect(screen.getByText(/No title/)).toBeInTheDocument();
+    expect(screen.getByText('opened ChatGPT')).toBeInTheDocument();
+    expect(screen.queryByText(/—/)).not.toBeInTheDocument();
   });
 
   test('is_excluded is present in the data but never rendered in the DOM', () => {
