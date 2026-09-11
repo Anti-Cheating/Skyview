@@ -12,10 +12,12 @@ vi.mock('react-router-dom', () => ({
 
 const getPostAnalysis = vi.fn();
 const getById = vi.fn();
+const getWindows = vi.fn();
 vi.mock('../../../src/services/interview.service', () => ({
   InterviewService: {
     getPostAnalysis: (...a: unknown[]) => getPostAnalysis(...a),
     getById: (...a: unknown[]) => getById(...a),
+    getWindows: (...a: unknown[]) => getWindows(...a),
   },
 }));
 
@@ -45,6 +47,7 @@ const session = {
 beforeEach(() => {
   getPostAnalysis.mockResolvedValue({ success: true, data: rawAnalysis });
   getById.mockResolvedValue({ success: true, data: session });
+  getWindows.mockResolvedValue({ success: true, data: { results: [], total: 0 } });
   Object.defineProperty(navigator, 'clipboard', {
     value: { writeText: vi.fn().mockResolvedValue(undefined) },
     configurable: true,
@@ -83,5 +86,62 @@ describe('PostAnalysisPanel', () => {
     // Must never silently coerce the null into a real-looking "0" verdict.
     expect(screen.queryByText('0')).not.toBeInTheDocument();
     expect(screen.queryByText('ANALYSIS_FAILED')).not.toBeInTheDocument();
+  });
+
+  test('renders modality breakdown bars and classic signal cards', async () => {
+    render(<PostAnalysisPanel />);
+    expect(await screen.findByRole('heading', { name: 'Jane Doe' })).toBeInTheDocument();
+    expect(screen.getByText('Score Breakdown')).toBeInTheDocument();
+    expect(screen.getByText('Keystroke')).toBeInTheDocument();
+    expect(screen.getByText('Voice')).toBeInTheDocument();
+    expect(screen.getByText('App Usage')).toBeInTheDocument();
+    expect(screen.getByText('🎙️ Voice Analysis')).toBeInTheDocument();
+    expect(screen.getByText('⌨️ Keystroke Analysis')).toBeInTheDocument();
+    expect(screen.getByText('🖥️ App Usage')).toBeInTheDocument();
+  });
+
+  test('renders the interactive Session Integrity Timeline Scrubber when windows exist', async () => {
+    getWindows.mockResolvedValue({
+      success: true,
+      data: {
+        total: 2,
+        results: [
+          {
+            window_id: 'w1',
+            risk: 'Low',
+            score: 15,
+            summary: 'Initial pleasantries and question intro.',
+            processed_at: '2026-07-01T10:00:30Z',
+            timeline: [{ ts: 1720000010000, kind: 'APP', detail: 'opened VS Code' }],
+            per_modality: {
+              app_metadata: { risk_level: 'Low', risk_score: 10 },
+              keystroke: { risk_level: 'Low', risk_score: 12 },
+              voice: { risk_level: 'Low', risk_score: 8 },
+            },
+          },
+          {
+            window_id: 'w2',
+            risk: 'High',
+            score: 75,
+            summary: 'Pasted 120 chars from Chrome.',
+            processed_at: '2026-07-01T10:01:00Z',
+            timeline: [
+              { ts: 1720000040000, kind: 'APP', detail: 'opened Chrome — "ChatGPT"' },
+              { ts: 1720000050000, kind: 'KEYSTROKE', detail: 'paste (Cmd+V) in VS Code (120 chars)' },
+            ],
+            per_modality: {
+              app_metadata: { risk_level: 'High', risk_score: 80 },
+              keystroke: { risk_level: 'High', risk_score: 75 },
+              voice: { risk_level: 'Low', risk_score: 10 },
+            },
+          },
+        ],
+      },
+    });
+
+    render(<PostAnalysisPanel />);
+    expect(await screen.findByText('Session Integrity Timeline Scrubber')).toBeInTheDocument();
+    expect(screen.getByText(/Window #/i)).toBeInTheDocument();
+    expect(screen.getByText(/Micro-Events in this 30s Window/i)).toBeInTheDocument();
   });
 });

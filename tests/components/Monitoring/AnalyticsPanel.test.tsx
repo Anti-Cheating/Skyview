@@ -641,4 +641,33 @@ describe('AnalyticsPanel', () => {
     expect(screen.getByText(/Timeline \(2\)/)).toBeInTheDocument();
     expect(screen.queryByText(/Timeline \(4\)/)).not.toBeInTheDocument();
   });
+
+  test('WindowCard displays modality quick badges and expandable modality breakdown', async () => {
+    const windowResult = win({
+      risk: 'high',
+      score: 78,
+      processed_at: '2026-07-05T10:30:48Z',
+      per_modality: {
+        app_metadata: { risk_level: 'high', risk_score: 85, summary: 'ChatGPT window active.' },
+        keystroke: { risk_level: 'medium', risk_score: 60, summary: '140 WPM burst paste.' },
+        voice: { risk_level: 'low', risk_score: 12, summary: 'Steady voice pace.' },
+      },
+    });
+
+    renderPanel({ results: [windowResult], latestResult: windowResult });
+    await userEvent.click(screen.getAllByRole('tab')[1]);
+
+    // Modality quick score pills in header
+    expect(screen.getAllByText('85').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('60').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('12').length).toBeGreaterThanOrEqual(1);
+
+    // Modality breakdown subsection
+    expect(screen.getByText(/Modality Breakdown \(3\)/)).toBeInTheDocument();
+    await userEvent.click(screen.getByText(/Modality Breakdown \(3\)/));
+    expect(screen.getByText('Apps')).toBeInTheDocument();
+    expect(screen.getByText('Keystrokes')).toBeInTheDocument();
+    expect(screen.getByText('Voice')).toBeInTheDocument();
+  });
 });
+

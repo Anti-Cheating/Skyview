@@ -29,22 +29,31 @@ function ContentSummarySections({ sections }: { sections: { heading: string; bul
   );
 }
 
-// Legacy fallback: older analyses populate `final_summary` (freeform text /
-// newline- or bullet-delimited) instead of the structured `content_summary`.
-function FinalSummaryText({ text }: { text: string }) {
-  const lines = text
+function renderBullet(line: string) {
+  const m = line.match(/^([^:]{2,28}):\s+(.+)$/s);
+  if (m) {
+    return <><strong>{m[1]}:</strong> {m[2]}</>;
+  }
+  return line;
+}
+
+function Bullets({ text, empty, className }: { text?: string; empty: string; className?: string }) {
+  const lines = String(text ?? "")
     .split(/\r?\n/)
     .map((l) => l.replace(/^[-•*]\s*/, "").trim())
     .filter(Boolean);
-  if (lines.length <= 1) return <p className="pa-body">{text.trim()}</p>;
+  if (lines.length === 0) return <p className={className ?? "pa-body"}>{empty}</p>;
   return (
-    <ul className="pa-body" style={{ margin: 0, paddingLeft: 18 }}>
-      {lines.map((l, i) => <li key={i} style={{ margin: "3px 0" }}>{l}</li>)}
+    <ul className={className ?? "pa-body"} style={{ margin: 0, paddingLeft: 18 }}>
+      {lines.map((l, i) => (
+        <li key={i} style={{ margin: "4px 0" }}>{renderBullet(l)}</li>
+      ))}
     </ul>
   );
 }
 
 const SEVERITY_COLOR: Record<string, string> = { HIGH: "#DC2626", MEDIUM: "#F97316", LOW: "#9CA3AF" };
+
 
 // Note: each finding still carries `timestamps` in the data (the anti-
 // hallucination guardrail lives there — see resolveChunkFindings /
@@ -250,6 +259,292 @@ const RiskGauge: React.FC<{ score: number; level: string; riskColor: string }> =
   );
 };
 
+// ── Score breakdown cards (each modality independent 0-100) ──────────────────
+interface ModalityRow {
+  label: string;
+  score: number | null;
+  summary: string;
+}
+
+const scoreColor = (s: number) => {
+  const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
+  const rgb = (r: number, g: number, b: number) => `rgb(${r},${g},${b})`;
+  if (s >= 70) {
+    const t = Math.min((s - 70) / 30, 1);
+    return rgb(lerp(248, 153, t), lerp(113, 27, t), lerp(113, 27, t));
+  }
+  if (s >= 45) {
+    const t = (s - 45) / 24;
+    return rgb(lerp(253, 249, t), lerp(186, 115, t), lerp(116, 22, t));
+  }
+  if (s >= 20) {
+    const t = (s - 20) / 24;
+    return rgb(lerp(254, 234, t), lerp(240, 179, t), lerp(138, 8, t));
+  }
+  const t = Math.min(s / 19, 1);
+  return rgb(lerp(134, 22, t), lerp(239, 163, t), lerp(172, 74, t));
+};
+
+const ScoreBreakdown: React.FC<{ rows: ModalityRow[] }> = ({ rows }) => {
+  const [animated, setAnimated] = useState(false);
+  const [hovered, setHovered] = useState<string | null>(null);
+  useEffect(() => { const t = setTimeout(() => setAnimated(true), 150); return () => clearTimeout(t); }, []);
+
+  return (
+    <div className="sb-grid">
+      {rows.map(({ label, score, summary }) => {
+        const val = score ?? 0;
+        const barColor = score !== null ? scoreColor(val) : "#D1D5DB";
+        const isHovered = hovered === label;
+        return (
+          <div
+            key={label}
+            className="sb-card"
+            onMouseEnter={() => setHovered(label)}
+            onMouseLeave={() => setHovered(null)}
+          >
+            <div className="sb-card-header">
+              <span className="sb-label">{label}</span>
+              <span className="sb-score" style={{ color: barColor }}>
+                {score !== null ? val : "—"}
+              </span>
+            </div>
+            <div className="sb-track">
+              <div
+                className="sb-fill"
+                style={{
+                  width: animated ? `${val}%` : "0%",
+                  background: barColor,
+                  transition: animated ? "width 0.9s cubic-bezier(0.34,1.1,0.64,1)" : "none",
+                }}
+              />
+            </div>
+            {isHovered && summary && (
+              <div className="sb-tooltip">{summary}</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── Timeline Scrubber Component ──────────────────────────────────────────────
+export interface ScrubberWindow {
+  id: string;
+  index: number;
+  risk: string;
+  score: number;
+  summary: string;
+  processed_at: string;
+  per_modality?: {
+    app_metadata?: { risk_level?: string; risk_score?: number; summary?: string };
+    keystroke?: { risk_level?: string; risk_score?: number; summary?: string };
+    voice?: { risk_level?: string; risk_score?: number; summary?: string };
+  };
+  timeline?: { ts: number; kind: string; detail: string; speakerRole?: string }[];
+  startOffsetSec: number;
+  endOffsetSec: number;
+}
+
+const SessionTimelineScrubber: React.FC<{
+  windows: ScrubberWindow[];
+  getRiskColor: (risk: string) => string;
+}> = ({ windows, getRiskColor }) => {
+  const [selectedIdx, setSelectedIdx] = useState<number>(() => {
+    if (windows.length === 0) return 0;
+    const highRiskIdx = windows.findIndex((w) =>
+      ["CRITICAL", "SEVERE", "HIGH"].includes(w.risk?.toUpperCase())
+    );
+    return highRiskIdx >= 0 ? highRiskIdx : 0;
+  });
+
+  if (windows.length === 0) return null;
+
+  const selected = windows[selectedIdx] || windows[0];
+  const flaggedIndices = windows
+    .map((w, idx) => ({
+      idx,
+      isFlagged: ["CRITICAL", "SEVERE", "HIGH", "MEDIUM"].includes(w.risk?.toUpperCase()),
+    }))
+    .filter((w) => w.isFlagged)
+    .map((w) => w.idx);
+
+  const handlePrevFlagged = () => {
+    const prev = [...flaggedIndices].reverse().find((i) => i < selectedIdx);
+    if (prev !== undefined) setSelectedIdx(prev);
+  };
+
+  const handleNextFlagged = () => {
+    const next = flaggedIndices.find((i) => i > selectedIdx);
+    if (next !== undefined) setSelectedIdx(next);
+  };
+
+  const formatSec = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  const totalSec = windows[windows.length - 1].endOffsetSec;
+  const timeLabels = [
+    "00:00",
+    formatSec(Math.round(totalSec * 0.25)),
+    formatSec(Math.round(totalSec * 0.5)),
+    formatSec(Math.round(totalSec * 0.75)),
+    formatSec(totalSec),
+  ];
+
+  const appMod = selected.per_modality?.app_metadata;
+  const keyMod = selected.per_modality?.keystroke;
+  const voiceMod = selected.per_modality?.voice;
+
+  return (
+    <section className="pa-card pa-scrubber-card">
+      <div className="pa-scrubber-header">
+        <div>
+          <h3 className="pa-card-title" style={{ margin: 0 }}>
+            Session Integrity Timeline Scrubber
+          </h3>
+          <p style={{ fontSize: "12px", color: "var(--pa-muted)", margin: "4px 0 0" }}>
+            Click any 30-second window segment to inspect forensic micro-events and modality breakdown.
+          </p>
+        </div>
+        <div className="pa-scrubber-controls">
+          <button
+            type="button"
+            className="pa-jump-btn"
+            onClick={handlePrevFlagged}
+            disabled={!flaggedIndices.some((i) => i < selectedIdx)}
+            title="Jump to previous flagged window"
+          >
+            ◀ Prev Flagged
+          </button>
+          <button
+            type="button"
+            className="pa-jump-btn"
+            onClick={handleNextFlagged}
+            disabled={!flaggedIndices.some((i) => i > selectedIdx)}
+            title="Jump to next flagged window"
+          >
+            Next Flagged ▶
+          </button>
+        </div>
+      </div>
+
+      <div className="pa-scrubber-track" role="tablist" aria-label="Timeline Segments">
+        {windows.map((w, idx) => {
+          const color = getRiskColor(w.risk);
+          const isSelected = idx === selectedIdx;
+          return (
+            <div
+              key={w.id || idx}
+              className={`pa-scrubber-seg${isSelected ? " is-active" : ""}`}
+              style={{ background: color }}
+              onClick={() => setSelectedIdx(idx)}
+              title={`Window #${idx + 1} (${formatSec(w.startOffsetSec)} – ${formatSec(w.endOffsetSec)}): ${w.risk?.toUpperCase()} Risk (${w.score}/100)`}
+            />
+          );
+        })}
+      </div>
+
+      <div className="pa-scrubber-labels">
+        {timeLabels.map((lbl, i) => (
+          <span key={i}>{lbl}</span>
+        ))}
+      </div>
+
+      {/* ── Active Window Snapshot Card ── */}
+      <div className="pa-snapshot-card">
+        <div className="pa-snapshot-top">
+          <div className="pa-snapshot-meta">
+            <span className="pa-snapshot-title">
+              Window #{selected.index + 1} ({formatSec(selected.startOffsetSec)} – {formatSec(selected.endOffsetSec)})
+            </span>
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                padding: "2px 8px",
+                borderRadius: "4px",
+                background: `${getRiskColor(selected.risk)}15`,
+                color: getRiskColor(selected.risk),
+                border: `1px solid ${getRiskColor(selected.risk)}40`,
+              }}
+            >
+              {selected.risk?.toUpperCase()} RISK ({selected.score}/100)
+            </span>
+          </div>
+
+          <div className="pa-snapshot-modalities">
+            {appMod && (
+              <span className="pa-snapshot-pill" style={{ color: getRiskColor(appMod.risk_level || "LOW") }}>
+                🖥️ Apps: {appMod.risk_score ?? 0}/100
+              </span>
+            )}
+            {keyMod && (
+              <span className="pa-snapshot-pill" style={{ color: getRiskColor(keyMod.risk_level || "LOW") }}>
+                ⌨️ Keys: {keyMod.risk_score ?? 0}/100
+              </span>
+            )}
+            {voiceMod && (
+              <span className="pa-snapshot-pill" style={{ color: getRiskColor(voiceMod.risk_level || "LOW") }}>
+                🎙️ Voice: {voiceMod.risk_score ?? 0}/100
+              </span>
+            )}
+          </div>
+        </div>
+
+        {selected.summary && (
+          <p className="pa-snapshot-narrative">
+            <strong>Summary:</strong> {selected.summary}
+          </p>
+        )}
+
+        {selected.timeline && selected.timeline.length > 0 ? (
+          <div>
+            <div
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                color: "var(--pa-muted)",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                marginBottom: "8px",
+              }}
+            >
+              Micro-Events in this 30s Window ({selected.timeline.length})
+            </div>
+            <div className="pa-snapshot-events">
+              {selected.timeline.map((ev, i) => {
+                const kind = ev.kind?.toUpperCase();
+                const kindColor = kind === "APP" ? "#2563EB" : kind === "KEYSTROKE" ? "#D97706" : "#16A34A";
+                const timeStr = ev.ts ? new Date(ev.ts).toLocaleTimeString() : "";
+                return (
+                  <div key={i} className="pa-snapshot-event">
+                    {timeStr && <span className="pa-snapshot-time">{timeStr}</span>}
+                    <span className="pa-snapshot-kind" style={{ background: `${kindColor}15`, color: kindColor }}>
+                      {kind}
+                    </span>
+                    <span className="pa-snapshot-detail">
+                      {ev.speakerRole ? `[${ev.speakerRole}]: ` : ""}{ev.detail}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <p style={{ fontSize: "12px", color: "var(--pa-faint)", margin: 0 }}>
+            No micro-events recorded during this 30-second window.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+};
+
+
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface DetectedAppCategory {
@@ -354,6 +649,7 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
 
   const [analysis, setAnalysis] = useState<PostAnalysis | null>(null);
   const [session, setSession] = useState<InterviewSession | null>(null);
+  const [scrubberWindows, setScrubberWindows] = useState<ScrubberWindow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -374,15 +670,34 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
       if (!sessionId) { setError("Session ID not found"); setLoading(false); return; }
 
       try {
-        const [analysisRes, sessionRes] = await Promise.all([
+        const [analysisRes, sessionRes, windowsRes] = await Promise.all([
           InterviewService.getPostAnalysis(sessionId),
           InterviewService.getById(sessionId),
+          typeof InterviewService.getWindows === "function"
+            ? InterviewService.getWindows(sessionId).catch(() => ({ success: false, data: { results: [], total: 0 } }))
+            : Promise.resolve({ success: false, data: { results: [], total: 0 } }),
         ]);
         if (cancelled) return;
         if (analysisRes.success && analysisRes.data) {
           const normalized = normalizeAnalysis(analysisRes.data);
           setAnalysis(normalized);
           if (sessionRes.success && sessionRes.data) setSession(sessionRes.data);
+          if (windowsRes?.success && Array.isArray((windowsRes as any).data?.results)) {
+            const rawWindows = (windowsRes as any).data.results;
+            const parsed: ScrubberWindow[] = rawWindows.map((w: any, idx: number) => ({
+              id: String(w.window_id || w.id || idx),
+              index: idx,
+              risk: String(w.risk || "Low"),
+              score: Number(w.score ?? 0),
+              summary: String(w.narrative || w.summary || ""),
+              processed_at: String(w.processed_at || ""),
+              per_modality: w.per_modality,
+              timeline: Array.isArray(w.timeline) ? w.timeline : [],
+              startOffsetSec: idx * 30,
+              endOffsetSec: (idx + 1) * 30,
+            }));
+            setScrubberWindows(parsed);
+          }
           setError(null);
           setLoading(false);
           // A 200 whose row is still "pending" means analysis is running —
@@ -411,6 +726,7 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
     load();
     return () => { cancelled = true; if (pollTimer) clearTimeout(pollTimer); };
   }, [sessionId, mockScenario, pendingPoll]);
+
 
   const handleExportPDF = async () => {
     if (!sessionId || pdfLoading) return;
@@ -533,6 +849,14 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   const interviewDate = session?.scheduled_start_at ? formatDate(session.scheduled_start_at) : "";
   const candidateName = candidate ? `${candidate.first_name} ${candidate.last_name}`.trim() : "Candidate";
 
+  const modalityRows: ModalityRow[] = [
+    { label: "Keystroke", score: analysis.keystroke_score, summary: analysis.keystroke_summary },
+    { label: "Voice",     score: analysis.voice_score,     summary: analysis.voice_summary },
+    { label: "Image",     score: analysis.image_score,     summary: analysis.image_summary },
+    { label: "App Usage", score: analysis.app_score,       summary: analysis.app_summary ?? "" },
+  ];
+  const hasModalityScores = modalityRows.some((r) => r.score !== null);
+
   return (
     <div className={`pa-root${embedded ? " pa-embedded" : ""}`} ref={printRef}>
 
@@ -618,26 +942,64 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
         </div>
       </header>
 
-      {/* ── Overall Score (full width) ───────────────────────────────────── */}
-      <section className="pa-card pa-gauge-card">
-        <h3 className="pa-card-title">Overall Score</h3>
-        <RiskGauge score={analysis.risk_score} level={analysis.risk_level} riskColor={riskColor} />
-        <p className="pa-card-note">{analysis.score_reason || "Aggregated across voice, keystrokes and app usage."}</p>
-      </section>
+      {/* ── Score + Donut / Breakdown ────────────────────────────────────── */}
+      <div className="pa-charts-row">
+        <section className="pa-card pa-gauge-card">
+          <h3 className="pa-card-title">Overall Score</h3>
+          <RiskGauge score={analysis.risk_score} level={analysis.risk_level} riskColor={riskColor} />
+          <p className="pa-card-note">{analysis.score_reason || "Aggregated across voice, keystrokes and app usage."}</p>
+        </section>
+
+        <section className="pa-card pa-donut-card">
+          <h3 className="pa-card-title">Score Breakdown</h3>
+          {hasModalityScores ? (
+            <ScoreBreakdown rows={modalityRows} />
+          ) : (
+            <p className="pa-body pa-body-sm" style={{ textAlign: "center", paddingTop: "2rem" }}>
+              No modality score data available.
+            </p>
+          )}
+        </section>
+      </div>
 
       {/* ── Summary — content only, topic-segmented from the transcript ──── */}
       <section className="pa-card pa-summary-card">
         <h3 className="pa-card-title">Interview Summary</h3>
-        {analysis.content_summary.length === 0 && analysis.final_summary.trim()
-          ? <FinalSummaryText text={analysis.final_summary} />
-          : <ContentSummarySections sections={analysis.content_summary} />}
+        {analysis.content_summary.length === 0 && analysis.final_summary.trim() ? (
+          <Bullets className="pa-body" text={analysis.final_summary} empty="No summary available." />
+        ) : (
+          <ContentSummarySections sections={analysis.content_summary} />
+        )}
       </section>
 
+      {/* ── Session Integrity Timeline Scrubber ──────────────────────────── */}
+      {scrubberWindows.length > 0 && (
+        <SessionTimelineScrubber windows={scrubberWindows} getRiskColor={getRiskColor} />
+      )}
+
+      {/* ── 3 Classic Modality Signals ───────────────────────────────────── */}
+      <div className="pa-signals">
+        <section className="pa-card pa-signal-card">
+          <h3 className="pa-card-title">🎙️ Voice Analysis</h3>
+          <Bullets className="pa-body pa-body-sm" text={analysis.voice_summary} empty="No voice data recorded." />
+        </section>
+        <section className="pa-card pa-signal-card">
+          <h3 className="pa-card-title">⌨️ Keystroke Analysis</h3>
+          <Bullets className="pa-body pa-body-sm" text={analysis.keystroke_summary} empty="No keystroke data recorded." />
+        </section>
+        <section className="pa-card pa-signal-card">
+          <h3 className="pa-card-title">🖥️ App Usage</h3>
+          <Bullets className="pa-body pa-body-sm" text={analysis.app_summary} empty="No app usage data recorded." />
+        </section>
+      </div>
+
       {/* ── Finding Summary — flagged behavior only, session-wide, grouped ── */}
-      <section className="pa-card pa-summary-card">
-        <h3 className="pa-card-title">Finding Summary</h3>
-        <FindingSummaryList findings={analysis.finding_summary} />
-      </section>
+      {analysis.finding_summary.length > 0 && (
+        <section className="pa-card pa-summary-card">
+          <h3 className="pa-card-title">Finding Summary</h3>
+          <FindingSummaryList findings={analysis.finding_summary} />
+        </section>
+      )}
 
       {/* ── Detected Application Categories ─────────────────────────────── */}
       {analysis.detected_app_categories.length > 0 && (

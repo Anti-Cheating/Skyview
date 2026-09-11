@@ -505,6 +505,92 @@ function TimelineStepper({ entries }: { entries: SummarizedTimelineEntry[] }) {
   );
 }
 
+function ModalityCard({
+  label,
+  icon,
+  modality,
+}: {
+  label: string;
+  icon: any;
+  modality: { risk_level?: string; risk_score?: number; summary?: string; signals?: string[]; evidence?: string[] };
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const color = getRiskColor(modality.risk_level || 'LOW');
+  const hasDetails = Boolean(
+    modality.summary ||
+      (modality.signals && modality.signals.length > 0) ||
+      (modality.evidence && modality.evidence.length > 0)
+  );
+
+  return (
+    <Box sx={{ borderRadius: '8px', border: `1px solid ${DARK_BORDER}`, bgcolor: DARK_BG, overflow: 'hidden', mb: 0.5 }}>
+      <Box
+        onClick={() => hasDetails && setExpanded(!expanded)}
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          px: 1,
+          py: 0.6,
+          cursor: hasDetails ? 'pointer' : 'default',
+          '&:hover': hasDetails ? { bgcolor: `${color}06` } : {},
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+          <Box sx={{ color, display: 'flex', alignItems: 'center' }}>
+            <HugeiconsIcon icon={icon} size={13} color={color} />
+          </Box>
+          <Typography sx={{ fontSize: '0.675rem', fontWeight: 600, color: DARK_TEXT }}>{label}</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+          <Chip
+            label={modality.risk_level?.toUpperCase() || 'LOW'}
+            size="small"
+            sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${color}20`, color, '& .MuiChip-label': { px: 0.5 } }}
+          />
+          <Typography sx={{ fontSize: '0.675rem', fontWeight: 700, color: getScoreColor(modality.risk_score ?? 0), minWidth: 20, textAlign: 'right' }}>
+            {modality.risk_score ?? 0}
+          </Typography>
+          {hasDetails && (
+            <HugeiconsIcon icon={expanded ? ArrowUp01Icon : ArrowDown01Icon} size={12} color={DARK_TEXT_MUTED} />
+          )}
+        </Box>
+      </Box>
+      <Collapse in={expanded}>
+        <Box sx={{ px: 1, pb: 0.8, pt: 0.4, borderTop: `1px solid ${DARK_BORDER}` }}>
+          {modality.summary && (
+            <Typography sx={{ fontSize: '0.625rem', color: DARK_TEXT_SECONDARY, mb: 0.5, lineHeight: 1.4 }}>
+              {modality.summary}
+            </Typography>
+          )}
+          {modality.signals && modality.signals.length > 0 && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.3, mb: 0.5 }}>
+              {modality.signals.map((s, i) => (
+                <Chip
+                  key={i}
+                  label={formatSignal(s)}
+                  size="small"
+                  sx={{ height: 16, fontSize: '0.5rem', bgcolor: `${color}15`, color, '& .MuiChip-label': { px: 0.4 } }}
+                />
+              ))}
+            </Box>
+          )}
+          {modality.evidence && modality.evidence.length > 0 && (
+            <Box>
+              {modality.evidence.map((item, i) => (
+                <Box key={i} sx={{ display: 'flex', gap: 0.5, mb: 0.2, alignItems: 'flex-start' }}>
+                  <Box sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: color, mt: '5px', flexShrink: 0 }} />
+                  <Typography sx={{ fontSize: '0.625rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.4 }}>{item}</Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </Box>
+      </Collapse>
+    </Box>
+  );
+}
+
 export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScreenshot }: { result: WindowResult; isLatest: boolean; onExpandScreenshot: (urls: string[], startIndex: number) => void }) {
   const [expanded, setExpanded] = useState(isLatest);
   const [showRaw, setShowRaw] = useState(false);
@@ -521,7 +607,15 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
   const displayTimeline = showRaw ? (rawTimeline as SummarizedTimelineEntry[]) : summarizedTimeline;
   const canToggleRaw = rawTimeline.length > summarizedTimeline.length;
   const hasEvidence = result.evidence && result.evidence.length > 0;
-  const hasExpandable = Boolean(result.narrative || hasTimeline || hasEvidence || result.timeline_note);
+  const hasModalities = Boolean(
+    result.per_modality &&
+      (result.per_modality.app_metadata ||
+        result.per_modality.keystroke ||
+        result.per_modality.voice)
+  );
+  const hasExpandable = Boolean(
+    hasModalities || result.narrative || hasTimeline || hasEvidence || result.timeline_note
+  );
   // Narrative is the headline now — fall back to the old summary field for
   // rows analyzed before this rolled out (they'll never have narrative).
   const headline = result.narrative || result.summary;
@@ -550,9 +644,45 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
             )}
           </Box>
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.3, mb: 0.5 }}>
-          <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: getScoreColor(result.score), lineHeight: 1 }}>{result.score}</Typography>
-          <Typography sx={{ fontSize: '0.6rem', color: DARK_TEXT_MUTED }}>/100</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.3 }}>
+            <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: getScoreColor(result.score), lineHeight: 1 }}>{result.score}</Typography>
+            <Typography sx={{ fontSize: '0.6rem', color: DARK_TEXT_MUTED }}>/100</Typography>
+          </Box>
+          {result.per_modality && (
+            <Box sx={{ display: 'flex', gap: 0.6, alignItems: 'center' }}>
+              {result.per_modality.app_metadata && (
+                <Tooltip title={`Apps: ${result.per_modality.app_metadata.risk_score}/100 (${result.per_modality.app_metadata.risk_level})`} arrow>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, bgcolor: `${getRiskColor(result.per_modality.app_metadata.risk_level)}12`, px: 0.5, py: 0.2, borderRadius: '4px' }}>
+                    <HugeiconsIcon icon={LaptopIcon} size={11} color={getRiskColor(result.per_modality.app_metadata.risk_level)} />
+                    <Typography sx={{ fontSize: '0.55rem', fontWeight: 700, color: getRiskColor(result.per_modality.app_metadata.risk_level) }}>
+                      {result.per_modality.app_metadata.risk_score}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+              )}
+              {result.per_modality.keystroke && (
+                <Tooltip title={`Keys: ${result.per_modality.keystroke.risk_score}/100 (${result.per_modality.keystroke.risk_level})`} arrow>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, bgcolor: `${getRiskColor(result.per_modality.keystroke.risk_level)}12`, px: 0.5, py: 0.2, borderRadius: '4px' }}>
+                    <HugeiconsIcon icon={KeyboardIcon} size={11} color={getRiskColor(result.per_modality.keystroke.risk_level)} />
+                    <Typography sx={{ fontSize: '0.55rem', fontWeight: 700, color: getRiskColor(result.per_modality.keystroke.risk_level) }}>
+                      {result.per_modality.keystroke.risk_score}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+              )}
+              {result.per_modality.voice && (
+                <Tooltip title={`Voice: ${result.per_modality.voice.risk_score}/100 (${result.per_modality.voice.risk_level})`} arrow>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, bgcolor: `${getRiskColor(result.per_modality.voice.risk_level)}12`, px: 0.5, py: 0.2, borderRadius: '4px' }}>
+                    <HugeiconsIcon icon={Mic01Icon} size={11} color={getRiskColor(result.per_modality.voice.risk_level)} />
+                    <Typography sx={{ fontSize: '0.55rem', fontWeight: 700, color: getRiskColor(result.per_modality.voice.risk_level) }}>
+                      {result.per_modality.voice.risk_score}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+              )}
+            </Box>
+          )}
         </Box>
         {headline && (
           <Box>
@@ -563,6 +693,21 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
       </Box>
       <Collapse in={expanded}>
         <Box sx={{ px: 1.2, pb: 1.2, pt: 0.2 }}>
+          {hasModalities && (
+            <SubSection label="Modality Breakdown" count={3}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4, mt: 0.4 }}>
+                {result.per_modality!.app_metadata && (
+                  <ModalityCard label="Apps" icon={LaptopIcon} modality={result.per_modality!.app_metadata} />
+                )}
+                {result.per_modality!.keystroke && (
+                  <ModalityCard label="Keystrokes" icon={KeyboardIcon} modality={result.per_modality!.keystroke} />
+                )}
+                {result.per_modality!.voice && (
+                  <ModalityCard label="Voice" icon={Mic01Icon} modality={result.per_modality!.voice} />
+                )}
+              </Box>
+            </SubSection>
+          )}
           {hasTimeline && (
             <SubSection
               label="Timeline"
