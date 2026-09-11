@@ -24,7 +24,7 @@ export interface ProcessListItem {
   candidate: ProcessCandidate;
   rounds_total: number;
   rounds_done: number;
-  status: 'IN_PROGRESS' | 'COMPLETED';
+  status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';
   updated_at: string;
 }
 
@@ -35,7 +35,7 @@ export interface ProcessDetail {
   candidate: ProcessCandidate;
   created_at: string;
   created_by_name: string | null;
-  status: 'IN_PROGRESS' | 'COMPLETED';
+  status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';
   rounds: RoundSummary[];
 }
 

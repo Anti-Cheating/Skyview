@@ -175,6 +175,15 @@ export default function TeamPage() {
   const [busyInviteId, setBusyInviteId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<'revoke' | 'resend' | null>(null);
 
+  // Member row menu + the confirm dialog it opens. `memberAction` doubles as
+  // "which dialog is open" — null means none.
+  const [memberMenuAnchor, setMemberMenuAnchor] = useState<HTMLElement | null>(null);
+  const [menuMember, setMenuMember] = useState<TeamMember | null>(null);
+  const [memberAction, setMemberAction] = useState<'role' | 'transfer' | 'remove' | null>(null);
+  const [actionMember, setActionMember] = useState<TeamMember | null>(null);
+  const [nextRole, setNextRole] = useState<InviteRole>('Member');
+  const [memberBusy, setMemberBusy] = useState(false);
+
   // Pagination — client-side, since Members + Pending lists are short
   // and fully loaded into memory. Page + size are per-tab so switching
   // tabs doesn't strand the user on a page that no longer exists in
@@ -325,6 +334,68 @@ export default function TeamPage() {
     }
   };
 
+  // Only the Owner changes roles or transfers the seat; an Admin can remove
+  // Members but not other Admins. Cortex enforces all of this — these flags
+  // just keep the menu honest about what will actually work.
+  const isOwner = userRole === 'Owner';
+  const canActOn = (m: TeamMember): boolean => {
+    if (m.id === user?.id) return false;      // never yourself
+    if (m.role === 'Owner') return false;     // the Owner seat moves by transfer only
+    return isOwner || m.role === 'Member';
+  };
+
+  const openMemberMenu = (e: React.MouseEvent<HTMLElement>, m: TeamMember) => {
+    setMemberMenuAnchor(e.currentTarget);
+    setMenuMember(m);
+  };
+  const closeMemberMenu = () => {
+    setMemberMenuAnchor(null);
+    setMenuMember(null);
+  };
+  const openMemberAction = (action: 'role' | 'transfer' | 'remove', m: TeamMember) => {
+    setActionMember(m);
+    setMemberAction(action);
+    setNextRole(m.role === 'Admin' ? 'Member' : 'Admin');
+    closeMemberMenu();
+  };
+  const closeMemberAction = () => {
+    if (memberBusy) return;
+    setMemberAction(null);
+    setActionMember(null);
+  };
+
+  const runMemberAction = async () => {
+    if (!companyId || !actionMember || !memberAction) return;
+    setMemberBusy(true);
+    try {
+      const name = `${actionMember.first_name ?? ''} ${actionMember.last_name ?? ''}`.trim() || actionMember.email;
+      const resp =
+        memberAction === 'role'
+          ? await InvitesService.changeRole(companyId, actionMember.id, nextRole)
+          : memberAction === 'transfer'
+            ? await InvitesService.transferOwnership(companyId, actionMember.id)
+            : await InvitesService.removeMember(companyId, actionMember.id);
+      if (!resp.success) {
+        showError(resp.message || 'Action failed');
+        return;
+      }
+      showSuccess(
+        memberAction === 'role'
+          ? `${name} is now ${nextRole === 'Admin' ? 'an Admin' : 'a Member'}`
+          : memberAction === 'transfer'
+            ? `${name} is now the Owner — you are an Admin`
+            : `${name} removed from the company`
+      );
+      setMemberAction(null);
+      setActionMember(null);
+      refresh();
+    } catch (err: any) {
+      showError(err?.data?.error || err?.message || 'Action failed');
+    } finally {
+      setMemberBusy(false);
+    }
+  };
+
   const handleRevoke = async (invite: PendingInvite) => {
     setBusyInviteId(invite.id);
     setBusyAction('revoke');
@@ -460,7 +531,27 @@ export default function TeamPage() {
         </Caption>
       ),
     },
-  ], []);
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      width: 48,
+      showOnHover: true,
+      // No menu at all on rows nothing can be done to — your own row, the
+      // Owner's row, and (for an Admin) other Admins.
+      render: (m) =>
+        canActOn(m) ? (
+          <IconButton
+            size="small"
+            onClick={(e) => openMemberMenu(e, m)}
+            aria-label={`Actions for ${m.email}`}
+            sx={{ color: TOKENS.textSecondary }}
+          >
+            <MoreVertIcon fontSize="small" />
+          </IconButton>
+        ) : null,
+    },
+  ], [isOwner, user?.id]);
 
   const pendingColumns = useMemo<DataTableColumn<PendingInvite>[]>(() => [
     {
@@ -771,6 +862,79 @@ export default function TeamPage() {
         </MenuItemMui>
       </Menu>
 
+      <Menu
+        anchorEl={memberMenuAnchor}
+        open={!!memberMenuAnchor}
+        onClose={closeMemberMenu}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        {isOwner && menuMember && (
+          <MenuItemMui onClick={() => openMemberAction('role', menuMember)}>
+            {menuMember.role === 'Admin' ? 'Change to Member' : 'Make Admin'}
+          </MenuItemMui>
+        )}
+        {isOwner && menuMember && (
+          <MenuItemMui onClick={() => openMemberAction('transfer', menuMember)}>
+            Transfer ownership
+          </MenuItemMui>
+        )}
+        {menuMember && (
+          <MenuItemMui
+            onClick={() => openMemberAction('remove', menuMember)}
+            sx={{ color: TOKENS.error }}
+          >
+            Remove from company
+          </MenuItemMui>
+        )}
+      </Menu>
+
+      <Dialog
+        open={!!memberAction}
+        onClose={closeMemberAction}
+        fullWidth
+        maxWidth="xs"
+        aria-labelledby="member-action-title"
+      >
+        <DialogTitle id="member-action-title" sx={{ fontSize: '1rem', fontWeight: 600 }}>
+          {memberAction === 'role'
+            ? `Change role to ${nextRole}?`
+            : memberAction === 'transfer'
+              ? 'Transfer ownership?'
+              : 'Remove from company?'}
+        </DialogTitle>
+        <DialogContent>
+          <Secondary sx={{ color: TOKENS.textSecondary }}>
+            {(() => {
+              const name = actionMember
+                ? `${actionMember.first_name ?? ''} ${actionMember.last_name ?? ''}`.trim() || actionMember.email
+                : '';
+              if (memberAction === 'role') {
+                return nextRole === 'Admin'
+                  ? `${name} will be able to invite Members and remove them.`
+                  : `${name} will lose Admin access — no more inviting or removing people.`;
+              }
+              if (memberAction === 'transfer') {
+                return `${name} becomes the Owner of this workspace. You become an Admin, and only ${name} will be able to change roles or transfer ownership after this.`;
+              }
+              return `${name} loses access immediately and their seat is freed. Interviews they ran are kept. They can be invited again later.`;
+            })()}
+          </Secondary>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <ActionButton variant="secondary" onClick={closeMemberAction} disabled={memberBusy}>
+            Cancel
+          </ActionButton>
+          <ActionButton onClick={runMemberAction} loading={memberBusy}>
+            {memberAction === 'role'
+              ? 'Change role'
+              : memberAction === 'transfer'
+                ? 'Transfer ownership'
+                : 'Remove'}
+          </ActionButton>
+        </DialogActions>
+      </Dialog>
+
       <Dialog
         open={dialogOpen}
         onClose={() => !dialogBusy && setDialogOpen(false)}
@@ -801,8 +965,11 @@ export default function TeamPage() {
               onChange={(e) => setDialogRole(e.target.value as InviteRole)}
               disabled={dialogBusy}
               SelectProps={{ native: true }}
+              // Only the Owner can create Admins — otherwise an Admin could
+              // route around the Owner-only role change by inviting one.
+              helperText={isOwner ? undefined : 'Only the Owner can invite an Admin'}
             >
-              <option value="Admin">Admin</option>
+              {isOwner && <option value="Admin">Admin</option>}
               <option value="Member">Member</option>
             </FormField>
           </Stack>

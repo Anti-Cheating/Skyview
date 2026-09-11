@@ -18,6 +18,7 @@ import { Box } from '@mui/material';
 export type SessionStatus =
   | 'SCHEDULED'
   | 'ACTIVE'
+  | 'IN_PROGRESS'
   | 'COMPLETED'
   | 'CANCELLED'
   | string;
@@ -41,6 +42,14 @@ const STATUS_TOKENS: Record<string, TagTokens> = {
     bg:     'rgba(76, 217, 100, 0.14)',
     border: 'rgba(76, 217, 100, 0.45)',
     text:   '#047857',
+  },
+  // Process-level state: some rounds done, others still ahead. Blue keeps
+  // it distinct from ACTIVE green ("live right now").
+  IN_PROGRESS: {
+    bg:     'rgba(59,130,246,0.12)',
+    border: 'rgba(59,130,246,0.35)',
+    text:   '#2563EB',
+    label:  'In progress',
   },
   COMPLETED: {
     bg:     '#ECFDF5',
@@ -85,7 +94,7 @@ export function StatusTag({ status }: { status: SessionStatus }) {
         transition: 'background-color 200ms ease, border-color 200ms ease, color 200ms ease',
       }}
     >
-      {prettyLabel(status)}
+      {tokens.label ?? prettyLabel(status)}
     </Box>
   );
 }

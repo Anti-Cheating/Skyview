@@ -384,6 +384,9 @@ export default function InterviewDetailPage() {
 
   const isCompleted = session.status === 'COMPLETED';
   const canStart = !isCompleted;
+  // ACTIVE means the interviewer left the monitoring view without ending —
+  // re-entering resumes the live session rather than starting a new one.
+  const isLive = session.status === 'ACTIVE';
   const canAnalyse = isCompleted && !analysing;
 
   const handleAnalyse = async () => {
@@ -482,7 +485,7 @@ export default function InterviewDetailPage() {
               '&:hover': { bgcolor: '#3CC954', boxShadow: 'none' },
             }}
           >
-            Start Interview
+            {isLive ? 'Resume Interview' : 'Start Interview'}
           </Button>
         )}
       </Box>

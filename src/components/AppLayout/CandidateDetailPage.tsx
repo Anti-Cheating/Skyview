@@ -1,24 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Box, Chip, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Box, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { DeleteForeverOutlined as EraseIcon } from '@mui/icons-material';
 import { TOKENS } from '../../theme';
 import { PageTitle, Secondary, Caption } from '../layout/Typography';
 import { ActionButton } from '../common/ActionButton';
 import { Breadcrumb } from '../common/Breadcrumb';
 import { DataTable, type DataTableColumn } from '../common/DataTable';
+import { StatusTag } from '../common/StatusTag';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { CandidatesService, type CandidateDetail, type CandidateInterview } from '../../services/candidates.service';
 
-function StatusPill({ done }: { done: boolean }) {
-  return (
-    <Chip
-      label={done ? 'Completed' : 'In progress'}
-      size="small"
-      sx={{ height: 22, fontSize: '0.7rem', fontWeight: 600, bgcolor: done ? 'rgba(76,217,100,0.14)' : 'rgba(59,130,246,0.12)', color: done ? '#047857' : '#2563EB' }}
-    />
-  );
+function roundsStatus(rounds: { status: string }[]): 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' {
+  if (rounds.length === 0) return 'SCHEDULED';
+  if (rounds.some((r) => r.status === 'ACTIVE')) return 'IN_PROGRESS';
+  if (!rounds.some((r) => r.status === 'SCHEDULED')) return 'COMPLETED';
+  return rounds.some((r) => r.status === 'COMPLETED') ? 'IN_PROGRESS' : 'SCHEDULED';
 }
 
 export default function CandidateDetailPage() {
@@ -63,7 +61,7 @@ export default function CandidateDetailPage() {
     },
     {
       key: 'status', header: 'Status', width: 140,
-      render: (iv) => <StatusPill done={iv.rounds.length > 0 && iv.rounds.every((r) => r.status === 'COMPLETED')} />,
+      render: (iv) => <StatusTag status={roundsStatus(iv.rounds)} />,
     },
     {
       key: 'created', header: 'Created', width: 140, hideOn: 'mobile',
