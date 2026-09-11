@@ -29,8 +29,9 @@ describe('PulseAlertBanner', () => {
     ];
     render(<PulseAlertBanner alerts={alerts} />);
     expect(screen.getAllByText('AI Tools')[0]).toBeInTheDocument();
-    expect(screen.getByText('opened ChatGPT')).toBeInTheDocument();
-    expect(screen.getByText('opened Claude')).toBeInTheDocument();
+    expect(screen.getByText('ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText('Claude')).toBeInTheDocument();
+    expect(screen.getAllByText('Open')).toHaveLength(2);
   });
 
   test('renders an activity with an occurrence count', () => {
@@ -104,7 +105,8 @@ describe('PulseAlertBanner', () => {
     ];
     render(<PulseAlertBanner alerts={alerts} />);
     expect(screen.getByText('AI Sub')).toBeInTheDocument();
-    expect(screen.getByText('opened ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText('ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText('Open')).toBeInTheDocument();
   });
 
   test('same category across two pulses merges its apps (else branch)', () => {
@@ -122,8 +124,9 @@ describe('PulseAlertBanner', () => {
     ];
     render(<PulseAlertBanner alerts={alerts} />);
     // Deduped union across both pulses.
-    expect(screen.getByText('opened ChatGPT')).toBeInTheDocument();
-    expect(screen.getByText('opened Claude')).toBeInTheDocument();
+    expect(screen.getByText('ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText('Claude')).toBeInTheDocument();
+    expect(screen.getAllByText('Open')).toHaveLength(2);
   });
 
   test('duration labels cover seconds / minutes / hours branches on close events', () => {
@@ -161,9 +164,15 @@ describe('PulseAlertBanner', () => {
       },
     ];
     render(<PulseAlertBanner alerts={alerts} />);
-    expect(screen.getByText(/closed Recent — open 30s/)).toBeInTheDocument();
-    expect(screen.getByText(/closed MinsAgo — open 5 min/)).toBeInTheDocument();
-    expect(screen.getByText(/closed HoursAgo — open 2h 15m/)).toBeInTheDocument();
+    expect(screen.getAllByText('Recent')).toHaveLength(2);
+    expect(screen.getByText(/open 30s/)).toBeInTheDocument();
+    expect(screen.getAllByText('MinsAgo')).toHaveLength(2);
+    expect(screen.getByText(/open 5 min/)).toBeInTheDocument();
+    expect(screen.getAllByText('HoursAgo')).toHaveLength(2);
+    expect(screen.getByText(/open 2h 15m/)).toBeInTheDocument();
+    expect(screen.getAllByText('Open')).toHaveLength(3);
+    expect(screen.getAllByText('Close')).toHaveLength(3);
+    expect(screen.queryByText(/—/)).not.toBeInTheDocument();
   });
 
   test('an unknown activity falls back to a humanised label', () => {
@@ -234,8 +243,9 @@ describe('PulseAlertBanner — duration accumulation', () => {
 
     render(<PulseAlertBanner alerts={alerts} />);
 
-    expect(screen.getByText('opened Cursor')).toBeInTheDocument();
-    expect(screen.queryByText(/closed Cursor/)).not.toBeInTheDocument();
+    expect(screen.getByText('Cursor')).toBeInTheDocument();
+    expect(screen.getByText('Open')).toBeInTheDocument();
+    expect(screen.queryByText('Close')).not.toBeInTheDocument();
   });
 
   test('accumulates correctly even when app_closed casing differs from the open detection\'s app name', () => {
@@ -253,7 +263,8 @@ describe('PulseAlertBanner — duration accumulation', () => {
 
     expect(screen.getByText(/open 3 min/)).toBeInTheDocument();
     expect(screen.queryByText(/50 min/)).not.toBeInTheDocument();
-    expect(screen.getByText(/closed Cursor/)).toBeInTheDocument();
+    expect(screen.getByText('Cursor')).toBeInTheDocument();
+    expect(screen.getByText('Close')).toBeInTheDocument();
   });
 });
 
@@ -325,7 +336,8 @@ describe('PulseAlertBanner — appInfos', () => {
       },
     ];
     render(<PulseAlertBanner alerts={alerts} />);
-    expect(screen.getByText('opened ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText('ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText('Open')).toBeInTheDocument();
     expect(screen.queryByText(/—/)).not.toBeInTheDocument();
   });
 
@@ -523,11 +535,14 @@ describe('PulseAlertBanner — appInfos', () => {
       // 10:16:31 alert must appear before 10:35:18 app close in the DOM
       const lower = text.toLowerCase();
       const switchIndex = lower.indexOf('rapid app switching');
-      const closeIndex = lower.indexOf('closed aside');
+      const closeIndex = lower.indexOf('close');
+      const asideIndex = lower.indexOf('aside');
 
       expect(switchIndex).toBeGreaterThan(-1);
       expect(closeIndex).toBeGreaterThan(-1);
+      expect(asideIndex).toBeGreaterThan(-1);
       expect(switchIndex).toBeLessThan(closeIndex);
+      expect(switchIndex).toBeLessThan(asideIndex);
     });
 
     test('summarizes rapid app switching arrow chain into condensed between/across format', () => {

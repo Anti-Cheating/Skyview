@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import AnalyticsPanel from '../../../src/components/Monitoring/AnalyticsPanel';
+import AnalyticsPanel, { summarizeTimeline } from '../../../src/components/Monitoring/AnalyticsPanel';
 import type {
   UseRiskSocketReturn,
   WindowResult,
@@ -536,5 +536,66 @@ describe('AnalyticsPanel', () => {
     await userEvent.click(screen.getAllByRole('tab')[3]);
     expect(screen.getByText('Candidate')).toBeInTheDocument();
     expect(screen.getByText('no role here')).toBeInTheDocument();
+  });
+
+  // ── Timeline summarization & stepper ──
+
+  test('summarizeTimeline collapses repeated keystrokes, ping-pong switches, and voice', () => {
+    const raw = [
+      { ts: 1000, kind: 'APP', detail: 'opened Cursor — "solution.ts"' },
+      { ts: 2000, kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+      { ts: 3000, kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+      { ts: 4000, kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+      { ts: 5000, kind: 'APP', detail: 'closed Cursor, opened Chrome — "Claude"' },
+      { ts: 6000, kind: 'APP', detail: 'closed Chrome, opened Cursor — "solution.ts"' },
+      { ts: 7000, kind: 'APP', detail: 'closed Cursor, opened Chrome — "Claude"' },
+      { ts: 8000, kind: 'APP', detail: 'closed Chrome, opened Cursor — "solution.ts"' },
+      { ts: 9000, kind: 'VOICE', detail: 'candidate: "Let me check"' },
+      { ts: 10000, kind: 'VOICE', detail: 'candidate: "the function logic"' },
+    ];
+
+    const summarized = summarizeTimeline(raw);
+    expect(summarized).toHaveLength(4);
+    expect(summarized[0].detail).toBe('opened Cursor — "solution.ts"');
+    expect(summarized[1].detail).toBe('pasted in Cursor (3×)');
+    expect(summarized[1].count).toBe(3);
+    expect(summarized[2].detail).toBe('Rapid switching between Cursor and Chrome (4×)');
+    expect(summarized[2].count).toBe(4);
+    expect(summarized[3].detail).toContain('candidate: "Let me check the function logic"');
+    expect(summarized[3].count).toBe(2);
+  });
+
+  test('WindowCard shows summarized timeline count and toggles to raw view', async () => {
+    const detailed = win({
+      risk: 'high',
+      score: 80,
+      confidence: 'high',
+      summary: 'Heavy repeated pasting',
+      timeline: [
+        { ts: Date.parse('2026-07-05T10:00:01Z'), kind: 'APP', detail: 'opened Cursor — "code.ts"' },
+        { ts: Date.parse('2026-07-05T10:00:02Z'), kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+        { ts: Date.parse('2026-07-05T10:00:03Z'), kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+        { ts: Date.parse('2026-07-05T10:00:04Z'), kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+      ],
+    });
+
+    renderPanel({ results: [detailed], latestResult: detailed });
+    await userEvent.click(screen.getAllByRole('tab')[1]);
+
+    // Header displays summarized count (2: opened Cursor + pasted in Cursor (3×))
+    expect(screen.getByText(/Timeline \(2\)/)).toBeInTheDocument();
+
+    // Toggle button to view raw entries appears since raw (4) > summarized (2)
+    const rawBtn = screen.getByRole('button', { name: /Raw \(4\)/ });
+    expect(rawBtn).toBeInTheDocument();
+
+    // Expand the Timeline SubSection
+    await userEvent.click(screen.getByText(/Timeline \(2\)/));
+    expect(screen.getByText('pasted in Cursor (3×)')).toBeInTheDocument();
+
+    // Click to switch to Raw view
+    await userEvent.click(rawBtn);
+    expect(screen.getByRole('button', { name: /Summarized \(2\)/ })).toBeInTheDocument();
+    expect(screen.getAllByText('pasted in Cursor').length).toBe(3);
   });
 });

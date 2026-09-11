@@ -14,21 +14,28 @@ import {
   Switch,
   FormControlLabel,
 } from '@mui/material';
+import { HugeiconsIcon } from '@hugeicons/react';
+import type { IconSvgElement } from '@hugeicons/react';
 import {
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  Mic as VoiceIcon,
-  Schedule as TimelineIcon,
-  Shield as ShieldIcon,
-  Warning as WarningIcon,
-  CameraAlt as CameraIcon,
-  VideoCall as VideoCallIcon,
-  FiberManualRecord as DotIcon,
-  TrendingUp as TrendUpIcon,
-  TrendingDown as TrendDownIcon,
-  TrendingFlat as TrendFlatIcon,
-  UnfoldMore as UnfoldMoreIcon,
-} from '@mui/icons-material';
+  ArrowDown01Icon,
+  ArrowUp01Icon,
+  Mic01Icon,
+  Clock01Icon,
+  Shield01Icon,
+  Alert02Icon,
+  Camera01Icon,
+  ComputerVideoCallIcon,
+  ArrowUpRight01Icon,
+  ArrowDownRight01Icon,
+  ArrowRight01Icon,
+  Robot01Icon,
+  LaptopIcon,
+  ClipboardIcon,
+  Copy01Icon,
+  KeyboardIcon,
+  BrowserIcon,
+  ArrowLeftRightIcon,
+} from '@hugeicons/core-free-icons';
 import { TOKENS } from '../../theme';
 import { formatDateTime, formatClock } from '../../utils/dateFormat';
 import type { WindowResult, Correlation, EvidenceCitation, UseRiskSocketReturn, TranscriptFragment, ImageAnalysisResult } from '../../hooks/useRiskSocket';
@@ -124,7 +131,7 @@ function formatSignal(signal: string): string {
 /** One row per event — timeline lines, never side-by-side, always stacked
  *  chronologically. Shared by the Timeline and (indirectly, via the same
  *  visual language) the pulse banner's open/close rows. */
-function TimelineRow({ time, kind, detail }: { time: string; kind: string; detail: string }) {
+export function TimelineRow({ time, kind, detail }: { time: string; kind: string; detail: string }) {
   return (
     <Box sx={{ display: 'flex', gap: 0.6, alignItems: 'flex-start', py: 0.25 }}>
       <Typography sx={{ fontSize: '0.6rem', color: DARK_TEXT_MUTED, fontFamily: 'monospace', flexShrink: 0, width: 62 }}>{time}</Typography>
@@ -138,7 +145,7 @@ function EvidenceRow({ item }: { item: EvidenceCitation }) {
   const color = getImpactColor((item.confidence as Correlation['impact']) || 'weak');
   return (
     <Box sx={{ display: 'flex', gap: 0.6, alignItems: 'flex-start', px: 1, py: 0.5, borderRadius: '6px', bgcolor: `${color}10`, border: `1px solid ${color}20`, mb: 0.4 }}>
-      <DotIcon sx={{ fontSize: 6, color, mt: '5px', flexShrink: 0 }} />
+      <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: color, mt: '5px', flexShrink: 0 }} />
       <Box sx={{ flex: 1 }}>
         <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT, lineHeight: 1.4 }}>{item.claim}</Typography>
         <Box sx={{ display: 'flex', gap: 0.4, mt: 0.3, alignItems: 'center' }}>
@@ -153,13 +160,41 @@ function EvidenceRow({ item }: { item: EvidenceCitation }) {
 
 /** A collapsible sub-section within an expanded WindowCard — Timeline and
  *  Evidence each get their own independent expand state, default collapsed. */
-function SubSection({ label, count, children }: { label: string; count: number; children: React.ReactNode }) {
+function SubSection({
+  label,
+  count,
+  children,
+  action,
+}: {
+  label: string;
+  count: number;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <Box sx={{ mb: 0.8 }}>
-      <Box onClick={() => setOpen(!open)} sx={{ display: 'flex', alignItems: 'center', gap: 0.4, cursor: 'pointer', py: 0.3 }}>
-        <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: DARK_TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label} ({count})</Typography>
-        <Box sx={{ color: DARK_TEXT_MUTED, display: 'flex', '& svg': { fontSize: 14 } }}>{open ? <ExpandLessIcon /> : <ExpandMoreIcon />}</Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 0.3 }}>
+        <Box
+          onClick={() => setOpen(!open)}
+          sx={{ display: 'flex', alignItems: 'center', gap: 0.4, cursor: 'pointer' }}
+        >
+          <Typography
+            sx={{
+              fontSize: '0.6rem',
+              fontWeight: 700,
+              color: DARK_TEXT_MUTED,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            {label} ({count})
+          </Typography>
+          <Box sx={{ color: DARK_TEXT_MUTED, display: 'flex', alignItems: 'center' }}>
+            <HugeiconsIcon icon={open ? ArrowUp01Icon : ArrowDown01Icon} size={13} color={DARK_TEXT_MUTED} />
+          </Box>
+        </Box>
+        {action}
       </Box>
       <Collapse in={open}>
         <Box sx={{ pt: 0.3 }}>{children}</Box>
@@ -168,10 +203,282 @@ function SubSection({ label, count, children }: { label: string; count: number; 
   );
 }
 
+export interface SummarizedTimelineEntry {
+  ts: number;
+  kind: string;
+  detail: string;
+  count?: number;
+  isSuspicious?: boolean;
+}
+
+export function summarizeTimeline(
+  entries: { ts: number; kind: string; detail: string }[]
+): SummarizedTimelineEntry[] {
+  if (!entries || entries.length === 0) return [];
+  const out: SummarizedTimelineEntry[] = [];
+  let i = 0;
+  while (i < entries.length) {
+    const current = entries[i];
+
+    // 1. Detect rapid alternating app switches (e.g. Cursor ↔ Chrome ping-pong)
+    if (current.kind === 'APP') {
+      const matchTransition = current.detail.match(/closed (.+?), opened (.+?)(?: —|$)/);
+      if (matchTransition) {
+        const appA = matchTransition[1].trim();
+        const appB = matchTransition[2].trim();
+        let pingPongCount = 1;
+        let j = i + 1;
+        while (j < entries.length && entries[j].kind === 'APP') {
+          const nextMatch = entries[j].detail.match(/closed (.+?), opened (.+?)(?: —|$)/);
+          if (!nextMatch) break;
+          const nextA = nextMatch[1].trim();
+          const nextB = nextMatch[2].trim();
+          if ((nextA === appB && nextB === appA) || (nextA === appA && nextB === appB)) {
+            pingPongCount++;
+            j++;
+          } else {
+            break;
+          }
+        }
+        if (pingPongCount >= 3) {
+          out.push({
+            ts: current.ts,
+            kind: 'APP',
+            detail: `Rapid switching between ${appA} and ${appB} (${pingPongCount}×)`,
+            count: pingPongCount,
+            isSuspicious: true,
+          });
+          i = j;
+          continue;
+        }
+      }
+    }
+
+    // 2. Consecutive voice lines from the same speaker
+    if (current.kind === 'VOICE') {
+      const speakerMatch = current.detail.match(/^([^:]+):\s*\"(.*)\"$/);
+      if (speakerMatch) {
+        const speaker = speakerMatch[1];
+        let mergedText = speakerMatch[2];
+        let count = 1;
+        let j = i + 1;
+        while (j < entries.length && entries[j].kind === 'VOICE') {
+          const nextMatch = entries[j].detail.match(/^([^:]+):\s*\"(.*)\"$/);
+          if (nextMatch && nextMatch[1] === speaker) {
+            mergedText += ` ${nextMatch[2]}`;
+            count++;
+            j++;
+          } else {
+            break;
+          }
+        }
+        out.push({
+          ts: current.ts,
+          kind: 'VOICE',
+          detail: `${speaker}: "${mergedText.length > 95 ? mergedText.slice(0, 92) + '...' : mergedText}"${
+            count > 1 ? ` (${count} segments)` : ''
+          }`,
+          count,
+        });
+        i = j;
+        continue;
+      }
+    }
+
+    // 3. Consecutive identical detail & kind (keystrokes like paste, copy, shortcut, screenshots)
+    let count = 1;
+    let j = i + 1;
+    while (j < entries.length && entries[j].kind === current.kind && entries[j].detail === current.detail) {
+      count++;
+      j++;
+    }
+
+    const isSuspicious =
+      /paste|storm|switch_storm/i.test(current.detail) ||
+      /claude|chatgpt|openai|copilot|aside/i.test(current.detail);
+
+    if (count > 1) {
+      out.push({
+        ts: current.ts,
+        kind: current.kind,
+        detail: `${current.detail} (${count}×)`,
+        count,
+        isSuspicious,
+      });
+      i = j;
+    } else {
+      out.push({
+        ts: current.ts,
+        kind: current.kind,
+        detail: current.detail,
+        count: 1,
+        isSuspicious,
+      });
+      i++;
+    }
+  }
+  return out;
+}
+
+function getTimelineEntryIcon(entry: { kind: string; detail: string }): IconSvgElement {
+  if (entry.kind === 'VOICE') return Mic01Icon;
+  if (entry.kind === 'IMAGE') return Camera01Icon;
+  if (entry.kind === 'KEYSTROKE') {
+    if (/paste/i.test(entry.detail)) return ClipboardIcon;
+    if (/copy/i.test(entry.detail)) return Copy01Icon;
+    return KeyboardIcon;
+  }
+  // APP
+  if (/switch/i.test(entry.detail)) return ArrowLeftRightIcon;
+  if (/claude|chatgpt|openai|copilot|aside/i.test(entry.detail)) return Robot01Icon;
+  if (/chrome|firefox|safari|edge|browser/i.test(entry.detail)) return BrowserIcon;
+  return LaptopIcon;
+}
+
+function TimelineStepper({ entries }: { entries: SummarizedTimelineEntry[] }) {
+  return (
+    <Box sx={{ position: 'relative', py: 0.4 }}>
+      {entries.map((item, idx) => {
+        const isLast = idx === entries.length - 1;
+        const Icon = getTimelineEntryIcon(item);
+        const iconColor = item.isSuspicious ? '#DC2626' : '#6B7280';
+        const nodeBg = item.isSuspicious ? 'rgba(220, 38, 38, 0.08)' : '#F3F4F6';
+        const nodeBorder = item.isSuspicious ? 'rgba(220, 38, 38, 0.25)' : '#E5E7EB';
+
+        return (
+          <Box
+            key={idx}
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              position: 'relative',
+              pb: isLast ? 0.3 : 1,
+            }}
+          >
+            {/* Timestamp */}
+            <Typography
+              sx={{
+                fontSize: '0.625rem',
+                color: DARK_TEXT_MUTED,
+                fontFamily: 'monospace',
+                width: 54,
+                flexShrink: 0,
+                pt: '2px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {formatClock(item.ts)}
+            </Typography>
+
+            {/* Vertical connector track + Node icon */}
+            <Box
+              sx={{
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                width: 22,
+                flexShrink: 0,
+                mr: 0.8,
+              }}
+            >
+              {!isLast && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 18,
+                    bottom: -4,
+                    width: '2px',
+                    bgcolor: 'rgba(0,0,0,0.07)',
+                    zIndex: 0,
+                  }}
+                />
+              )}
+
+              <Box
+                sx={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: '6px',
+                  bgcolor: nodeBg,
+                  border: `1px solid ${nodeBorder}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 1,
+                  color: iconColor,
+                }}
+              >
+                <HugeiconsIcon icon={Icon} size={11} color={iconColor} />
+              </Box>
+            </Box>
+
+            {/* Event detail */}
+            <Box sx={{ flex: 1, minWidth: 0, pt: '1px' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, mb: 0.2 }}>
+                <Typography
+                  sx={{
+                    fontSize: '0.55rem',
+                    fontWeight: 700,
+                    color: item.isSuspicious ? '#DC2626' : DARK_TEXT_MUTED,
+                    letterSpacing: '0.03em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {item.kind}
+                </Typography>
+                {item.count && item.count > 1 && (
+                  <Box
+                    sx={{
+                      px: 0.5,
+                      py: 0.1,
+                      borderRadius: '3px',
+                      bgcolor: item.isSuspicious ? 'rgba(220, 38, 38, 0.12)' : 'rgba(0,0,0,0.06)',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: '0.55rem',
+                        fontWeight: 700,
+                        color: item.isSuspicious ? '#DC2626' : '#374151',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {item.count}×
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+              <Typography
+                sx={{
+                  fontSize: '0.675rem',
+                  color: DARK_TEXT_SECONDARY,
+                  lineHeight: 1.35,
+                  fontWeight: item.isSuspicious ? 600 : 400,
+                  wordBreak: 'break-word',
+                }}
+              >
+                {item.detail}
+              </Typography>
+            </Box>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
 export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScreenshot }: { result: WindowResult; isLatest: boolean; onExpandScreenshot: (urls: string[], startIndex: number) => void }) {
   const [expanded, setExpanded] = useState(isLatest);
+  const [showRaw, setShowRaw] = useState(false);
   const color = getRiskColor(result.risk);
-  const hasTimeline = result.timeline && result.timeline.length > 0;
+  const rawTimeline = result.timeline || [];
+  const hasTimeline = rawTimeline.length > 0;
+  const summarizedTimeline = useMemo(() => summarizeTimeline(rawTimeline), [rawTimeline]);
+  const displayTimeline = showRaw ? (rawTimeline as SummarizedTimelineEntry[]) : summarizedTimeline;
+  const canToggleRaw = rawTimeline.length > summarizedTimeline.length;
   const hasEvidence = result.evidence && result.evidence.length > 0;
   const hasExpandable = Boolean(result.narrative || hasTimeline || hasEvidence || result.timeline_note);
   // Narrative is the headline now — fall back to the old summary field for
@@ -187,7 +494,7 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
             {result.confidence && (
               <Tooltip title={`Confidence: ${result.confidence}`} arrow>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}>
-                  <ShieldIcon sx={{ fontSize: 11, color: getConfidenceColor(result.confidence) }} />
+                  <HugeiconsIcon icon={Shield01Icon} size={11} color={getConfidenceColor(result.confidence)} />
                   <Typography sx={{ fontSize: '0.55rem', color: getConfidenceColor(result.confidence), fontWeight: 600 }}>{result.confidence}</Typography>
                 </Box>
               </Tooltip>
@@ -195,7 +502,11 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_MUTED }}>{formatDateTime(result.processed_at)}</Typography>
-            {hasExpandable && <Box sx={{ color: DARK_TEXT_MUTED, display: 'flex', '& svg': { fontSize: 16 } }}>{expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}</Box>}
+            {hasExpandable && (
+              <Box sx={{ color: DARK_TEXT_MUTED, display: 'flex', alignItems: 'center' }}>
+                <HugeiconsIcon icon={expanded ? ArrowUp01Icon : ArrowDown01Icon} size={14} color={DARK_TEXT_MUTED} />
+              </Box>
+            )}
           </Box>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.3, mb: 0.5 }}>
@@ -212,12 +523,33 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
       <Collapse in={expanded}>
         <Box sx={{ px: 1.2, pb: 1.2, pt: 0.2 }}>
           {hasTimeline && (
-            <SubSection label="Timeline" count={result.timeline!.length}>
-              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                {result.timeline!.map((e, i) => (
-                  <TimelineRow key={i} time={formatClock(e.ts)} kind={e.kind} detail={e.detail} />
-                ))}
-              </Box>
+            <SubSection
+              label="Timeline"
+              count={summarizedTimeline.length}
+              action={
+                canToggleRaw ? (
+                  <Button
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowRaw((prev) => !prev);
+                    }}
+                    sx={{
+                      fontSize: '0.55rem',
+                      textTransform: 'none',
+                      py: 0,
+                      px: 0.6,
+                      minWidth: 0,
+                      color: '#2563EB',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {showRaw ? `Summarized (${summarizedTimeline.length})` : `Raw (${rawTimeline.length})`}
+                  </Button>
+                ) : undefined
+              }
+            >
+              <TimelineStepper entries={displayTimeline} />
             </SubSection>
           )}
           {hasEvidence && (
@@ -227,7 +559,7 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
           )}
           {!result.narrative && result.timeline_note && (
             <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'flex-start', px: 1, py: 0.5, borderRadius: '6px', bgcolor: 'rgba(0,0,0,0.03)' }}>
-              <TimelineIcon sx={{ fontSize: 11, color: DARK_TEXT_MUTED, mt: '2px', flexShrink: 0 }} />
+              <HugeiconsIcon icon={Clock01Icon} size={11} color={DARK_TEXT_MUTED} style={{ marginTop: '2px', flexShrink: 0 }} />
               <Typography sx={{ fontSize: '0.625rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.4 }}>{result.timeline_note}</Typography>
             </Box>
           )}
@@ -247,7 +579,7 @@ export function ImageAnalysisCard({ result: ia, onExpand }: { result: ImageAnaly
       <Box sx={{ p: 1.2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <CameraIcon sx={{ fontSize: 14, color: iaColor }} />
+            <HugeiconsIcon icon={Camera01Icon} size={14} color={iaColor} />
             <Chip label={ia.risk?.toUpperCase()} size="small" sx={{ height: 20, fontSize: '0.6rem', fontWeight: 700, bgcolor: `${iaColor}15`, color: iaColor }} />
             <Typography sx={{ fontSize: '0.55rem', color: DARK_TEXT_MUTED }}>{ia.image_count} images</Typography>
           </Box>
@@ -380,7 +712,7 @@ function RollingSummaryCard({ results }: { results: WindowResult[] }) {
   const latest = results[results.length - 1];
   const trend = computeTrend(results);
   const topSignals = getTopSignals(results);
-  const TrendIcon = trend.direction === 'up' ? TrendUpIcon : trend.direction === 'down' ? TrendDownIcon : TrendFlatIcon;
+  const trendIcon = trend.direction === 'up' ? ArrowUpRight01Icon : trend.direction === 'down' ? ArrowDownRight01Icon : ArrowRight01Icon;
   const trendColor = trend.direction === 'up' ? '#ef4444' : trend.direction === 'down' ? '#22c55e' : DARK_TEXT_MUTED;
   const trendLabel = trend.direction === 'up' ? 'Rising' : trend.direction === 'down' ? 'Declining' : 'Stable';
 
@@ -389,7 +721,7 @@ function RollingSummaryCard({ results }: { results: WindowResult[] }) {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
         <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: DARK_TEXT_MUTED }}>Summary</Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
-          <TrendIcon sx={{ fontSize: 13, color: trendColor }} />
+          <HugeiconsIcon icon={trendIcon} size={13} color={trendColor} />
           <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, color: trendColor }}>
             {trendLabel}{trend.priorAvg > 0 ? ` (${trend.priorAvg} → ${trend.recentAvg})` : ''}
           </Typography>
@@ -435,7 +767,9 @@ function WindowGroupHeader({ group, isExpanded, onToggle }: { group: WindowGroup
       <Typography sx={{ fontSize: '0.65rem', color: DARK_TEXT_SECONDARY, flex: 1 }}>
         {count === 1 ? '1 window' : `${count} windows`} · {timeRange}
       </Typography>
-      <UnfoldMoreIcon sx={{ fontSize: 14, color: DARK_TEXT_MUTED, transform: isExpanded ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s' }} />
+      <Box sx={{ display: 'flex', alignItems: 'center', color: DARK_TEXT_MUTED, transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}>
+        <HugeiconsIcon icon={ArrowDown01Icon} size={14} color={DARK_TEXT_MUTED} />
+      </Box>
     </Box>
   );
 }
@@ -497,7 +831,7 @@ export default function AnalyticsPanel({
               <Button
                 variant="outlined"
                 size="small"
-                startIcon={<VideoCallIcon sx={{ fontSize: '14px !important' }} />}
+                startIcon={<HugeiconsIcon icon={ComputerVideoCallIcon} size={14} />}
                 onClick={() =>
                   window.open(
                     interview.provider_metadata.join_url,
@@ -536,7 +870,7 @@ export default function AnalyticsPanel({
                 <Button
                   variant="outlined"
                   size="small"
-                  startIcon={<CameraIcon sx={{ fontSize: '14px !important' }} />}
+                  startIcon={<HugeiconsIcon icon={Camera01Icon} size={14} />}
                   onClick={() => {
                     riskData.incrementPendingImageAnalysis(1);
                     riskData.emitCaptureScreenshots();
@@ -625,7 +959,7 @@ export default function AnalyticsPanel({
                   <Typography sx={{ fontSize: '0.6rem', color: DARK_TEXT_SECONDARY }}>Latest</Typography>
                   {latestResult.confidence && (
                     <Tooltip title={`Confidence: ${latestResult.confidence}`} arrow>
-                      <Chip icon={<ShieldIcon sx={{ fontSize: '9px !important' }} />} label={latestResult.confidence} size="small" sx={{ height: 16, fontSize: '0.5rem', fontWeight: 600, bgcolor: `${getConfidenceColor(latestResult.confidence)}18`, color: getConfidenceColor(latestResult.confidence), '& .MuiChip-icon': { color: getConfidenceColor(latestResult.confidence), ml: 0.3 }, '& .MuiChip-label': { px: 0.4 } }} />
+                      <Chip icon={<HugeiconsIcon icon={Shield01Icon} size={9} color={getConfidenceColor(latestResult.confidence)} />} label={latestResult.confidence} size="small" sx={{ height: 16, fontSize: '0.5rem', fontWeight: 600, bgcolor: `${getConfidenceColor(latestResult.confidence)}18`, color: getConfidenceColor(latestResult.confidence), '& .MuiChip-icon': { color: getConfidenceColor(latestResult.confidence), ml: 0.3 }, '& .MuiChip-label': { px: 0.4 } }} />
                     </Tooltip>
                   )}
                 </Box>
@@ -634,7 +968,7 @@ export default function AnalyticsPanel({
               <LinearProgress variant="determinate" value={latestResult.score} sx={{ height: 5, borderRadius: 3, bgcolor: 'rgba(0,0,0,0.04)', '& .MuiLinearProgress-bar': { bgcolor: getScoreColor(latestResult.score), borderRadius: 3 } }} />
               {totalCorrelations > 0 && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3, mt: 0.5 }}>
-                  <WarningIcon sx={{ fontSize: 10, color: '#f59e0b' }} />
+                  <HugeiconsIcon icon={Alert02Icon} size={10} color="#f59e0b" />
                   <Typography sx={{ fontSize: '0.6rem', color: '#f59e0b', fontWeight: 600 }}>{totalCorrelations} correlation{totalCorrelations !== 1 ? 's' : ''} detected</Typography>
                 </Box>
               )}
@@ -743,7 +1077,7 @@ export default function AnalyticsPanel({
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 1.5 }}>
               <Box sx={{ width: 40, height: 40, borderRadius: '12px', bgcolor: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <DotIcon sx={{ fontSize: 14, color: DARK_TEXT_MUTED }} />
+                <HugeiconsIcon icon={Alert02Icon} size={18} color={DARK_TEXT_MUTED} />
               </Box>
               <Box sx={{ textAlign: 'center' }}>
                 <Typography sx={{ fontSize: '0.8rem', fontWeight: 500, color: DARK_TEXT, mb: 0.3 }}>No alerts yet</Typography>
@@ -838,14 +1172,11 @@ export default function AnalyticsPanel({
           id="analytics-tabpanel-2"
           aria-labelledby="analytics-tab-2"
           sx={{
-            flex: 1, overflow: 'auto', px: 1.5, py: 1, minHeight: 0,
+            flex: 1, overflow: 'auto', minHeight: 0,
             '&::-webkit-scrollbar': { width: '4px' },
             '&::-webkit-scrollbar-thumb': { background: 'rgba(0,0,0,0.15)', borderRadius: '4px' },
           }}
         >
-          {/* Capture button moved to the header row alongside Start/Stop */}
-
-          {/* Screenshot analysis results */}
           {imageAnalysisResults.length > 0 ? (
             <Box>
               {[...imageAnalysisResults].reverse().map((ia) => (
@@ -855,7 +1186,7 @@ export default function AnalyticsPanel({
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 1.5 }}>
               <Box sx={{ width: 40, height: 40, borderRadius: '12px', bgcolor: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <CameraIcon sx={{ fontSize: 18, color: DARK_TEXT_MUTED }} />
+                <HugeiconsIcon icon={Camera01Icon} size={18} color={DARK_TEXT_MUTED} />
               </Box>
               <Box sx={{ textAlign: 'center' }}>
                 <Typography sx={{ fontSize: '0.8rem', fontWeight: 500, color: DARK_TEXT, mb: 0.3 }}>No screenshots yet</Typography>
@@ -932,7 +1263,7 @@ export function TranscriptFeed({
         }}
       >
         <Box sx={{ width: 40, height: 40, borderRadius: '12px', bgcolor: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <VoiceIcon sx={{ fontSize: 18, color: DARK_TEXT_MUTED }} />
+          <HugeiconsIcon icon={Mic01Icon} size={18} color={DARK_TEXT_MUTED} />
         </Box>
         <Box sx={{ textAlign: 'center' }}>
           <Typography sx={{ fontSize: '0.8rem', fontWeight: 500, color: DARK_TEXT, mb: 0.3 }}>
