@@ -486,5 +486,69 @@ describe('PulseAlertBanner — appInfos', () => {
       expect(screen.queryByText('Cheating Platform Detected')).not.toBeInTheDocument();
       expect(screen.getAllByText('General Usage').length).toBeGreaterThan(0);
     });
+
+    test('interleaves app events and keyboard alerts in pure chronological order regardless of modality', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            { categoryId: 'ai_tools', categoryLabel: 'AI Tools', apps: ['Cursor'], matchedKeywords: [] },
+          ],
+          activities: [],
+          timestamp: '2026-07-05T10:00:00.000Z',
+        },
+        {
+          detections: [],
+          activities: [],
+          keyboardAlerts: [
+            {
+              type: 'app_switch_storm',
+              label: 'Rapid app switching (12×): Cursor → Google Chrome → Cursor → Google Chrome',
+              riskLevel: 'MEDIUM',
+            },
+          ],
+          timestamp: '2026-07-05T10:16:31.000Z',
+        },
+        {
+          detections: [
+            { categoryId: 'cheating_platforms', categoryLabel: 'Cheating Platform Detected', apps: ['Aside'], matchedKeywords: [] },
+          ],
+          activities: ['app_closed:aside'],
+          timestamp: '2026-07-05T10:35:18.000Z',
+        },
+      ];
+
+      const { container } = render(<PulseAlertBanner alerts={alerts} />);
+      const text = container.textContent || '';
+
+      // 10:16:31 alert must appear before 10:35:18 app close in the DOM
+      const lower = text.toLowerCase();
+      const switchIndex = lower.indexOf('rapid app switching');
+      const closeIndex = lower.indexOf('closed aside');
+
+      expect(switchIndex).toBeGreaterThan(-1);
+      expect(closeIndex).toBeGreaterThan(-1);
+      expect(switchIndex).toBeLessThan(closeIndex);
+    });
+
+    test('summarizes rapid app switching arrow chain into condensed between/across format', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [],
+          activities: [],
+          keyboardAlerts: [
+            {
+              type: 'app_switch_storm',
+              label: 'Rapid app switching (12×): Cursor → Google Chrome → Cursor → Google Chrome → Cursor → Google Chrome',
+              riskLevel: 'MEDIUM',
+            },
+          ],
+          timestamp: '2026-07-05T10:16:31.000Z',
+        },
+      ];
+
+      render(<PulseAlertBanner alerts={alerts} />);
+      expect(screen.getByText('Rapid app switching (12×): between Cursor and Google Chrome')).toBeInTheDocument();
+      expect(screen.queryByText(/→/)).not.toBeInTheDocument();
+    });
   });
 });

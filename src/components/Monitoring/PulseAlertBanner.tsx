@@ -148,6 +148,30 @@ function formatDuration(ms: number): string {
   return `${diffHr}h ${diffMin % 60}m`;
 }
 
+function summarizeLabel(label: string): string {
+  // If label matches "Rapid app switching (N×): A → B → A → B..."
+  const match = label.match(/^(Rapid app switching \(\d+×\)):\s*(.+)$/);
+  if (match) {
+    const prefix = match[1];
+    const chainStr = match[2];
+    const steps = chainStr.split('→').map((s) => s.trim()).filter(Boolean);
+    const unique = [...new Set(steps)];
+    if (unique.length === 2) {
+      return `${prefix}: between ${unique[0]} and ${unique[1]}`;
+    }
+    if (unique.length > 2) {
+      if (unique.length <= 4) {
+        return `${prefix}: across ${unique.join(', ')}`;
+      }
+      return `${prefix}: across ${unique.slice(0, 3).join(', ')} +${unique.length - 3} more`;
+    }
+    if (unique.length === 1) {
+      return `${prefix}: in ${unique[0]}`;
+    }
+  }
+  return label;
+}
+
 interface AppEventRow {
   app: string;
   ts: number;
@@ -276,29 +300,62 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
   // Flat chronological open/close event list (one row per transition).
   const appEventRows = buildAppEventRows(sortedAlerts, stealthAppsSet);
 
-  // Sort rows chronologically ("timebuild wise"). If timestamps are equal,
-  // cheating platforms & higher risk sort first.
   const isTopPriority = (id: string) => id.startsWith('cheating_platforms');
-  const sortedAppRows = [...appEventRows].sort((a, b) => {
+
+  // Track latest timestamp per activity for chronological placement
+  const latestTsByActivity = new Map<string, number>();
+  for (const alert of sortedAlerts) {
+    const ts = new Date(alert.timestamp).getTime();
+    for (const activity of alert.activities) {
+      if (activity.startsWith("app_closed:")) continue;
+      latestTsByActivity.set(activity, ts);
+    }
+  }
+
+  // Keyboard alerts
+  const allKeyboardAlerts = alerts
+    .flatMap((a) => (a.keyboardAlerts ?? []).map((k: KeyboardAlert) => ({ ...k, timestamp: a.timestamp })));
+
+  // Build unified items array so all modalities/events interleave in 100% chronological order
+  type UnifiedItem =
+    | { type: 'app'; key: string; ts: number; isPriority: boolean; row: AppEventRow }
+    | { type: 'keyboard'; key: string; ts: number; isPriority: boolean; alert: KeyboardAlert & { timestamp: string } }
+    | { type: 'activity'; key: string; ts: number; isPriority: boolean; activity: string; count: number };
+
+  const appItems: UnifiedItem[] = appEventRows.map((row, i) => ({
+    type: 'app',
+    key: `app-${row.app}-${row.kind}-${row.ts}-${i}`,
+    ts: row.ts,
+    isPriority: isTopPriority(row.categoryId),
+    row,
+  }));
+
+  const keyboardItems: UnifiedItem[] = allKeyboardAlerts.map((k, i) => ({
+    type: 'keyboard',
+    key: `kb-${k.timestamp}-${k.type}-${i}`,
+    ts: new Date(k.timestamp).getTime(),
+    isPriority: k.riskLevel === 'CRITICAL' || k.riskLevel === 'HIGH',
+    alert: k,
+  }));
+
+  const activityItems: UnifiedItem[] = Array.from(activityCounts.entries()).map(([activity, count]) => ({
+    type: 'activity',
+    key: `act-${activity}`,
+    ts: latestTsByActivity.get(activity) ?? 0,
+    isPriority: false,
+    activity,
+    count,
+  }));
+
+  // Pure chronological sort: oldest first. When timestamps match, high priority sorts first.
+  const unifiedTimeline = [...appItems, ...keyboardItems, ...activityItems].sort((a, b) => {
     if (a.ts !== b.ts) return a.ts - b.ts;
-    if (isTopPriority(a.categoryId) && !isTopPriority(b.categoryId)) return -1;
-    if (!isTopPriority(a.categoryId) && isTopPriority(b.categoryId)) return 1;
+    if (a.isPriority && !b.isPriority) return -1;
+    if (!a.isPriority && b.isPriority) return 1;
     return 0;
   });
 
-  // Sorted unique activities with their counts
-  const allActivities = Array.from(activityCounts.entries())
-    .map(([activity, count]) => ({ activity, count }));
-
-  // Keyboard alerts — a flat chronological FEED, every occurrence (NO dedup).
-  // Unlike app detections (deduped per category), each keyboard event is a
-  // distinct moment we want the interviewer to see each time it happens.
-  const allKeyboardAlerts = alerts
-    .flatMap((a) => (a.keyboardAlerts ?? []).map((k: KeyboardAlert) => ({ ...k, timestamp: a.timestamp })))
-    .sort((x, y) => new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime());
-
-  if (alerts.length === 0) return null;
-  if (sortedAppRows.length === 0 && allActivities.length === 0 && allKeyboardAlerts.length === 0) return null;
+  if (alerts.length === 0 || unifiedTimeline.length === 0) return null;
 
   return (
     <Box
@@ -310,28 +367,228 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
         gap,
       }}
     >
-      {/* Individual cards for each app open/close event, ordered chronologically */}
-      {sortedAppRows.map((row, i) => {
-        const config = getConfig(row.categoryId);
-        const Icon = config.icon;
-        const info = infoByApp.get(row.app.toLowerCase());
-        const label =
-          row.kind === 'open'
-            ? `opened ${row.app}${info?.window_title ? ` — "${info.window_title}"` : ''}`
-            : `closed ${row.app}${
-                row.cycleMs != null ? ` — open ${formatDuration(row.cycleMs)}` : ''
-              }`;
+      {/* Unified chronological timeline feed — all events ordered purely by time */}
+      {unifiedTimeline.map((item) => {
+        if (item.type === 'app') {
+          const row = item.row;
+          const config = getConfig(row.categoryId);
+          const Icon = config.icon;
+          const info = infoByApp.get(row.app.toLowerCase());
+          const label =
+            row.kind === 'open'
+              ? `opened ${row.app}${info?.window_title ? ` — "${info.window_title}"` : ''}`
+              : `closed ${row.app}${
+                  row.cycleMs != null ? ` — open ${formatDuration(row.cycleMs)}` : ''
+                }`;
 
+          return (
+            <Box
+              key={item.key}
+              data-testid="pulse-event-card"
+              sx={{
+                p: 1.25,
+                borderRadius: '8px',
+                bgcolor: '#FFFFFF',
+                border: `1px solid ${config.color}25`,
+                borderLeft: `3px solid ${config.color}`,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 1.5,
+                transition: 'all 0.15s ease',
+                '&:hover': {
+                  borderColor: `${config.color}50`,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+                },
+              }}
+            >
+              {/* Left: App Icon + Opened/Closed Label */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1 }}>
+                <Box
+                  sx={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: '6px',
+                    bgcolor: config.bg,
+                    color: config.color,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Icon sx={{ fontSize: 15 }} />
+                </Box>
+                <Typography
+                  sx={{
+                    fontSize: '0.75rem',
+                    fontWeight: row.kind === 'open' ? 700 : 500,
+                    color: row.kind === 'open' ? '#111827' : '#6B7280',
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {label}
+                </Typography>
+              </Box>
+
+              {/* Right: Category badge + Formatted Timestamp */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                <Box
+                  sx={{
+                    px: 0.75,
+                    py: 0.2,
+                    borderRadius: '4px',
+                    bgcolor: config.bg,
+                    border: `1px solid ${config.color}20`,
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: '0.625rem',
+                      fontWeight: 700,
+                      color: config.color,
+                      letterSpacing: '0.02em',
+                      textTransform: 'uppercase',
+                      lineHeight: 1.2,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {row.categoryLabel}
+                  </Typography>
+                </Box>
+                <Typography
+                  sx={{
+                    fontSize: '0.65rem',
+                    color: '#6B7280',
+                    fontFamily: 'monospace',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {formatClock(row.ts)}
+                </Typography>
+              </Box>
+            </Box>
+          );
+        }
+
+        if (item.type === 'keyboard') {
+          const k = item.alert;
+          const color = KB_RISK_COLOR[k.riskLevel] ?? '#6B7280';
+          const KbIcon = kbIcon(k.type);
+          const label = summarizeLabel(k.label);
+
+          return (
+            <Box
+              key={item.key}
+              sx={{
+                p: 1.25,
+                borderRadius: '8px',
+                bgcolor: '#FFFFFF',
+                border: `1px solid ${color}25`,
+                borderLeft: `3px solid ${color}`,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 1.5,
+                transition: 'all 0.15s ease',
+                '&:hover': {
+                  borderColor: `${color}50`,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+                },
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1 }}>
+                <Box
+                  sx={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: '6px',
+                    bgcolor: `${color}15`,
+                    color,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <KbIcon sx={{ fontSize: 15 }} />
+                </Box>
+                <Typography
+                  sx={{
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    color: '#111827',
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {label}
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                {k.riskLevel && k.riskLevel !== 'LOW' && (
+                  <Box
+                    sx={{
+                      px: 0.75,
+                      py: 0.2,
+                      borderRadius: '4px',
+                      bgcolor: `${color}15`,
+                      border: `1px solid ${color}30`,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: '0.625rem',
+                        fontWeight: 700,
+                        color,
+                        letterSpacing: '0.02em',
+                        textTransform: 'uppercase',
+                        lineHeight: 1.2,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {k.riskLevel}
+                    </Typography>
+                  </Box>
+                )}
+                <Typography
+                  sx={{
+                    fontSize: '0.65rem',
+                    color: '#6B7280',
+                    fontFamily: 'monospace',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {formatClock(k.timestamp)}
+                </Typography>
+              </Box>
+            </Box>
+          );
+        }
+
+        const actConfig = getActivityConfig(item.activity);
+        const ActIcon = actConfig.icon;
         return (
           <Box
-            key={`${row.app}-${row.kind}-${row.ts}-${i}`}
-            data-testid="pulse-event-card"
+            key={item.key}
             sx={{
               p: 1.25,
               borderRadius: '8px',
               bgcolor: '#FFFFFF',
-              border: `1px solid ${config.color}25`,
-              borderLeft: `3px solid ${config.color}`,
+              border: `1px solid ${actConfig.color}25`,
+              borderLeft: `3px solid ${actConfig.color}`,
               boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
               display: 'flex',
               alignItems: 'center',
@@ -339,70 +596,69 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
               gap: 1.5,
               transition: 'all 0.15s ease',
               '&:hover': {
-                borderColor: `${config.color}50`,
+                borderColor: `${actConfig.color}50`,
                 boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
               },
             }}
           >
-            {/* Left: App Icon + Opened/Closed Label */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1 }}>
               <Box
                 sx={{
                   width: 26,
                   height: 26,
                   borderRadius: '6px',
-                  bgcolor: config.bg,
-                  color: config.color,
+                  bgcolor: actConfig.bg,
+                  color: actConfig.color,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0,
                 }}
               >
-                <Icon sx={{ fontSize: 15 }} />
+                <ActIcon sx={{ fontSize: 15 }} />
               </Box>
               <Typography
                 sx={{
                   fontSize: '0.75rem',
-                  fontWeight: row.kind === 'open' ? 700 : 500,
-                  color: row.kind === 'open' ? '#111827' : '#6B7280',
+                  fontWeight: 700,
+                  color: '#111827',
+                  letterSpacing: '0.01em',
+                  textTransform: 'uppercase',
                   minWidth: 0,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                 }}
               >
-                {label}
+                {actConfig.label}
               </Typography>
-            </Box>
-
-            {/* Right: Category badge + Formatted Timestamp */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-              <Box
-                sx={{
-                  px: 0.75,
-                  py: 0.2,
-                  borderRadius: '4px',
-                  bgcolor: config.bg,
-                  border: `1px solid ${config.color}20`,
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-              >
-                <Typography
+              {item.count > 1 && (
+                <Box
                   sx={{
-                    fontSize: '0.625rem',
-                    fontWeight: 700,
-                    color: config.color,
-                    letterSpacing: '0.02em',
-                    textTransform: 'uppercase',
-                    lineHeight: 1.2,
-                    whiteSpace: 'nowrap',
+                    minWidth: 18,
+                    height: 18,
+                    borderRadius: '4px',
+                    bgcolor: `${actConfig.color}25`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    px: 0.5,
                   }}
                 >
-                  {row.categoryLabel}
-                </Typography>
-              </Box>
+                  <Typography
+                    sx={{
+                      fontSize: '0.625rem',
+                      fontWeight: 700,
+                      color: actConfig.color,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {item.count}×
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+            {item.ts > 0 && (
               <Typography
                 sx={{
                   fontSize: '0.65rem',
@@ -411,102 +667,9 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                   whiteSpace: 'nowrap',
                 }}
               >
-                {formatClock(row.ts)}
+                {formatClock(item.ts)}
               </Typography>
-            </Box>
-          </Box>
-        );
-      })}
-
-      {/* Keyboard & clipboard activities with occurrence counts */}
-      {allActivities.map(({ activity, count }) => {
-        const actConfig = getActivityConfig(activity);
-        const ActIcon = actConfig.icon;
-        return (
-          <Box
-            key={activity}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.75,
-              px: 1,
-              py: 0.5,
-              borderRadius: '8px',
-              bgcolor: actConfig.bg,
-              border: `1px solid ${actConfig.color}20`,
-            }}
-          >
-            <ActIcon sx={{ fontSize: 14, color: actConfig.color, flexShrink: 0 }} />
-            <Typography
-              sx={{
-                fontSize: '0.7rem',
-                fontWeight: 700,
-                color: actConfig.color,
-                letterSpacing: '0.02em',
-                textTransform: 'uppercase',
-                flex: 1,
-              }}
-            >
-              {actConfig.label}
-            </Typography>
-            {count > 1 && (
-              <Box
-                sx={{
-                  minWidth: 18,
-                  height: 18,
-                  borderRadius: '4px',
-                  bgcolor: `${actConfig.color}25`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  px: 0.5,
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontSize: '0.625rem',
-                    fontWeight: 700,
-                    color: actConfig.color,
-                    lineHeight: 1,
-                  }}
-                >
-                  {count}×
-                </Typography>
-              </Box>
             )}
-          </Box>
-        );
-      })}
-
-      {/* Keyboard event FEED — every occurrence, with app context + time. */}
-      {allKeyboardAlerts.map((k, i) => {
-        const color = KB_RISK_COLOR[k.riskLevel] ?? '#6B7280';
-        const KbIcon = kbIcon(k.type);
-        return (
-          <Box
-            key={`${k.timestamp}-${i}`}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 0.75,
-              px: 1,
-              py: 0.5,
-              borderRadius: '8px',
-              bgcolor: `${color}12`,
-              border: `1px solid ${color}30`,
-            }}
-          >
-            <KbIcon sx={{ fontSize: 15, color, flexShrink: 0 }} />
-            <Typography
-              sx={{ fontSize: '0.72rem', fontWeight: 600, color: '#1F2937', flex: 1, minWidth: 0 }}
-            >
-              {k.label}
-            </Typography>
-            <Typography
-              sx={{ fontSize: '0.6rem', fontWeight: 500, color: '#9CA3AF', whiteSpace: 'nowrap', flexShrink: 0 }}
-            >
-              {formatClock(k.timestamp)}
-            </Typography>
           </Box>
         );
       })}
