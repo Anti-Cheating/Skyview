@@ -565,5 +565,94 @@ describe('PulseAlertBanner — appInfos', () => {
       expect(screen.getByText('Rapid app switching (12×): between Cursor and Google Chrome')).toBeInTheDocument();
       expect(screen.queryByText(/→/)).not.toBeInTheDocument();
     });
+
+    test('renders row elements in order: App Name before Window Title before Category Badge', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            {
+              categoryId: 'ai_tools',
+              categoryLabel: 'AI Tools',
+              apps: ['ChatGPT'],
+              appInfos: [
+                {
+                  app_name: 'ChatGPT',
+                  window_title: 'ChatGPT - Prompt Engineering',
+                  is_excluded: false,
+                },
+              ],
+              matchedKeywords: [],
+            },
+          ],
+          activities: [],
+          timestamp: TS,
+        },
+      ];
+
+      const { container } = render(<PulseAlertBanner alerts={alerts} />);
+      const card = container.querySelector('[data-testid="pulse-event-card"]');
+      expect(card).toBeInTheDocument();
+
+      const text = card?.textContent || '';
+      const appIndex = text.indexOf('ChatGPT');
+      const titleIndex = text.indexOf('ChatGPT - Prompt Engineering');
+      const categoryIndex = text.indexOf('AI Tools');
+
+      expect(appIndex).toBeGreaterThan(-1);
+      expect(titleIndex).toBeGreaterThan(-1);
+      expect(categoryIndex).toBeGreaterThan(-1);
+
+      // Order: App Name < Window Title < Category
+      expect(appIndex).toBeLessThan(titleIndex);
+      expect(titleIndex).toBeLessThan(categoryIndex);
+    });
+
+    test('truncates long window title by default and allows expanding/collapsing full title', async () => {
+      const longTitle = 'Trueyy — harshrathod@Harshs-Mac-mini — -zsh — 229×51 Workspace Active Session';
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            {
+              categoryId: 'ai_tools',
+              categoryLabel: 'AI Tools',
+              apps: ['Cursor'],
+              appInfos: [
+                {
+                  app_name: 'Cursor',
+                  window_title: longTitle,
+                  is_excluded: false,
+                },
+              ],
+              matchedKeywords: [],
+            },
+          ],
+          activities: [],
+          timestamp: TS,
+        },
+      ];
+
+      const { userEvent } = await import('@testing-library/user-event');
+      const user = userEvent.setup();
+      render(<PulseAlertBanner alerts={alerts} />);
+
+      const titleEl = screen.getByTestId('pulse-window-title');
+      expect(titleEl).toHaveAttribute('aria-expanded', 'false');
+      // Truncated title ends with ellipsis
+      expect(titleEl.textContent).toContain('...');
+      expect(titleEl.textContent).not.toBe(longTitle);
+
+      const toggleBtn = screen.getByTestId('expand-title-toggle');
+      expect(toggleBtn).toBeInTheDocument();
+
+      // Click to expand
+      await user.click(toggleBtn);
+      expect(titleEl).toHaveAttribute('aria-expanded', 'true');
+      expect(titleEl.textContent).toContain(longTitle);
+
+      // Click again to collapse
+      await user.click(titleEl);
+      expect(titleEl).toHaveAttribute('aria-expanded', 'false');
+      expect(titleEl.textContent).toContain('...');
+    });
   });
 });

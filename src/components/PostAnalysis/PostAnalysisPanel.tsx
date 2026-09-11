@@ -7,6 +7,7 @@ import { MOCK_ANALYSIS_SCENARIOS, type MockScenario } from "../../mockData/postA
 import { InterviewService } from "../../services/interview.service";
 import { refreshAccessToken } from "../../services/api.service";
 import type { InterviewSession } from "../../types/interview.types";
+import AnalysisRunningAnimation from "./AnalysisRunningAnimation";
 import "./PostAnalysisPanel.css";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -475,10 +476,14 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   if (loading) {
     // Embedded: stay invisible — the host shows its own loader (button spinner).
     if (embedded) return null;
-    return (
+    return pendingPoll ? (
+      <div className="pa-state" style={{ padding: '24px 16px' }}>
+        <AnalysisRunningAnimation />
+      </div>
+    ) : (
       <div className="pa-state">
         <div className="pa-spinner" />
-        <p>{pendingPoll ? "Analysis is running — this may take a moment." : "Loading analysis…"}</p>
+        <p>Loading analysis…</p>
       </div>
     );
   }
@@ -492,7 +497,11 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   }
   if (!analysis) return <div className="pa-state"><p>No analysis available</p></div>;
   if (analysis.status === "pending") {
-    return <div className="pa-state"><div className="pa-spinner" /><p>Analysis is being processed…</p></div>;
+    return (
+      <div className="pa-state" style={{ padding: '24px 16px' }}>
+        <AnalysisRunningAnimation />
+      </div>
+    );
   }
   if (analysis.analysis_failed) {
     return (

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Box, Typography } from '@mui/material';
 import { HugeiconsIcon } from '@hugeicons/react';
 import type { IconSvgElement } from '@hugeicons/react';
@@ -26,6 +27,8 @@ import {
   BrowserIcon,
   Link01Icon,
   KeyboardIcon,
+  ArrowDown01Icon,
+  ArrowUp01Icon,
 } from '@hugeicons/core-free-icons';
 import { formatClock } from '../../utils/dateFormat';
 import type { PulseAlert, KeyboardAlert } from '../../hooks/useRiskSocket';
@@ -151,13 +154,12 @@ function formatDuration(ms: number): string {
 
 function cleanTitle(title?: string): string {
   if (!title) return '';
-  const cleaned = title
+  return title
     .replace(/\s*—\s*Trueyy$/i, '')
     .replace(/\s*-\s*Trueyy$/i, '')
     .replace(/\s*—\s*Google Chrome$/i, '')
     .replace(/\s*-\s*Google Chrome$/i, '')
     .trim();
-  return cleaned.length > 35 ? `${cleaned.slice(0, 32)}...` : cleaned;
 }
 
 function summarizeLabel(label: string): string {
@@ -257,6 +259,20 @@ function buildAppEventRows(
 }
 
 export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBannerProps) {
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
   const activityCounts = new Map<string, number>();
 
   // Sort alerts chronologically to trace state transitions accurately
@@ -466,7 +482,72 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                   {row.app}
                 </Typography>
 
-                {/* Category Badge — BESIDE APP */}
+                {/* Window Title (with expand option) — BESIDE APP */}
+                {row.kind === 'open' && cleanedTitle && (() => {
+                  const isExpanded = expandedKeys.has(item.key);
+                  const displayTitle = isExpanded
+                    ? (info?.window_title || cleanedTitle)
+                    : (cleanedTitle.length > 32 ? `${cleanedTitle.slice(0, 30)}...` : cleanedTitle);
+                  return (
+                    <Box
+                      data-testid="pulse-window-title"
+                      onClick={() => toggleExpand(item.key)}
+                      title={info?.window_title || cleanedTitle}
+                      aria-expanded={isExpanded}
+                      sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        minWidth: 0,
+                        maxWidth: isExpanded ? '100%' : { xs: 140, sm: 220, md: 340 },
+                        bgcolor: 'rgba(0,0,0,0.03)',
+                        px: 0.75,
+                        py: 0.2,
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        transition: 'all 0.15s ease',
+                        '&:hover': {
+                          bgcolor: 'rgba(0,0,0,0.06)',
+                        },
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: '0.675rem',
+                          color: '#4B5563',
+                          fontWeight: 500,
+                          minWidth: 0,
+                          overflow: isExpanded ? 'visible' : 'hidden',
+                          textOverflow: isExpanded ? 'clip' : 'ellipsis',
+                          whiteSpace: isExpanded ? 'normal' : 'nowrap',
+                          wordBreak: isExpanded ? 'break-word' : 'normal',
+                        }}
+                      >
+                        {displayTitle}
+                      </Typography>
+                      {cleanedTitle.length > 25 && (
+                        <Box
+                          component="span"
+                          role="button"
+                          data-testid="expand-title-toggle"
+                          aria-label={isExpanded ? 'Collapse title' : 'Expand title'}
+                          sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            color: '#9CA3AF',
+                            flexShrink: 0,
+                            '&:hover': { color: '#4B5563' },
+                          }}
+                        >
+                          <HugeiconsIcon icon={isExpanded ? ArrowUp01Icon : ArrowDown01Icon} size={11} color="#6B7280" />
+                        </Box>
+                      )}
+                    </Box>
+                  );
+                })()}
+
+                {/* Category Badge — BESIDE WINDOW TITLE */}
                 <Box
                   sx={{
                     px: 0.75,
@@ -493,23 +574,6 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                     {row.categoryLabel}
                   </Typography>
                 </Box>
-
-                {/* Minimal title (without em-dashes, truncated) */}
-                {row.kind === 'open' && cleanedTitle && (
-                  <Typography
-                    title={info?.window_title}
-                    sx={{
-                      fontSize: '0.675rem',
-                      color: '#6B7280',
-                      minWidth: 0,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {cleanedTitle}
-                  </Typography>
-                )}
 
                 {/* Closed duration (without em-dashes) */}
                 {row.kind === 'close' && row.cycleMs != null && (
