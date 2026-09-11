@@ -668,9 +668,8 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                 >
                   {label}
                 </Typography>
-              </Box>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                {/* Risk Level Badge — BESIDE LABEL (NOT BESIDE TIMESTAMP) */}
                 {k.riskLevel && k.riskLevel !== 'LOW' && (
                   <Box
                     sx={{
@@ -681,6 +680,7 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                       border: `1px solid ${color}30`,
                       display: 'flex',
                       alignItems: 'center',
+                      flexShrink: 0,
                     }}
                   >
                     <Typography
@@ -698,6 +698,10 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                     </Typography>
                   </Box>
                 )}
+              </Box>
+
+              {/* Right: Formatted Timestamp Only */}
+              <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                 <Typography
                   sx={{
                     fontSize: '0.65rem',

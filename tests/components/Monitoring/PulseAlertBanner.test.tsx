@@ -44,7 +44,7 @@ describe('PulseAlertBanner', () => {
     expect(screen.getByText('2×')).toBeInTheDocument();
   });
 
-  test('renders keyboard alerts in the feed', () => {
+  test('renders keyboard alerts in the feed with risk badge beside label on left, not beside timestamp', () => {
     const alerts: PulseAlert[] = [
       {
         detections: [],
@@ -53,8 +53,19 @@ describe('PulseAlertBanner', () => {
         timestamp: TS,
       },
     ];
-    render(<PulseAlertBanner alerts={alerts} />);
+    const { container } = render(<PulseAlertBanner alerts={alerts} />);
     expect(screen.getByText('Screenshot shortcut')).toBeInTheDocument();
+    expect(screen.getByText('HIGH')).toBeInTheDocument();
+
+    const card = container.querySelector('[data-testid="pulse-event-card"]') || container.firstChild?.firstChild;
+    // Card has 2 children: left Box (icon + label + risk badge) and right Box (timestamp only)
+    const cardEl = card as HTMLElement;
+    const [leftBox, rightBox] = Array.from(cardEl.children);
+
+    expect(leftBox).toHaveTextContent('Screenshot shortcut');
+    expect(leftBox).toHaveTextContent('HIGH');
+    expect(rightBox).not.toHaveTextContent('HIGH');
+    expect(rightBox?.textContent?.trim()).toMatch(/^\d+:\d+:\d+/);
   });
 
   test('cheating platforms sort ahead of other detections', () => {
