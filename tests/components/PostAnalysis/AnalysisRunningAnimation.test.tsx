@@ -11,19 +11,20 @@ describe('AnalysisRunningAnimation', () => {
     vi.useRealTimers();
   });
 
-  test('renders the animation container, radar badge, and active status', () => {
+  test('renders the animation container, green radar badge, and active status', () => {
     render(<AnalysisRunningAnimation />);
     expect(screen.getByTestId('analysis-running-animation')).toBeInTheDocument();
     expect(screen.getByText(/AI PIPELINE ACTIVE/i)).toBeInTheDocument();
     expect(screen.getByText(/Analyzing Interview/i)).toBeInTheDocument();
   });
 
-  test('renders pipeline analysis stages and advances stage periodically', () => {
+  test('renders stage-wise pills and advances stage periodically', () => {
     render(<AnalysisRunningAnimation />);
-    expect(screen.getByText(/Transcribing/i)).toBeInTheDocument();
-    expect(screen.getByText(/telemetry/i)).toBeInTheDocument();
-    expect(screen.getByText(/keyboard events/i)).toBeInTheDocument();
-    expect(screen.getByText(/integrity verdict/i)).toBeInTheDocument();
+    expect(screen.getByText('Loading')).toBeInTheDocument();
+    expect(screen.getByText('Checking')).toBeInTheDocument();
+    expect(screen.getByText('Transcribing')).toBeInTheDocument();
+    expect(screen.getByText('Preparing')).toBeInTheDocument();
+    expect(screen.getByText('Synthesizing')).toBeInTheDocument();
 
     // First step is in progress
     const activeStepsBefore = screen.getAllByTestId('stage-in-progress');
