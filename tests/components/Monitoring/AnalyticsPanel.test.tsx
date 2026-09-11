@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import AnalyticsPanel, { summarizeTimeline } from '../../../src/components/Monitoring/AnalyticsPanel';
+import AnalyticsPanel, { summarizeTimeline, filterTimelineToWindow } from '../../../src/components/Monitoring/AnalyticsPanel';
 import type {
   UseRiskSocketReturn,
   WindowResult,
@@ -597,5 +597,48 @@ describe('AnalyticsPanel', () => {
     await userEvent.click(rawBtn);
     expect(screen.getByRole('button', { name: /Summarized \(2\)/ })).toBeInTheDocument();
     expect(screen.getAllByText('pasted in Cursor').length).toBe(3);
+  });
+
+  test('filterTimelineToWindow excludes older historical events outside the 30s window', () => {
+    const end = Date.parse('2026-07-05T10:30:48Z');
+    const events = [
+      // 15 minutes to 1 minute ago (should be filtered out)
+      { ts: Date.parse('2026-07-05T10:15:51Z'), kind: 'KEYSTROKE', detail: 'shortcut cmd+tab in Cursor' },
+      { ts: Date.parse('2026-07-05T10:15:52Z'), kind: 'KEYSTROKE', detail: 'shortcut cmd+tab in Google Chrome' },
+      { ts: Date.parse('2026-07-05T10:20:00Z'), kind: 'KEYSTROKE', detail: 'shortcut enter in Cursor' },
+      { ts: Date.parse('2026-07-05T10:30:10Z'), kind: 'KEYSTROKE', detail: 'shortcut delete in Cursor' }, // 38s before end
+      // Inside 30s window (10:30:18Z to 10:30:48Z)
+      { ts: Date.parse('2026-07-05T10:30:46Z'), kind: 'KEYSTROKE', detail: 'shortcut delete in Cursor' },
+      { ts: Date.parse('2026-07-05T10:30:48Z'), kind: 'APP', detail: 'closed python3, opened Storage' },
+    ];
+
+    const windowOnly = filterTimelineToWindow(events, '2026-07-05T10:30:48Z');
+    expect(windowOnly).toHaveLength(2);
+    expect(windowOnly[0].detail).toBe('shortcut delete in Cursor');
+    expect(windowOnly[1].detail).toBe('closed python3, opened Storage');
+  });
+
+  test('WindowCard filters out past events and only renders the 30s window count', async () => {
+    const end = Date.parse('2026-07-05T10:30:48Z');
+    const windowResult = win({
+      risk: 'medium',
+      score: 45,
+      processed_at: '2026-07-05T10:30:48Z',
+      timeline: [
+        // 10 minutes ago
+        { ts: end - 600_000, kind: 'KEYSTROKE', detail: 'shortcut cmd+tab in Cursor' },
+        { ts: end - 500_000, kind: 'KEYSTROKE', detail: 'shortcut cmd+tab in Chrome' },
+        // Inside 30-second window
+        { ts: end - 15_000, kind: 'KEYSTROKE', detail: 'shortcut delete in Cursor' },
+        { ts: end, kind: 'APP', detail: 'closed python3, opened Storage' },
+      ],
+    });
+
+    renderPanel({ results: [windowResult], latestResult: windowResult });
+    await userEvent.click(screen.getAllByRole('tab')[1]);
+
+    // Header displays 2 (only the 2 events within the 30-second window, not 4)
+    expect(screen.getByText(/Timeline \(2\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Timeline \(4\)/)).not.toBeInTheDocument();
   });
 });

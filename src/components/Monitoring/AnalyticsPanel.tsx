@@ -211,6 +211,41 @@ export interface SummarizedTimelineEntry {
   isSuspicious?: boolean;
 }
 
+/**
+ * Restricts timeline entries to strictly the 30-second monitoring window.
+ * A window card represents a 30s window. If upstream captures or historical
+ * records contain past events spanning minutes in the past, prune them so
+ * each card only displays what occurred in its active 30-second window.
+ */
+export function filterTimelineToWindow(
+  entries: { ts: number; kind: string; detail: string; speakerRole?: string }[],
+  processedAt?: string,
+  windowEndTime?: string
+): { ts: number; kind: string; detail: string; speakerRole?: string }[] {
+  if (!entries || entries.length <= 1) return entries || [];
+
+  const validEntries = entries.filter((e) => Number.isFinite(e.ts));
+  if (validEntries.length === 0) return entries;
+
+  // Determine window end timestamp: window_end_time, processed_at, or max event timestamp
+  const endExplicitTs = windowEndTime ? new Date(windowEndTime).getTime() : 0;
+  const processedTs = processedAt ? new Date(processedAt).getTime() : 0;
+  const maxEventTs = validEntries.reduce((max, e) => (e.ts > max ? e.ts : max), 0);
+  const endTs = Math.max(
+    Number.isFinite(endExplicitTs) ? endExplicitTs : 0,
+    Number.isFinite(processedTs) ? processedTs : 0,
+    maxEventTs
+  );
+
+  if (endTs <= 0) return entries;
+
+  // 30-second window with a 1s margin for network/clock skew
+  const startTs = endTs - 30 * 1000;
+  const inWindow = validEntries.filter((e) => e.ts >= startTs && e.ts <= endTs + 2000);
+
+  return inWindow.length > 0 ? inWindow : entries;
+}
+
 export function summarizeTimeline(
   entries: { ts: number; kind: string; detail: string }[]
 ): SummarizedTimelineEntry[] {
@@ -474,7 +509,13 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
   const [expanded, setExpanded] = useState(isLatest);
   const [showRaw, setShowRaw] = useState(false);
   const color = getRiskColor(result.risk);
-  const rawTimeline = result.timeline || [];
+  const rawTimeline = useMemo(() => {
+    return filterTimelineToWindow(
+      result.timeline || [],
+      result.processed_at,
+      (result as any).window_end_time || (result as any).end_time
+    );
+  }, [result.timeline, result.processed_at, (result as any).window_end_time, (result as any).end_time]);
   const hasTimeline = rawTimeline.length > 0;
   const summarizedTimeline = useMemo(() => summarizeTimeline(rawTimeline), [rawTimeline]);
   const displayTimeline = showRaw ? (rawTimeline as SummarizedTimelineEntry[]) : summarizedTimeline;
