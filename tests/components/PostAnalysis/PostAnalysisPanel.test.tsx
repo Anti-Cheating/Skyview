@@ -143,5 +143,12 @@ describe('PostAnalysisPanel', () => {
     expect(await screen.findByText('Session Integrity Timeline Scrubber')).toBeInTheDocument();
     expect(screen.getByText(/Window #/i)).toBeInTheDocument();
     expect(screen.getByText(/Micro-Events in this 30s Window/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /All \(2\)/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apps \(1\)/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Keystrokes \(1\)/ })).toBeInTheDocument();
+    expect(screen.getByText(/\[APP\]/)).toBeInTheDocument();
+    expect(screen.getByText(/opened Chrome — "ChatGPT"/)).toBeInTheDocument();
+    expect(screen.getByText(/\[KEYSTROKE\]/)).toBeInTheDocument();
+    expect(screen.getByText(/paste \(Cmd\+V\) in VS Code/)).toBeInTheDocument();
   });
 });

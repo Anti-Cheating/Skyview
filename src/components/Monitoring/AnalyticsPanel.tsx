@@ -126,6 +126,14 @@ function formatSignal(signal: string): string {
   return signal.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+function formatClock24(ts?: number | string | Date): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 /* ── Sub-components ── */
 
 /** One row per event — timeline lines, never side-by-side, always stacked
@@ -594,6 +602,7 @@ function ModalityCard({
 export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScreenshot }: { result: WindowResult; isLatest: boolean; onExpandScreenshot: (urls: string[], startIndex: number) => void }) {
   const [expanded, setExpanded] = useState(isLatest);
   const [showRaw, setShowRaw] = useState(false);
+  const [timelineModalityFilter, setTimelineModalityFilter] = useState<'ALL' | 'APP' | 'KEYSTROKE' | 'VOICE'>('ALL');
   const color = getRiskColor(result.risk);
   const rawTimeline = useMemo(() => {
     return filterTimelineToWindow(
@@ -606,6 +615,24 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
   const summarizedTimeline = useMemo(() => summarizeTimeline(rawTimeline), [rawTimeline]);
   const displayTimeline = showRaw ? (rawTimeline as SummarizedTimelineEntry[]) : summarizedTimeline;
   const canToggleRaw = rawTimeline.length > summarizedTimeline.length;
+
+  const appCount = useMemo(() => rawTimeline.filter(e => e.kind?.toUpperCase() === 'APP').length, [rawTimeline]);
+  const keyCount = useMemo(() => rawTimeline.filter(e => e.kind?.toUpperCase() === 'KEYSTROKE').length, [rawTimeline]);
+  const voiceCount = useMemo(() => rawTimeline.filter(e => {
+    const k = e.kind?.toUpperCase();
+    return k === 'VOICE' || k === 'TRANSCRIPT' || k === 'AUDIO';
+  }).length, [rawTimeline]);
+
+  const filteredDisplayTimeline = useMemo(() => {
+    if (timelineModalityFilter === 'ALL') return displayTimeline;
+    if (timelineModalityFilter === 'VOICE') {
+      return displayTimeline.filter(e => {
+        const k = e.kind?.toUpperCase();
+        return k === 'VOICE' || k === 'TRANSCRIPT' || k === 'AUDIO';
+      });
+    }
+    return displayTimeline.filter(e => e.kind?.toUpperCase() === timelineModalityFilter);
+  }, [displayTimeline, timelineModalityFilter]);
   const hasEvidence = result.evidence && result.evidence.length > 0;
   const hasModalities = Boolean(
     result.per_modality &&
@@ -735,7 +762,176 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
                 ) : undefined
               }
             >
-              <TimelineStepper entries={displayTimeline} />
+              {/* Modality Filter Pills */}
+              <Box sx={{ display: 'flex', gap: 0.5, mb: 0.8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTimelineModalityFilter('ALL');
+                  }}
+                  sx={{
+                    fontSize: '0.58rem',
+                    fontWeight: 600,
+                    px: 0.6,
+                    py: 0.2,
+                    borderRadius: '4px',
+                    border: '1px solid',
+                    borderColor: timelineModalityFilter === 'ALL' ? '#2563EB' : '#E2E8F0',
+                    bgcolor: timelineModalityFilter === 'ALL' ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                    color: timelineModalityFilter === 'ALL' ? '#2563EB' : DARK_TEXT_MUTED,
+                    cursor: 'pointer',
+                  }}
+                >
+                  All ({rawTimeline.length})
+                </Box>
+                {appCount > 0 && (
+                  <Box
+                    component="button"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTimelineModalityFilter('APP');
+                    }}
+                    sx={{
+                      fontSize: '0.58rem',
+                      fontWeight: 600,
+                      px: 0.6,
+                      py: 0.2,
+                      borderRadius: '4px',
+                      border: '1px solid',
+                      borderColor: timelineModalityFilter === 'APP' ? '#2563EB' : '#E2E8F0',
+                      bgcolor: timelineModalityFilter === 'APP' ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                      color: timelineModalityFilter === 'APP' ? '#2563EB' : DARK_TEXT_MUTED,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    🖥️ Apps ({appCount})
+                  </Box>
+                )}
+                {keyCount > 0 && (
+                  <Box
+                    component="button"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTimelineModalityFilter('KEYSTROKE');
+                    }}
+                    sx={{
+                      fontSize: '0.58rem',
+                      fontWeight: 600,
+                      px: 0.6,
+                      py: 0.2,
+                      borderRadius: '4px',
+                      border: '1px solid',
+                      borderColor: timelineModalityFilter === 'KEYSTROKE' ? '#2563EB' : '#E2E8F0',
+                      bgcolor: timelineModalityFilter === 'KEYSTROKE' ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                      color: timelineModalityFilter === 'KEYSTROKE' ? '#2563EB' : DARK_TEXT_MUTED,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ⌨️ Keys ({keyCount})
+                  </Box>
+                )}
+                {voiceCount > 0 && (
+                  <Box
+                    component="button"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTimelineModalityFilter('VOICE');
+                    }}
+                    sx={{
+                      fontSize: '0.58rem',
+                      fontWeight: 600,
+                      px: 0.6,
+                      py: 0.2,
+                      borderRadius: '4px',
+                      border: '1px solid',
+                      borderColor: timelineModalityFilter === 'VOICE' ? '#2563EB' : '#E2E8F0',
+                      bgcolor: timelineModalityFilter === 'VOICE' ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+                      color: timelineModalityFilter === 'VOICE' ? '#2563EB' : DARK_TEXT_MUTED,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    🎙️ Voice ({voiceCount})
+                  </Box>
+                )}
+              </Box>
+
+              {showRaw ? (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.4,
+                    bgcolor: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '6px',
+                    p: 0.8,
+                  }}
+                >
+                  {filteredDisplayTimeline.map((item, idx) => {
+                    const rawKind = item.kind?.toUpperCase() || 'EVENT';
+                    const isVoice = rawKind === 'VOICE' || rawKind === 'TRANSCRIPT' || rawKind === 'AUDIO';
+                    const displayKind = isVoice ? 'VOICE' : rawKind;
+                    const kindColor = displayKind === 'APP' ? '#2563EB' : displayKind === 'KEYSTROKE' ? '#D97706' : '#16A34A';
+                    const timeStr = formatClock24(item.ts);
+                    const kindTag = `[${displayKind}]`.padEnd(11, ' ');
+
+                    return (
+                      <Box
+                        key={idx}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'baseline',
+                          gap: 0.8,
+                          lineHeight: 1.45,
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        <Typography
+                          component="span"
+                          sx={{ fontSize: '0.75rem', fontWeight: 700, color: kindColor, flexShrink: 0, userSelect: 'none' }}
+                        >
+                          ○
+                        </Typography>
+                        {timeStr && (
+                          <Typography
+                            component="span"
+                            sx={{ fontSize: '0.65rem', color: '#64748B', fontFamily: 'monospace', flexShrink: 0, width: 56 }}
+                          >
+                            {timeStr}
+                          </Typography>
+                        )}
+                        <Typography
+                          component="span"
+                          sx={{
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            color: kindColor,
+                            fontFamily: 'monospace',
+                            flexShrink: 0,
+                            width: 84,
+                            whiteSpace: 'pre',
+                          }}
+                        >
+                          {kindTag}
+                        </Typography>
+                        <Typography
+                          component="span"
+                          sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, flex: 1, wordBreak: 'break-word' }}
+                        >
+                          {item.detail}
+                        </Typography>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              ) : (
+                <TimelineStepper entries={filteredDisplayTimeline} />
+              )}
             </SubSection>
           )}
           {hasEvidence && (

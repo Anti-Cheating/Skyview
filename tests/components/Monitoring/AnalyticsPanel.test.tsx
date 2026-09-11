@@ -597,6 +597,12 @@ describe('AnalyticsPanel', () => {
     await userEvent.click(rawBtn);
     expect(screen.getByRole('button', { name: /Summarized \(2\)/ })).toBeInTheDocument();
     expect(screen.getAllByText('pasted in Cursor').length).toBe(3);
+
+    // Verify modality filters and formatted tags
+    expect(screen.getByText('All (4)')).toBeInTheDocument();
+    expect(screen.getByText('🖥️ Apps (1)')).toBeInTheDocument();
+    expect(screen.getByText('⌨️ Keys (3)')).toBeInTheDocument();
+    expect(screen.getAllByText(/\[KEYSTROKE\]/).length).toBe(3);
   });
 
   test('filterTimelineToWindow excludes older historical events outside the 30s window', () => {

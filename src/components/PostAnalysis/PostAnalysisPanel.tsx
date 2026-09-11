@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowBack as BackIcon, ContentCopy as CopyIcon, FileDownload as ExportIcon } from "@mui/icons-material";
 import { ENV } from "../../config/env";
@@ -399,6 +399,36 @@ const SessionTimelineScrubber: React.FC<{
   const keyMod = selected.per_modality?.keystroke;
   const voiceMod = selected.per_modality?.voice;
 
+  const [filterModality, setFilterModality] = useState<"ALL" | "APP" | "KEYSTROKE" | "VOICE">("ALL");
+
+  const format24hTime = (ts?: number | string) => {
+    if (!ts) return "";
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+
+  const totalEvents = selected.timeline?.length || 0;
+  const appCount = selected.timeline?.filter((e) => e.kind?.toUpperCase() === "APP").length || 0;
+  const keyCount = selected.timeline?.filter((e) => e.kind?.toUpperCase() === "KEYSTROKE").length || 0;
+  const voiceCount = selected.timeline?.filter((e) => {
+    const k = e.kind?.toUpperCase();
+    return k === "VOICE" || k === "TRANSCRIPT" || k === "AUDIO";
+  }).length || 0;
+
+  const filteredTimeline = useMemo(() => {
+    if (!selected.timeline) return [];
+    if (filterModality === "ALL") return selected.timeline;
+    if (filterModality === "VOICE") {
+      return selected.timeline.filter((e) => {
+        const k = e.kind?.toUpperCase();
+        return k === "VOICE" || k === "TRANSCRIPT" || k === "AUDIO";
+      });
+    }
+    return selected.timeline.filter((e) => e.kind?.toUpperCase() === filterModality);
+  }, [selected.timeline, filterModality]);
+
   return (
     <section className="pa-card pa-scrubber-card">
       <div className="pa-scrubber-header">
@@ -505,26 +535,74 @@ const SessionTimelineScrubber: React.FC<{
           <div>
             <div
               style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                color: "var(--pa-muted)",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
                 marginBottom: "8px",
+                flexWrap: "wrap",
+                gap: "8px",
               }}
             >
-              Micro-Events in this 30s Window ({selected.timeline.length})
+              <div
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "var(--pa-muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Micro-Events in this 30s Window ({totalEvents})
+              </div>
+
+              {/* Modality Filter Tabs */}
+              <div className="pa-snapshot-filter-bar">
+                <button
+                  type="button"
+                  className={`pa-snapshot-filter-btn${filterModality === "ALL" ? " is-active" : ""}`}
+                  onClick={() => setFilterModality("ALL")}
+                >
+                  All ({totalEvents})
+                </button>
+                <button
+                  type="button"
+                  className={`pa-snapshot-filter-btn${filterModality === "APP" ? " is-active" : ""}`}
+                  onClick={() => setFilterModality("APP")}
+                >
+                  🖥️ Apps ({appCount})
+                </button>
+                <button
+                  type="button"
+                  className={`pa-snapshot-filter-btn${filterModality === "KEYSTROKE" ? " is-active" : ""}`}
+                  onClick={() => setFilterModality("KEYSTROKE")}
+                >
+                  ⌨️ Keystrokes ({keyCount})
+                </button>
+                <button
+                  type="button"
+                  className={`pa-snapshot-filter-btn${filterModality === "VOICE" ? " is-active" : ""}`}
+                  onClick={() => setFilterModality("VOICE")}
+                >
+                  🎙️ Voice ({voiceCount})
+                </button>
+              </div>
             </div>
+
             <div className="pa-snapshot-events">
-              {selected.timeline.map((ev, i) => {
-                const kind = ev.kind?.toUpperCase();
+              {filteredTimeline.map((ev, i) => {
+                const rawKind = ev.kind?.toUpperCase() || "EVENT";
+                const isVoice = rawKind === "VOICE" || rawKind === "TRANSCRIPT" || rawKind === "AUDIO";
+                const kind = isVoice ? "VOICE" : rawKind;
                 const kindColor = kind === "APP" ? "#2563EB" : kind === "KEYSTROKE" ? "#D97706" : "#16A34A";
-                const timeStr = ev.ts ? new Date(ev.ts).toLocaleTimeString() : "";
+                const timeStr = format24hTime(ev.ts);
+                const kindTag = `[${kind}]`.padEnd(11, " ");
+
                 return (
                   <div key={i} className="pa-snapshot-event">
+                    <span className="pa-snapshot-dot" style={{ color: kindColor }}>○</span>
                     {timeStr && <span className="pa-snapshot-time">{timeStr}</span>}
-                    <span className="pa-snapshot-kind" style={{ background: `${kindColor}15`, color: kindColor }}>
-                      {kind}
+                    <span className="pa-snapshot-kind" style={{ color: kindColor }}>
+                      {kindTag}
                     </span>
                     <span className="pa-snapshot-detail">
                       {ev.speakerRole ? `[${ev.speakerRole}]: ` : ""}{ev.detail}
