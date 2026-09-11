@@ -26,7 +26,7 @@ import {
   DeveloperMode as DevToolsIcon,
   Keyboard as KeyboardIcon,
 } from '@mui/icons-material';
-import { formatDateTime } from '../../utils/dateFormat';
+import { formatClock } from '../../utils/dateFormat';
 import type { PulseAlert, KeyboardAlert } from '../../hooks/useRiskSocket';
 
 // Risk → colour for the keyboard-event feed (matches the app-detection palette).
@@ -90,6 +90,15 @@ const CATEGORY_CONFIG: Record<string, { icon: typeof AiIcon; color: string; bg: 
   virtual_machines:      { icon: VmIcon,        color: '#C2410C', bg: 'rgba(194, 65, 12, 0.10)' },
   automation:            { icon: ClipboardIcon, color: '#C2410C', bg: 'rgba(194, 65, 12, 0.10)' },
 };
+
+const CLEAN_APP_NAMES = [
+  'google chrome', 'chrome', 'firefox', 'safari',
+  'microsoft edge', 'edge', 'opera', 'brave',
+  'visual studio code', 'code', 'warp', 'webstorm', 'goland',
+  'phpstorm', 'datagrip', 'clion', 'rider', 'jetbrains',
+  'android studio', 'sublime', 'neovim', 'zed editor',
+  'codesignal', 'codility', 'hackerearth',
+];
 
 function getConfig(categoryId: string) {
   const baseId = categoryId.includes('::') ? categoryId.split('::')[0] : categoryId;
@@ -155,7 +164,10 @@ interface AppEventRow {
  * every close is its own event, stacked in order, matching the same
  * "one row per event" principle as the window Timeline.
  */
-function buildAppEventRows(sortedAlerts: PulseAlert[]): AppEventRow[] {
+function buildAppEventRows(
+  sortedAlerts: PulseAlert[],
+  stealthAppsSet: Set<string>
+): AppEventRow[] {
   const rows: AppEventRow[] = [];
   const openByKey = new Map<string, { ts: number; categoryLabel: string }>();
 
@@ -164,15 +176,21 @@ function buildAppEventRows(sortedAlerts: PulseAlert[]): AppEventRow[] {
 
     for (const detection of alert.detections) {
       for (const app of detection.apps) {
-        const key = `${detection.categoryId}|${app.toLowerCase()}`;
+        // If this app is flagged as a stealth overlay (e.g. Aside with is_excluded: true in a mixed set),
+        // re-categorize it under cheating_platforms even if historical pulse payload categorized it as general_usage.
+        const isStealth = stealthAppsSet.has(app.toLowerCase());
+        const effectiveCategoryId = isStealth ? 'cheating_platforms' : detection.categoryId;
+        const effectiveCategoryLabel = isStealth ? 'Cheating Platform Detected' : detection.categoryLabel;
+
+        const key = `${effectiveCategoryId}|${app.toLowerCase()}`;
         if (!openByKey.has(key)) {
-          openByKey.set(key, { ts, categoryLabel: detection.categoryLabel });
+          openByKey.set(key, { ts, categoryLabel: effectiveCategoryLabel });
           rows.push({
             app,
             ts,
             kind: 'open',
-            categoryId: detection.categoryId,
-            categoryLabel: detection.categoryLabel,
+            categoryId: effectiveCategoryId,
+            categoryLabel: effectiveCategoryLabel,
           });
         }
       }
@@ -208,9 +226,6 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
   // Sort alerts chronologically to trace state transitions accurately
   const sortedAlerts = [...alerts].sort((x, y) => new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime());
 
-  // Flat chronological open/close event list (one row per transition).
-  const appEventRows = buildAppEventRows(sortedAlerts);
-
   // Map of app_name (lowercase) to its latest info (window_title, is_excluded)
   const infoByApp = new Map<string, { app_name: string; window_title: string; is_excluded: boolean }>();
   for (const alert of sortedAlerts) {
@@ -218,8 +233,16 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
       if (detection.appInfos) {
         for (const info of detection.appInfos) {
           const k = info.app_name.toLowerCase();
-          if (!infoByApp.has(k)) {
-            infoByApp.set(k, info);
+          const existing = infoByApp.get(k);
+          if (!existing) {
+            infoByApp.set(k, { ...info });
+          } else {
+            if ((info.window_title || '').length > existing.window_title.length) {
+              existing.window_title = info.window_title;
+            }
+            if (info.is_excluded === true) {
+              existing.is_excluded = true;
+            }
           }
         }
       }
@@ -229,6 +252,29 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
       activityCounts.set(activity, (activityCounts.get(activity) || 0) + 1);
     }
   }
+
+  // Detect stealth overlay apps (e.g., Aside) that were previously or currently
+  // categorized under general_usage. If sharing state is reliable (some windows excluded,
+  // some not), any non-clean app with is_excluded=true is escalated to cheating_platforms.
+  const allInfos = Array.from(infoByApp.values());
+  const totalInfos = allInfos.length;
+  const excludedInfos = allInfos.filter((i) => i.is_excluded === true).length;
+  const sharingReliable = excludedInfos > 0 && excludedInfos < totalInfos;
+
+  const isCleanApp = (name: string) =>
+    CLEAN_APP_NAMES.some((clean) => name.toLowerCase().includes(clean));
+
+  const stealthAppsSet = new Set<string>();
+  if (sharingReliable) {
+    for (const info of allInfos) {
+      if (info.is_excluded === true && !isCleanApp(info.app_name)) {
+        stealthAppsSet.add(info.app_name.toLowerCase());
+      }
+    }
+  }
+
+  // Flat chronological open/close event list (one row per transition).
+  const appEventRows = buildAppEventRows(sortedAlerts, stealthAppsSet);
 
   // Sort rows chronologically ("timebuild wise"). If timestamps are equal,
   // cheating platforms & higher risk sort first.
@@ -365,7 +411,7 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                   whiteSpace: 'nowrap',
                 }}
               >
-                {formatDateTime(new Date(row.ts).toISOString())}
+                {formatClock(row.ts)}
               </Typography>
             </Box>
           </Box>
@@ -459,7 +505,7 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
             <Typography
               sx={{ fontSize: '0.6rem', fontWeight: 500, color: '#9CA3AF', whiteSpace: 'nowrap', flexShrink: 0 }}
             >
-              {formatDateTime(k.timestamp)}
+              {formatClock(k.timestamp)}
             </Typography>
           </Box>
         );

@@ -408,5 +408,83 @@ describe('PulseAlertBanner — appInfos', () => {
       expect(cards[1]).toHaveTextContent('Cursor');
       expect(cards[2]).toHaveTextContent('Docker Desktop');
     });
+
+    test('timestamps render time only without date', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            { categoryId: 'general_usage', categoryLabel: 'General Usage', apps: ['Terminal'], matchedKeywords: [] },
+          ],
+          activities: [],
+          timestamp: '2026-07-05T14:32:45.000Z',
+        },
+      ];
+      const { container } = render(<PulseAlertBanner alerts={alerts} />);
+      // Should not contain date information like year "2026" or month "Jul"
+      expect(container.textContent).not.toMatch(/2026/);
+      expect(container.textContent).not.toMatch(/Jul/);
+      // Should contain time (AM/PM)
+      expect(container.textContent).toMatch(/\d+:\d+:\d+/);
+    });
+
+    test('remediates historical general_usage detection to cheating_platforms if app has is_excluded=true in a mixed set', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            {
+              categoryId: 'general_usage',
+              categoryLabel: 'General Usage',
+              apps: ['Terminal', 'Spotify', 'Aside'],
+              appInfos: [
+                { app_name: 'Terminal', window_title: 'zsh', is_excluded: false },
+                { app_name: 'Spotify', window_title: 'Spotify Free', is_excluded: false },
+                { app_name: 'Aside', window_title: 'Aside', is_excluded: true },
+              ],
+              matchedKeywords: ['Terminal', 'Spotify', 'Aside'],
+            },
+          ],
+          activities: [],
+          timestamp: TS,
+        },
+      ];
+      render(<PulseAlertBanner alerts={alerts} />);
+      const cards = screen.getAllByTestId('pulse-event-card');
+      expect(cards).toHaveLength(3);
+
+      // Aside should have category label "Cheating Platform Detected", not "General Usage"
+      const asideCard = cards.find((c) => c.textContent?.includes('Aside'));
+      expect(asideCard).toBeDefined();
+      expect(asideCard).toHaveTextContent('Cheating Platform Detected');
+
+      // Terminal should remain General Usage
+      const terminalCard = cards.find((c) => c.textContent?.includes('Terminal'));
+      expect(terminalCard).toBeDefined();
+      expect(terminalCard).toHaveTextContent('General Usage');
+    });
+
+    test('does not escalate when all apps are is_excluded=true (permission missing)', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            {
+              categoryId: 'general_usage',
+              categoryLabel: 'General Usage',
+              apps: ['Terminal', 'Spotify', 'Aside'],
+              appInfos: [
+                { app_name: 'Terminal', window_title: 'zsh', is_excluded: true },
+                { app_name: 'Spotify', window_title: 'Spotify Free', is_excluded: true },
+                { app_name: 'Aside', window_title: 'Aside', is_excluded: true },
+              ],
+              matchedKeywords: ['Terminal', 'Spotify', 'Aside'],
+            },
+          ],
+          activities: [],
+          timestamp: TS,
+        },
+      ];
+      render(<PulseAlertBanner alerts={alerts} />);
+      expect(screen.queryByText('Cheating Platform Detected')).not.toBeInTheDocument();
+      expect(screen.getAllByText('General Usage').length).toBeGreaterThan(0);
+    });
   });
 });
