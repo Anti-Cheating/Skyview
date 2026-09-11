@@ -27,7 +27,7 @@ import {
   Keyboard as KeyboardIcon,
 } from '@mui/icons-material';
 import { formatDateTime } from '../../utils/dateFormat';
-import type { PulseAlert, PulseDetection, KeyboardAlert } from '../../hooks/useRiskSocket';
+import type { PulseAlert, KeyboardAlert } from '../../hooks/useRiskSocket';
 
 // Risk → colour for the keyboard-event feed (matches the app-detection palette).
 const KB_RISK_COLOR: Record<string, string> = {
@@ -144,6 +144,7 @@ interface AppEventRow {
   ts: number;
   kind: 'open' | 'close';
   categoryId: string;
+  categoryLabel: string;
   /** For 'close' rows: length of the open→close cycle that just ended. */
   cycleMs?: number;
 }
@@ -156,7 +157,7 @@ interface AppEventRow {
  */
 function buildAppEventRows(sortedAlerts: PulseAlert[]): AppEventRow[] {
   const rows: AppEventRow[] = [];
-  const openByKey = new Map<string, number>();
+  const openByKey = new Map<string, { ts: number; categoryLabel: string }>();
 
   for (const alert of sortedAlerts) {
     const ts = new Date(alert.timestamp).getTime();
@@ -165,8 +166,14 @@ function buildAppEventRows(sortedAlerts: PulseAlert[]): AppEventRow[] {
       for (const app of detection.apps) {
         const key = `${detection.categoryId}|${app.toLowerCase()}`;
         if (!openByKey.has(key)) {
-          openByKey.set(key, ts);
-          rows.push({ app, ts, kind: 'open', categoryId: detection.categoryId });
+          openByKey.set(key, { ts, categoryLabel: detection.categoryLabel });
+          rows.push({
+            app,
+            ts,
+            kind: 'open',
+            categoryId: detection.categoryId,
+            categoryLabel: detection.categoryLabel,
+          });
         }
       }
     }
@@ -177,7 +184,7 @@ function buildAppEventRows(sortedAlerts: PulseAlert[]): AppEventRow[] {
       const appKey = appName.toLowerCase();
       // A close event carries no category — close the app in every category
       // it's currently open under.
-      for (const [key, cycleStartMs] of openByKey) {
+      for (const [key, openData] of openByKey) {
         if (!key.endsWith(`|${appKey}`)) continue;
         openByKey.delete(key);
         rows.push({
@@ -185,7 +192,8 @@ function buildAppEventRows(sortedAlerts: PulseAlert[]): AppEventRow[] {
           ts,
           kind: 'close',
           categoryId: key.slice(0, -(appKey.length + 1)),
-          cycleMs: ts - cycleStartMs,
+          categoryLabel: openData.categoryLabel,
+          cycleMs: ts - openData.ts,
         });
       }
     }
@@ -195,10 +203,7 @@ function buildAppEventRows(sortedAlerts: PulseAlert[]): AppEventRow[] {
 }
 
 export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBannerProps) {
-  // Aggregate all detections across all alerts
-  const allDetections: PulseDetection[] = [];
   const activityCounts = new Map<string, number>();
-  const seenCategories = new Set<string>();
 
   // Sort alerts chronologically to trace state transitions accurately
   const sortedAlerts = [...alerts].sort((x, y) => new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime());
@@ -206,25 +211,15 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
   // Flat chronological open/close event list (one row per transition).
   const appEventRows = buildAppEventRows(sortedAlerts);
 
+  // Map of app_name (lowercase) to its latest info (window_title, is_excluded)
+  const infoByApp = new Map<string, { app_name: string; window_title: string; is_excluded: boolean }>();
   for (const alert of sortedAlerts) {
     for (const detection of alert.detections) {
-      if (!seenCategories.has(detection.categoryId)) {
-        seenCategories.add(detection.categoryId);
-        allDetections.push(JSON.parse(JSON.stringify(detection))); // deep copy so we don't modify raw hook state
-      } else {
-        const existing = allDetections.find((d) => d.categoryId === detection.categoryId);
-        if (existing) {
-          for (const app of detection.apps) {
-            if (!existing.apps.includes(app)) existing.apps.push(app);
-          }
-          // Merge per-app detail too, keyed by app name.
-          if (detection.appInfos?.length) {
-            existing.appInfos = existing.appInfos ?? [];
-            for (const info of detection.appInfos) {
-              if (!existing.appInfos.some((i) => i.app_name === info.app_name)) {
-                existing.appInfos.push(info);
-              }
-            }
+      if (detection.appInfos) {
+        for (const info of detection.appInfos) {
+          const k = info.app_name.toLowerCase();
+          if (!infoByApp.has(k)) {
+            infoByApp.set(k, info);
           }
         }
       }
@@ -235,11 +230,15 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
     }
   }
 
-  // Cheating platforms always on top
+  // Sort rows chronologically ("timebuild wise"). If timestamps are equal,
+  // cheating platforms & higher risk sort first.
   const isTopPriority = (id: string) => id.startsWith('cheating_platforms');
-  allDetections.sort((a, b) =>
-    isTopPriority(a.categoryId) ? -1 : isTopPriority(b.categoryId) ? 1 : 0
-  );
+  const sortedAppRows = [...appEventRows].sort((a, b) => {
+    if (a.ts !== b.ts) return a.ts - b.ts;
+    if (isTopPriority(a.categoryId) && !isTopPriority(b.categoryId)) return -1;
+    if (!isTopPriority(a.categoryId) && isTopPriority(b.categoryId)) return 1;
+    return 0;
+  });
 
   // Sorted unique activities with their counts
   const allActivities = Array.from(activityCounts.entries())
@@ -253,7 +252,7 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
     .sort((x, y) => new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime());
 
   if (alerts.length === 0) return null;
-  if (allDetections.length === 0 && allActivities.length === 0 && allKeyboardAlerts.length === 0) return null;
+  if (sortedAppRows.length === 0 && allActivities.length === 0 && allKeyboardAlerts.length === 0) return null;
 
   return (
     <Box
@@ -265,57 +264,83 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
         gap,
       }}
     >
-      {/* App detections by category — always expanded */}
-      {allDetections.map((detection) => {
-        const config = getConfig(detection.categoryId);
+      {/* Individual cards for each app open/close event, ordered chronologically */}
+      {sortedAppRows.map((row, i) => {
+        const config = getConfig(row.categoryId);
         const Icon = config.icon;
+        const info = infoByApp.get(row.app.toLowerCase());
+        const label =
+          row.kind === 'open'
+            ? `opened ${row.app}${info?.window_title ? ` — "${info.window_title}"` : ''}`
+            : `closed ${row.app}${
+                row.cycleMs != null ? ` — open ${formatDuration(row.cycleMs)}` : ''
+              }`;
 
         return (
           <Box
-            key={detection.categoryId}
+            key={`${row.app}-${row.kind}-${row.ts}-${i}`}
+            data-testid="pulse-event-card"
             sx={{
+              p: 1.25,
               borderRadius: '8px',
-              bgcolor: config.bg,
-              border: `1px solid ${config.color}20`,
-              overflow: 'hidden',
+              bgcolor: '#FFFFFF',
+              border: `1px solid ${config.color}25`,
+              borderLeft: `3px solid ${config.color}`,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1.5,
+              transition: 'all 0.15s ease',
+              '&:hover': {
+                borderColor: `${config.color}50`,
+                boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+              },
             }}
           >
-            {/* Header row */}
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.75,
-                px: 1,
-                py: 0.5,
-              }}
-            >
-              <Icon sx={{ fontSize: 14, color: config.color, flexShrink: 0 }} />
-              <Typography
-                sx={{
-                  fontSize: '0.7rem',
-                  fontWeight: 700,
-                  color: config.color,
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                  letterSpacing: '0.02em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                {detection.categoryLabel}
-              </Typography>
-
-              {/* App count badge */}
+            {/* Left: App Icon + Opened/Closed Label */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1 }}>
               <Box
                 sx={{
-                  minWidth: 16,
-                  height: 16,
-                  borderRadius: '4px',
-                  bgcolor: `${config.color}25`,
+                  width: 26,
+                  height: 26,
+                  borderRadius: '6px',
+                  bgcolor: config.bg,
+                  color: config.color,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  px: 0.5,
+                  flexShrink: 0,
+                }}
+              >
+                <Icon sx={{ fontSize: 15 }} />
+              </Box>
+              <Typography
+                sx={{
+                  fontSize: '0.75rem',
+                  fontWeight: row.kind === 'open' ? 700 : 500,
+                  color: row.kind === 'open' ? '#111827' : '#6B7280',
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {label}
+              </Typography>
+            </Box>
+
+            {/* Right: Category badge + Formatted Timestamp */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+              <Box
+                sx={{
+                  px: 0.75,
+                  py: 0.2,
+                  borderRadius: '4px',
+                  bgcolor: config.bg,
+                  border: `1px solid ${config.color}20`,
+                  display: 'flex',
+                  alignItems: 'center',
                 }}
               >
                 <Typography
@@ -323,47 +348,25 @@ export default function PulseAlertBanner({ alerts, gap = 0.5 }: PulseAlertBanner
                     fontSize: '0.625rem',
                     fontWeight: 700,
                     color: config.color,
-                    lineHeight: 1,
+                    letterSpacing: '0.02em',
+                    textTransform: 'uppercase',
+                    lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  {detection.apps.length}
+                  {row.categoryLabel}
                 </Typography>
               </Box>
-            </Box>
-
-            {/* App open/close event log — one row per transition, stacked
-                chronologically. Opened and closed are separate rows; an
-                earlier "opened" row is never overwritten or grayed out by
-                a later "closed" row for the same app — both stay visible
-                as history, matching the window Timeline's principle. */}
-            <Box sx={{ px: 1, pb: 0.75, pt: 0, display: 'flex', flexDirection: 'column' }}>
-              {(() => {
-                const infoByApp = new Map(
-                  (detection.appInfos ?? []).map((i) => [i.app_name.toLowerCase(), i])
-                );
-                const rows = appEventRows
-                  .filter((r) => r.categoryId === detection.categoryId)
-                  .sort((a, b) => a.ts - b.ts);
-                return rows.map((row, i) => {
-                  const info = infoByApp.get(row.app.toLowerCase());
-                  const label =
-                    row.kind === 'open'
-                      ? `opened ${row.app}${info?.window_title ? ` — "${info.window_title}"` : ''}`
-                      : `closed ${row.app}${
-                          row.cycleMs != null ? ` — open ${formatDuration(row.cycleMs)}` : ''
-                        }`;
-                  return (
-                    <Box key={`${row.app}-${row.kind}-${i}`} sx={{ display: 'flex', gap: 0.6, alignItems: 'baseline', py: 0.2 }}>
-                      <Typography sx={{ fontSize: '0.6rem', color: '#9CA3AF', fontFamily: 'monospace', flexShrink: 0, width: 62 }}>
-                        {formatDateTime(new Date(row.ts).toISOString())}
-                      </Typography>
-                      <Typography sx={{ fontSize: '0.7rem', fontWeight: row.kind === 'open' ? 700 : 500, color: row.kind === 'open' ? '#1F2937' : '#6B7280' }}>
-                        {label}
-                      </Typography>
-                    </Box>
-                  );
-                });
-              })()}
+              <Typography
+                sx={{
+                  fontSize: '0.65rem',
+                  color: '#6B7280',
+                  fontFamily: 'monospace',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {formatDateTime(new Date(row.ts).toISOString())}
+              </Typography>
             </Box>
           </Box>
         );

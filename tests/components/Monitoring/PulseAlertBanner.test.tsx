@@ -28,7 +28,7 @@ describe('PulseAlertBanner', () => {
       },
     ];
     render(<PulseAlertBanner alerts={alerts} />);
-    expect(screen.getByText('AI Tools')).toBeInTheDocument();
+    expect(screen.getAllByText('AI Tools')[0]).toBeInTheDocument();
     expect(screen.getByText('opened ChatGPT')).toBeInTheDocument();
     expect(screen.getByText('opened Claude')).toBeInTheDocument();
   });
@@ -348,5 +348,65 @@ describe('PulseAlertBanner — appInfos', () => {
     const { container } = render(<PulseAlertBanner alerts={alerts} />);
     expect(screen.getByText(/Hidden window/)).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/excluded/i);
+  });
+
+  describe('individual cards & chronological ordering', () => {
+    test('renders separate individual cards for apps instead of a shared category block', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            {
+              categoryId: 'ai_tools',
+              categoryLabel: 'AI Tools',
+              apps: ['Claude', 'Cursor'],
+              appInfos: [
+                { app_name: 'Claude', window_title: 'Claude', is_excluded: false },
+                { app_name: 'Cursor', window_title: 'CandidateJoinPage.tsx', is_excluded: false },
+              ],
+              matchedKeywords: ['claude', 'cursor'],
+            },
+          ],
+          activities: [],
+          timestamp: TS,
+        },
+      ];
+      render(<PulseAlertBanner alerts={alerts} />);
+      const appCards = screen.getAllByTestId('pulse-event-card');
+      expect(appCards).toHaveLength(2);
+      expect(appCards[0]).toHaveTextContent('Claude');
+      expect(appCards[1]).toHaveTextContent('Cursor');
+    });
+
+    test('interleaves app open events from different categories chronologically', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            { categoryId: 'general_usage', categoryLabel: 'General Usage', apps: ['Terminal'], matchedKeywords: [] },
+          ],
+          activities: [],
+          timestamp: '2026-07-05T10:00:00.000Z',
+        },
+        {
+          detections: [
+            { categoryId: 'ai_tools', categoryLabel: 'AI Tools', apps: ['Cursor'], matchedKeywords: [] },
+          ],
+          activities: [],
+          timestamp: '2026-07-05T10:00:05.000Z',
+        },
+        {
+          detections: [
+            { categoryId: 'virtual_machines', categoryLabel: 'VMs', apps: ['Docker Desktop'], matchedKeywords: [] },
+          ],
+          activities: [],
+          timestamp: '2026-07-05T10:00:10.000Z',
+        },
+      ];
+      render(<PulseAlertBanner alerts={alerts} />);
+      const cards = screen.getAllByTestId('pulse-event-card');
+      expect(cards).toHaveLength(3);
+      expect(cards[0]).toHaveTextContent('Terminal');
+      expect(cards[1]).toHaveTextContent('Cursor');
+      expect(cards[2]).toHaveTextContent('Docker Desktop');
+    });
   });
 });
