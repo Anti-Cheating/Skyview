@@ -38,7 +38,7 @@ import {
   ChevronRight,
 } from '@mui/icons-material';
 import { AnimatePresence, motion } from 'framer-motion';
-import { type ReactNode } from 'react';
+import { type ReactNode, type MouseEvent as ReactMouseEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Body, Caption } from '../layout/Typography';
 import { TOKENS } from '../../theme';
 
@@ -455,8 +455,30 @@ export function DataTable<TRow>({
                 {rows.map((row, index) => (
                   <MotionTableRow
                     key={rowKey(row, index)}
-                    onClick={onRowClick ? () => onRowClick(row, index) : undefined}
-                    sx={onRowClick ? { ...rowSx, cursor: 'pointer' } : rowSx}
+                    // Whole-row click. Clicks that land on a control inside
+                    // the row (action buttons, links, inputs) belong to that
+                    // control, not the row. Keyboard gets the same target via
+                    // Enter/Space so the row isn't mouse-only.
+                    onClick={
+                      onRowClick
+                        ? (e: ReactMouseEvent<HTMLElement>) => {
+                            if ((e.target as HTMLElement).closest('button, a, input, [role="button"]')) return;
+                            onRowClick(row, index);
+                          }
+                        : undefined
+                    }
+                    onKeyDown={
+                      onRowClick
+                        ? (e: ReactKeyboardEvent<HTMLElement>) => {
+                            if (e.target !== e.currentTarget) return;
+                            if (e.key !== 'Enter' && e.key !== ' ') return;
+                            e.preventDefault();
+                            onRowClick(row, index);
+                          }
+                        : undefined
+                    }
+                    tabIndex={onRowClick ? 0 : undefined}
+                    sx={onRowClick ? { ...rowSx, cursor: 'pointer', '&:focus-visible': { outline: `2px solid ${TOKENS.brand}`, outlineOffset: '-2px' } } : rowSx}
                     // Fade-only enter/exit. Skipping layout transforms
                     // on table rows on purpose (see import comment).
                     initial={{ opacity: 0 }}

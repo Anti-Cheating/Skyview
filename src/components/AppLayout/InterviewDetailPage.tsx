@@ -30,6 +30,7 @@ import type { InterviewSession } from '../../types/interview.types';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { PostAnalysisPanel } from '../PostAnalysis';
 import ActivityExplorer from '../PostAnalysis/ActivityExplorer';
+import AnalysisRunningAnimation from '../PostAnalysis/AnalysisRunningAnimation';
 
 function getInitials(first: string, last: string): string {
   return `${first?.[0] ?? ''}${last?.[0] ?? ''}`.toUpperCase();
@@ -383,6 +384,9 @@ export default function InterviewDetailPage() {
 
   const isCompleted = session.status === 'COMPLETED';
   const canStart = !isCompleted;
+  // ACTIVE means the interviewer left the monitoring view without ending —
+  // re-entering resumes the live session rather than starting a new one.
+  const isLive = session.status === 'ACTIVE';
   const canAnalyse = isCompleted && !analysing;
 
   const handleAnalyse = async () => {
@@ -481,7 +485,7 @@ export default function InterviewDetailPage() {
               '&:hover': { bgcolor: '#3CC954', boxShadow: 'none' },
             }}
           >
-            Start Interview
+            {isLive ? 'Resume Interview' : 'Start Interview'}
           </Button>
         )}
       </Box>
@@ -574,16 +578,18 @@ export default function InterviewDetailPage() {
               Analyse Interview
             </Button>
           </Box>
-          <Box sx={{ py: 6, textAlign: 'center' }}>
-            <AnalyseIcon sx={{ fontSize: 48, color: '#E5E7EB', mb: 1 }} />
-            <Typography sx={{ fontSize: '0.875rem', color: '#9CA3AF' }}>
-              {analysing
-                ? 'Analysis is running — this may take a moment.'
-                : isCompleted
+          {analysing ? (
+            <AnalysisRunningAnimation />
+          ) : (
+            <Box sx={{ py: 6, textAlign: 'center' }}>
+              <AnalyseIcon sx={{ fontSize: 48, color: '#E5E7EB', mb: 1 }} />
+              <Typography sx={{ fontSize: '0.875rem', color: '#9CA3AF' }}>
+                {isCompleted
                   ? 'No analysis generated yet. Click "Analyse Interview" to run it.'
                   : 'Analysis becomes available once the interview is completed.'}
-            </Typography>
-          </Box>
+              </Typography>
+            </Box>
+          )}
         </Box>
       )}
 

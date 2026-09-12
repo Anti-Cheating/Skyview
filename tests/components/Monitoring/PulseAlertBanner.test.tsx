@@ -28,9 +28,10 @@ describe('PulseAlertBanner', () => {
       },
     ];
     render(<PulseAlertBanner alerts={alerts} />);
-    expect(screen.getByText('AI Tools')).toBeInTheDocument();
+    expect(screen.getAllByText('AI Tools')[0]).toBeInTheDocument();
     expect(screen.getByText('ChatGPT')).toBeInTheDocument();
     expect(screen.getByText('Claude')).toBeInTheDocument();
+    expect(screen.getAllByText('Open')).toHaveLength(2);
   });
 
   test('renders an activity with an occurrence count', () => {
@@ -43,7 +44,7 @@ describe('PulseAlertBanner', () => {
     expect(screen.getByText('2×')).toBeInTheDocument();
   });
 
-  test('renders keyboard alerts in the feed', () => {
+  test('renders keyboard alerts in the feed with risk badge beside label on left, not beside timestamp', () => {
     const alerts: PulseAlert[] = [
       {
         detections: [],
@@ -52,8 +53,19 @@ describe('PulseAlertBanner', () => {
         timestamp: TS,
       },
     ];
-    render(<PulseAlertBanner alerts={alerts} />);
+    const { container } = render(<PulseAlertBanner alerts={alerts} />);
     expect(screen.getByText('Screenshot shortcut')).toBeInTheDocument();
+    expect(screen.getByText('HIGH')).toBeInTheDocument();
+
+    const card = container.querySelector('[data-testid="pulse-event-card"]') || container.firstChild?.firstChild;
+    // Card has 2 children: left Box (icon + label + risk badge) and right Box (timestamp only)
+    const cardEl = card as HTMLElement;
+    const [leftBox, rightBox] = Array.from(cardEl.children);
+
+    expect(leftBox).toHaveTextContent('Screenshot shortcut');
+    expect(leftBox).toHaveTextContent('HIGH');
+    expect(rightBox).not.toHaveTextContent('HIGH');
+    expect(rightBox?.textContent?.trim()).toMatch(/^\d+:\d+:\d+/);
   });
 
   test('cheating platforms sort ahead of other detections', () => {
@@ -105,6 +117,7 @@ describe('PulseAlertBanner', () => {
     render(<PulseAlertBanner alerts={alerts} />);
     expect(screen.getByText('AI Sub')).toBeInTheDocument();
     expect(screen.getByText('ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText('Open')).toBeInTheDocument();
   });
 
   test('same category across two pulses merges its apps (else branch)', () => {
@@ -124,32 +137,53 @@ describe('PulseAlertBanner', () => {
     // Deduped union across both pulses.
     expect(screen.getByText('ChatGPT')).toBeInTheDocument();
     expect(screen.getByText('Claude')).toBeInTheDocument();
+    expect(screen.getAllByText('Open')).toHaveLength(2);
   });
 
-  test('duration labels cover seconds / minutes / hours branches', () => {
-    const now = Date.now();
-    const iso = (msAgo: number) => new Date(now - msAgo).toISOString();
+  test('duration labels cover seconds / minutes / hours branches on close events', () => {
+    const base = new Date('2026-07-05T00:00:00.000Z').getTime();
     const alerts: PulseAlert[] = [
       {
         detections: [{ categoryId: 'search_engines', categoryLabel: 'Search', apps: ['Recent'], matchedKeywords: [] }],
         activities: [],
-        timestamp: iso(30 * 1000), // seconds
+        timestamp: new Date(base).toISOString(),
+      },
+      {
+        detections: [],
+        activities: ['app_closed:Recent'],
+        timestamp: new Date(base + 30 * 1000).toISOString(), // 30s
       },
       {
         detections: [{ categoryId: 'messaging', categoryLabel: 'Messaging', apps: ['MinsAgo'], matchedKeywords: [] }],
         activities: [],
-        timestamp: iso(5 * 60 * 1000), // minutes
+        timestamp: new Date(base).toISOString(),
+      },
+      {
+        detections: [],
+        activities: ['app_closed:MinsAgo'],
+        timestamp: new Date(base + 5 * 60 * 1000).toISOString(), // 5 min
       },
       {
         detections: [{ categoryId: 'ai_tools', categoryLabel: 'AI Tools', apps: ['HoursAgo'], matchedKeywords: [] }],
         activities: [],
-        timestamp: iso(2 * 60 * 60 * 1000), // hours
+        timestamp: new Date(base).toISOString(),
+      },
+      {
+        detections: [],
+        activities: ['app_closed:HoursAgo'],
+        timestamp: new Date(base + (2 * 60 + 15) * 60 * 1000).toISOString(), // 2h 15m
       },
     ];
     render(<PulseAlertBanner alerts={alerts} />);
-    expect(screen.getByText('Recent')).toBeInTheDocument();
-    expect(screen.getByText('MinsAgo')).toBeInTheDocument();
-    expect(screen.getByText('HoursAgo')).toBeInTheDocument();
+    expect(screen.getAllByText('Recent')).toHaveLength(2);
+    expect(screen.getByText(/open 30s/)).toBeInTheDocument();
+    expect(screen.getAllByText('MinsAgo')).toHaveLength(2);
+    expect(screen.getByText(/open 5 min/)).toBeInTheDocument();
+    expect(screen.getAllByText('HoursAgo')).toHaveLength(2);
+    expect(screen.getByText(/open 2h 15m/)).toBeInTheDocument();
+    expect(screen.getAllByText('Open')).toHaveLength(3);
+    expect(screen.getAllByText('Close')).toHaveLength(3);
+    expect(screen.queryByText(/—/)).not.toBeInTheDocument();
   });
 
   test('an unknown activity falls back to a humanised label', () => {
@@ -205,12 +239,13 @@ describe('PulseAlertBanner — duration accumulation', () => {
 
     render(<PulseAlertBanner alerts={alerts} />);
 
-    // Total accumulated = 2 min + 3 min = 5 min, not 13 min (time from first open to last close)
-    expect(screen.getByText(/5 min/)).toBeInTheDocument();
+    // Each cycle's close row reports its own duration (2 min and 3 min), not time from first open to last close (13 min)
+    expect(screen.getByText(/open 2 min/)).toBeInTheDocument();
+    expect(screen.getByText(/open 3 min/)).toBeInTheDocument();
     expect(screen.queryByText(/13 min/)).not.toBeInTheDocument();
   });
 
-  test('a still-open app accumulates up to the last event timestamp, not Date.now() (correct for post-interview replay)', () => {
+  test('a still-open app emits an open event row and no close row', () => {
     const alerts: PulseAlert[] = [
       { detections: [detection(['Cursor'])], activities: [], timestamp: '2026-07-19T10:00:00.000Z' },
       // No close event — last known event is 4 minutes later.
@@ -219,7 +254,9 @@ describe('PulseAlertBanner — duration accumulation', () => {
 
     render(<PulseAlertBanner alerts={alerts} />);
 
-    expect(screen.getByText(/4 min/)).toBeInTheDocument();
+    expect(screen.getByText('Cursor')).toBeInTheDocument();
+    expect(screen.getByText('Open')).toBeInTheDocument();
+    expect(screen.queryByText('Close')).not.toBeInTheDocument();
   });
 
   test('accumulates correctly even when app_closed casing differs from the open detection\'s app name', () => {
@@ -235,9 +272,10 @@ describe('PulseAlertBanner — duration accumulation', () => {
 
     render(<PulseAlertBanner alerts={alerts} />);
 
-    expect(screen.getByText(/3 min/)).toBeInTheDocument();
+    expect(screen.getByText(/open 3 min/)).toBeInTheDocument();
     expect(screen.queryByText(/50 min/)).not.toBeInTheDocument();
-    expect(screen.getByText(/CLOSED/)).toBeInTheDocument();
+    expect(screen.getByText('Cursor')).toBeInTheDocument();
+    expect(screen.getByText('Close')).toBeInTheDocument();
   });
 });
 
@@ -296,11 +334,11 @@ describe('PulseAlertBanner — appInfos', () => {
     ];
     render(<PulseAlertBanner alerts={alerts} />);
     // First-seen appInfo entry wins on dedup — not overwritten by the later pulse.
-    expect(screen.getByText(/Chat one$/)).toBeInTheDocument();
+    expect(screen.getByText(/Chat one/)).toBeInTheDocument();
     expect(screen.getByText(/Claude chat/)).toBeInTheDocument();
   });
 
-  test('no appInfos on the payload falls back to bare app names with "No title"', () => {
+  test('no appInfos on the payload falls back to bare app names without window title', () => {
     const alerts: PulseAlert[] = [
       {
         detections: [{ categoryId: 'ai_tools', categoryLabel: 'AI Tools', apps: ['ChatGPT'], matchedKeywords: [] }],
@@ -310,7 +348,8 @@ describe('PulseAlertBanner — appInfos', () => {
     ];
     render(<PulseAlertBanner alerts={alerts} />);
     expect(screen.getByText('ChatGPT')).toBeInTheDocument();
-    expect(screen.getByText(/No title/)).toBeInTheDocument();
+    expect(screen.getByText('Open')).toBeInTheDocument();
+    expect(screen.queryByText(/—/)).not.toBeInTheDocument();
   });
 
   test('is_excluded is present in the data but never rendered in the DOM', () => {
@@ -332,5 +371,299 @@ describe('PulseAlertBanner — appInfos', () => {
     const { container } = render(<PulseAlertBanner alerts={alerts} />);
     expect(screen.getByText(/Hidden window/)).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/excluded/i);
+  });
+
+  describe('individual cards & chronological ordering', () => {
+    test('renders separate individual cards for apps instead of a shared category block', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            {
+              categoryId: 'ai_tools',
+              categoryLabel: 'AI Tools',
+              apps: ['Claude', 'Cursor'],
+              appInfos: [
+                { app_name: 'Claude', window_title: 'Claude', is_excluded: false },
+                { app_name: 'Cursor', window_title: 'CandidateJoinPage.tsx', is_excluded: false },
+              ],
+              matchedKeywords: ['claude', 'cursor'],
+            },
+          ],
+          activities: [],
+          timestamp: TS,
+        },
+      ];
+      render(<PulseAlertBanner alerts={alerts} />);
+      const appCards = screen.getAllByTestId('pulse-event-card');
+      expect(appCards).toHaveLength(2);
+      expect(appCards[0]).toHaveTextContent('Claude');
+      expect(appCards[1]).toHaveTextContent('Cursor');
+    });
+
+    test('interleaves app open events from different categories chronologically', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            { categoryId: 'general_usage', categoryLabel: 'General Usage', apps: ['Terminal'], matchedKeywords: [] },
+          ],
+          activities: [],
+          timestamp: '2026-07-05T10:00:00.000Z',
+        },
+        {
+          detections: [
+            { categoryId: 'ai_tools', categoryLabel: 'AI Tools', apps: ['Cursor'], matchedKeywords: [] },
+          ],
+          activities: [],
+          timestamp: '2026-07-05T10:00:05.000Z',
+        },
+        {
+          detections: [
+            { categoryId: 'virtual_machines', categoryLabel: 'VMs', apps: ['Docker Desktop'], matchedKeywords: [] },
+          ],
+          activities: [],
+          timestamp: '2026-07-05T10:00:10.000Z',
+        },
+      ];
+      render(<PulseAlertBanner alerts={alerts} />);
+      const cards = screen.getAllByTestId('pulse-event-card');
+      expect(cards).toHaveLength(3);
+      expect(cards[0]).toHaveTextContent('Terminal');
+      expect(cards[1]).toHaveTextContent('Cursor');
+      expect(cards[2]).toHaveTextContent('Docker Desktop');
+    });
+
+    test('timestamps render time only without date', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            { categoryId: 'general_usage', categoryLabel: 'General Usage', apps: ['Terminal'], matchedKeywords: [] },
+          ],
+          activities: [],
+          timestamp: '2026-07-05T14:32:45.000Z',
+        },
+      ];
+      const { container } = render(<PulseAlertBanner alerts={alerts} />);
+      // Should not contain date information like year "2026" or month "Jul"
+      expect(container.textContent).not.toMatch(/2026/);
+      expect(container.textContent).not.toMatch(/Jul/);
+      // Should contain time (AM/PM)
+      expect(container.textContent).toMatch(/\d+:\d+:\d+/);
+    });
+
+    test('remediates historical general_usage detection to cheating_platforms if app has is_excluded=true in a mixed set', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            {
+              categoryId: 'general_usage',
+              categoryLabel: 'General Usage',
+              apps: ['Terminal', 'Spotify', 'Aside'],
+              appInfos: [
+                { app_name: 'Terminal', window_title: 'zsh', is_excluded: false },
+                { app_name: 'Spotify', window_title: 'Spotify Free', is_excluded: false },
+                { app_name: 'Aside', window_title: 'Aside', is_excluded: true },
+              ],
+              matchedKeywords: ['Terminal', 'Spotify', 'Aside'],
+            },
+          ],
+          activities: [],
+          timestamp: TS,
+        },
+      ];
+      render(<PulseAlertBanner alerts={alerts} />);
+      const cards = screen.getAllByTestId('pulse-event-card');
+      expect(cards).toHaveLength(3);
+
+      // Aside should have category label "Cheating Platform Detected", not "General Usage"
+      const asideCard = cards.find((c) => c.textContent?.includes('Aside'));
+      expect(asideCard).toBeDefined();
+      expect(asideCard).toHaveTextContent('Cheating Platform Detected');
+
+      // Terminal should remain General Usage
+      const terminalCard = cards.find((c) => c.textContent?.includes('Terminal'));
+      expect(terminalCard).toBeDefined();
+      expect(terminalCard).toHaveTextContent('General Usage');
+    });
+
+    test('does not escalate when all apps are is_excluded=true (permission missing)', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            {
+              categoryId: 'general_usage',
+              categoryLabel: 'General Usage',
+              apps: ['Terminal', 'Spotify', 'Aside'],
+              appInfos: [
+                { app_name: 'Terminal', window_title: 'zsh', is_excluded: true },
+                { app_name: 'Spotify', window_title: 'Spotify Free', is_excluded: true },
+                { app_name: 'Aside', window_title: 'Aside', is_excluded: true },
+              ],
+              matchedKeywords: ['Terminal', 'Spotify', 'Aside'],
+            },
+          ],
+          activities: [],
+          timestamp: TS,
+        },
+      ];
+      render(<PulseAlertBanner alerts={alerts} />);
+      expect(screen.queryByText('Cheating Platform Detected')).not.toBeInTheDocument();
+      expect(screen.getAllByText('General Usage').length).toBeGreaterThan(0);
+    });
+
+    test('interleaves app events and keyboard alerts in pure chronological order regardless of modality', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            { categoryId: 'ai_tools', categoryLabel: 'AI Tools', apps: ['Cursor'], matchedKeywords: [] },
+          ],
+          activities: [],
+          timestamp: '2026-07-05T10:00:00.000Z',
+        },
+        {
+          detections: [],
+          activities: [],
+          keyboardAlerts: [
+            {
+              type: 'app_switch_storm',
+              label: 'Rapid app switching (12×): Cursor → Google Chrome → Cursor → Google Chrome',
+              riskLevel: 'MEDIUM',
+            },
+          ],
+          timestamp: '2026-07-05T10:16:31.000Z',
+        },
+        {
+          detections: [
+            { categoryId: 'cheating_platforms', categoryLabel: 'Cheating Platform Detected', apps: ['Aside'], matchedKeywords: [] },
+          ],
+          activities: ['app_closed:aside'],
+          timestamp: '2026-07-05T10:35:18.000Z',
+        },
+      ];
+
+      const { container } = render(<PulseAlertBanner alerts={alerts} />);
+      const text = container.textContent || '';
+
+      // 10:16:31 alert must appear before 10:35:18 app close in the DOM
+      const lower = text.toLowerCase();
+      const switchIndex = lower.indexOf('rapid app switching');
+      const closeIndex = lower.indexOf('close');
+      const asideIndex = lower.indexOf('aside');
+
+      expect(switchIndex).toBeGreaterThan(-1);
+      expect(closeIndex).toBeGreaterThan(-1);
+      expect(asideIndex).toBeGreaterThan(-1);
+      expect(switchIndex).toBeLessThan(closeIndex);
+      expect(switchIndex).toBeLessThan(asideIndex);
+    });
+
+    test('summarizes rapid app switching arrow chain into condensed between/across format', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [],
+          activities: [],
+          keyboardAlerts: [
+            {
+              type: 'app_switch_storm',
+              label: 'Rapid app switching (12×): Cursor → Google Chrome → Cursor → Google Chrome → Cursor → Google Chrome',
+              riskLevel: 'MEDIUM',
+            },
+          ],
+          timestamp: '2026-07-05T10:16:31.000Z',
+        },
+      ];
+
+      render(<PulseAlertBanner alerts={alerts} />);
+      expect(screen.getByText('Rapid app switching (12×): between Cursor and Google Chrome')).toBeInTheDocument();
+      expect(screen.queryByText(/→/)).not.toBeInTheDocument();
+    });
+
+    test('renders row elements in order: App Name before Window Title before Category Badge', () => {
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            {
+              categoryId: 'ai_tools',
+              categoryLabel: 'AI Tools',
+              apps: ['ChatGPT'],
+              appInfos: [
+                {
+                  app_name: 'ChatGPT',
+                  window_title: 'ChatGPT - Prompt Engineering',
+                  is_excluded: false,
+                },
+              ],
+              matchedKeywords: [],
+            },
+          ],
+          activities: [],
+          timestamp: TS,
+        },
+      ];
+
+      const { container } = render(<PulseAlertBanner alerts={alerts} />);
+      const card = container.querySelector('[data-testid="pulse-event-card"]');
+      expect(card).toBeInTheDocument();
+
+      const text = card?.textContent || '';
+      const appIndex = text.indexOf('ChatGPT');
+      const titleIndex = text.indexOf('ChatGPT - Prompt Engineering');
+      const categoryIndex = text.indexOf('AI Tools');
+
+      expect(appIndex).toBeGreaterThan(-1);
+      expect(titleIndex).toBeGreaterThan(-1);
+      expect(categoryIndex).toBeGreaterThan(-1);
+
+      // Order: App Name < Window Title < Category
+      expect(appIndex).toBeLessThan(titleIndex);
+      expect(titleIndex).toBeLessThan(categoryIndex);
+    });
+
+    test('truncates long window title by default and allows expanding/collapsing full title', async () => {
+      const longTitle = 'Trueyy — harshrathod@Harshs-Mac-mini — -zsh — 229×51 Workspace Active Session';
+      const alerts: PulseAlert[] = [
+        {
+          detections: [
+            {
+              categoryId: 'ai_tools',
+              categoryLabel: 'AI Tools',
+              apps: ['Cursor'],
+              appInfos: [
+                {
+                  app_name: 'Cursor',
+                  window_title: longTitle,
+                  is_excluded: false,
+                },
+              ],
+              matchedKeywords: [],
+            },
+          ],
+          activities: [],
+          timestamp: TS,
+        },
+      ];
+
+      const { userEvent } = await import('@testing-library/user-event');
+      const user = userEvent.setup();
+      render(<PulseAlertBanner alerts={alerts} />);
+
+      const titleEl = screen.getByTestId('pulse-window-title');
+      expect(titleEl).toHaveAttribute('aria-expanded', 'false');
+      // Truncated title ends with ellipsis
+      expect(titleEl.textContent).toContain('...');
+      expect(titleEl.textContent).not.toBe(longTitle);
+
+      const toggleBtn = screen.getByTestId('expand-title-toggle');
+      expect(toggleBtn).toBeInTheDocument();
+
+      // Click to expand
+      await user.click(toggleBtn);
+      expect(titleEl).toHaveAttribute('aria-expanded', 'true');
+      expect(titleEl.textContent).toContain(longTitle);
+
+      // Click again to collapse
+      await user.click(titleEl);
+      expect(titleEl).toHaveAttribute('aria-expanded', 'false');
+      expect(titleEl.textContent).toContain('...');
+    });
   });
 });

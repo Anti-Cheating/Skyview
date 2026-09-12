@@ -14,27 +14,31 @@ import {
   Switch,
   FormControlLabel,
 } from '@mui/material';
+import { HugeiconsIcon } from '@hugeicons/react';
+import type { IconSvgElement } from '@hugeicons/react';
 import {
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  Monitor as ScreenIcon,
-  Keyboard as KeyboardIcon,
-  Mic as VoiceIcon,
-  Link as CorrelationIcon,
-  Schedule as TimelineIcon,
-  Shield as ShieldIcon,
-  Warning as WarningIcon,
-  CameraAlt as CameraIcon,
-  VideoCall as VideoCallIcon,
-  FiberManualRecord as DotIcon,
-  TrendingUp as TrendUpIcon,
-  TrendingDown as TrendDownIcon,
-  TrendingFlat as TrendFlatIcon,
-  UnfoldMore as UnfoldMoreIcon,
-} from '@mui/icons-material';
+  ArrowDown01Icon,
+  ArrowUp01Icon,
+  Mic01Icon,
+  Clock01Icon,
+  Shield01Icon,
+  Alert02Icon,
+  Camera01Icon,
+  ComputerVideoCallIcon,
+  ArrowUpRight01Icon,
+  ArrowDownRight01Icon,
+  ArrowRight01Icon,
+  Robot01Icon,
+  LaptopIcon,
+  ClipboardIcon,
+  Copy01Icon,
+  KeyboardIcon,
+  BrowserIcon,
+  ArrowLeftRightIcon,
+} from '@hugeicons/core-free-icons';
 import { TOKENS } from '../../theme';
 import { formatDateTime, formatClock } from '../../utils/dateFormat';
-import type { WindowResult, ModalityRisk, Correlation, UseRiskSocketReturn, TranscriptFragment, ImageAnalysisResult } from '../../hooks/useRiskSocket';
+import type { WindowResult, Correlation, EvidenceCitation, UseRiskSocketReturn, TranscriptFragment, ImageAnalysisResult } from '../../hooks/useRiskSocket';
 // CortexService import removed — capture button disabled (interviewer has no local Sentinel)
 import PulseAlertBanner from './PulseAlertBanner';
 import { ResponsiveContainer, LineChart, Line, Tooltip as RechartsTooltip, ReferenceArea, YAxis } from 'recharts';
@@ -124,60 +128,390 @@ function formatSignal(signal: string): string {
 
 /* ── Sub-components ── */
 
-function ModalityCard({ label, icon, modality }: { label: string; icon: React.ReactNode; modality: ModalityRisk }) {
-  const [expanded, setExpanded] = useState(false);
-  const color = getRiskColor(modality.risk_level);
-  const hasDetails = (modality.signals?.length > 0) || (modality.evidence?.length > 0) || modality.summary;
-
+/** One row per event — timeline lines, never side-by-side, always stacked
+ *  chronologically. Shared by the Timeline and (indirectly, via the same
+ *  visual language) the pulse banner's open/close rows. */
+export function TimelineRow({ time, kind, detail }: { time: string; kind: string; detail: string }) {
   return (
-    <Box sx={{ borderRadius: '8px', border: `1px solid ${color}20`, bgcolor: `${color}08`, overflow: 'hidden' }}>
-      <Box
-        onClick={() => hasDetails && setExpanded(!expanded)}
-        sx={{ px: 1.2, py: 0.7, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: hasDetails ? 'pointer' : 'default', '&:hover': hasDetails ? { bgcolor: `${color}12` } : {}, transition: 'background 0.15s' }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.7 }}>
-          <Box sx={{ color, display: 'flex', alignItems: 'center', '& svg': { fontSize: 14 } }}>{icon}</Box>
-          <Typography sx={{ fontSize: '0.7rem', fontWeight: 600, color: DARK_TEXT }}>{label}</Typography>
-          <Chip label={modality.risk_level?.toUpperCase() || 'N/A'} size="small" sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${color}20`, color, '& .MuiChip-label': { px: 0.5 } }} />
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: getScoreColor(modality.risk_score) }}>{modality.risk_score}</Typography>
-          {hasDetails && <Box sx={{ color: DARK_TEXT_MUTED, display: 'flex', '& svg': { fontSize: 16 } }}>{expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}</Box>}
+    <Box sx={{ display: 'flex', gap: 0.6, alignItems: 'flex-start', py: 0.25 }}>
+      <Typography sx={{ fontSize: '0.6rem', color: DARK_TEXT_MUTED, fontFamily: 'monospace', flexShrink: 0, width: 62 }}>{time}</Typography>
+      <Typography sx={{ fontSize: '0.55rem', fontWeight: 700, color: DARK_TEXT_MUTED, flexShrink: 0, width: 62 }}>{kind}</Typography>
+      <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.4 }}>{detail}</Typography>
+    </Box>
+  );
+}
+
+export function EvidenceRow({ item }: { item: EvidenceCitation }) {
+  const color = getImpactColor((item.confidence as Correlation['impact']) || 'weak');
+  return (
+    <Box sx={{ display: 'flex', gap: 0.6, alignItems: 'flex-start', px: 1, py: 0.5, borderRadius: '6px', bgcolor: `${color}10`, border: `1px solid ${color}20`, mb: 0.4 }}>
+      <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: color, mt: '5px', flexShrink: 0 }} />
+      <Box sx={{ flex: 1 }}>
+        <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT, lineHeight: 1.4 }}>{item.claim}</Typography>
+        <Box sx={{ display: 'flex', gap: 0.4, mt: 0.3, alignItems: 'center' }}>
+          {item.confidence && <Chip label={item.confidence.toUpperCase()} size="small" sx={{ height: 14, fontSize: '0.45rem', fontWeight: 700, bgcolor: `${color}20`, color, '& .MuiChip-label': { px: 0.4 } }} />}
+          {item.source && <Typography sx={{ fontSize: '0.55rem', color: DARK_TEXT_MUTED }}>{item.source}</Typography>}
+          {item.timestamp && <Typography sx={{ fontSize: '0.55rem', color: DARK_TEXT_MUTED, fontFamily: 'monospace' }}>@{item.timestamp}</Typography>}
         </Box>
       </Box>
-      <Collapse in={expanded}>
-        <Box sx={{ px: 1.2, pb: 1, pt: 0.3 }}>
-          {modality.summary && <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.5, mb: 0.6, fontStyle: 'italic' }}>{modality.summary}</Typography>}
-          {modality.signals?.length > 0 && (
-            <Box sx={{ mb: 0.6 }}>
-              <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, color: DARK_TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.4 }}>Signals</Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
-                {modality.signals.map((s, i) => <Chip key={i} label={formatSignal(s)} size="small" sx={{ height: 18, fontSize: '0.55rem', fontWeight: 500, bgcolor: `${color}15`, color, border: `1px solid ${color}25`, '& .MuiChip-label': { px: 0.6 } }} />)}
-              </Box>
-            </Box>
-          )}
-          {modality.evidence?.length > 0 && (
-            <Box>
-              <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, color: DARK_TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.3 }}>Evidence</Typography>
-              {modality.evidence.map((item, i) => (
-                <Box key={i} sx={{ display: 'flex', gap: 0.5, mb: 0.2, alignItems: 'flex-start' }}>
-                  <DotIcon sx={{ fontSize: 5, color, mt: '5px', flexShrink: 0 }} />
-                  <Typography sx={{ fontSize: '0.625rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.4 }}>{item}</Typography>
-                </Box>
-              ))}
-            </Box>
-          )}
+    </Box>
+  );
+}
+
+/** A collapsible sub-section within an expanded WindowCard — Timeline and
+ *  Evidence each get their own independent expand state, default collapsed. */
+export function SubSection({
+  label,
+  count,
+  children,
+  action,
+  defaultOpen = false,
+}: {
+  label: string;
+  count: number;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Box sx={{ mb: 0.8 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 0.3 }}>
+        <Box
+          onClick={() => setOpen(!open)}
+          sx={{ display: 'flex', alignItems: 'center', gap: 0.4, cursor: 'pointer' }}
+        >
+          <Typography
+            sx={{
+              fontSize: '0.6rem',
+              fontWeight: 700,
+              color: DARK_TEXT_MUTED,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            {label} ({count})
+          </Typography>
+          <Box sx={{ color: DARK_TEXT_MUTED, display: 'flex', alignItems: 'center' }}>
+            <HugeiconsIcon icon={open ? ArrowUp01Icon : ArrowDown01Icon} size={13} color={DARK_TEXT_MUTED} />
+          </Box>
         </Box>
+        {action}
+      </Box>
+      <Collapse in={open}>
+        <Box sx={{ pt: 0.3 }}>{children}</Box>
       </Collapse>
     </Box>
   );
 }
 
-function CorrelationCard({ correlation }: { correlation: Correlation }) {
+export interface SummarizedTimelineEntry {
+  ts: number;
+  kind: string;
+  detail: string;
+  count?: number;
+  isSuspicious?: boolean;
+}
+
+/**
+ * Restricts timeline entries to strictly the 30-second monitoring window.
+ * A window card represents a 30s window. If upstream captures or historical
+ * records contain past events spanning minutes in the past, prune them so
+ * each card only displays what occurred in its active 30-second window.
+ */
+export function filterTimelineToWindow(
+  entries: { ts: number; kind: string; detail: string; speakerRole?: string }[],
+  processedAt?: string,
+  windowEndTime?: string
+): { ts: number; kind: string; detail: string; speakerRole?: string }[] {
+  if (!entries || entries.length <= 1) return entries || [];
+
+  const validEntries = entries.filter((e) => Number.isFinite(e.ts));
+  if (validEntries.length === 0) return entries;
+
+  // Determine window end timestamp: window_end_time, processed_at, or max event timestamp
+  const endExplicitTs = windowEndTime ? new Date(windowEndTime).getTime() : 0;
+  const processedTs = processedAt ? new Date(processedAt).getTime() : 0;
+  const maxEventTs = validEntries.reduce((max, e) => (e.ts > max ? e.ts : max), 0);
+  const endTs = Math.max(
+    Number.isFinite(endExplicitTs) ? endExplicitTs : 0,
+    Number.isFinite(processedTs) ? processedTs : 0,
+    maxEventTs
+  );
+
+  if (endTs <= 0) return entries;
+
+  // 30-second window with a 1s margin for network/clock skew
+  const startTs = endTs - 30 * 1000;
+  const inWindow = validEntries.filter((e) => e.ts >= startTs && e.ts <= endTs + 2000);
+
+  return inWindow.length > 0 ? inWindow : entries;
+}
+
+export function summarizeTimeline(
+  entries: { ts: number; kind: string; detail: string }[]
+): SummarizedTimelineEntry[] {
+  if (!entries || entries.length === 0) return [];
+  const out: SummarizedTimelineEntry[] = [];
+  let i = 0;
+  while (i < entries.length) {
+    const current = entries[i];
+
+    // 1. Detect rapid alternating app switches (e.g. Cursor ↔ Chrome ping-pong)
+    if (current.kind === 'APP') {
+      const matchTransition = current.detail.match(/closed (.+?), opened (.+?)(?: —|$)/);
+      if (matchTransition) {
+        const appA = matchTransition[1].trim();
+        const appB = matchTransition[2].trim();
+        let pingPongCount = 1;
+        let j = i + 1;
+        while (j < entries.length && entries[j].kind === 'APP') {
+          const nextMatch = entries[j].detail.match(/closed (.+?), opened (.+?)(?: —|$)/);
+          if (!nextMatch) break;
+          const nextA = nextMatch[1].trim();
+          const nextB = nextMatch[2].trim();
+          if ((nextA === appB && nextB === appA) || (nextA === appA && nextB === appB)) {
+            pingPongCount++;
+            j++;
+          } else {
+            break;
+          }
+        }
+        if (pingPongCount >= 3) {
+          out.push({
+            ts: current.ts,
+            kind: 'APP',
+            detail: `Rapid switching between ${appA} and ${appB} (${pingPongCount}×)`,
+            count: pingPongCount,
+            isSuspicious: true,
+          });
+          i = j;
+          continue;
+        }
+      }
+    }
+
+    // 2. Consecutive voice lines from the same speaker
+    if (current.kind === 'VOICE') {
+      const speakerMatch = current.detail.match(/^([^:]+):\s*\"(.*)\"$/);
+      if (speakerMatch) {
+        const speaker = speakerMatch[1];
+        let mergedText = speakerMatch[2];
+        let count = 1;
+        let j = i + 1;
+        while (j < entries.length && entries[j].kind === 'VOICE') {
+          const nextMatch = entries[j].detail.match(/^([^:]+):\s*\"(.*)\"$/);
+          if (nextMatch && nextMatch[1] === speaker) {
+            mergedText += ` ${nextMatch[2]}`;
+            count++;
+            j++;
+          } else {
+            break;
+          }
+        }
+        out.push({
+          ts: current.ts,
+          kind: 'VOICE',
+          detail: `${speaker}: "${mergedText.length > 95 ? mergedText.slice(0, 92) + '...' : mergedText}"${
+            count > 1 ? ` (${count} segments)` : ''
+          }`,
+          count,
+        });
+        i = j;
+        continue;
+      }
+    }
+
+    // 3. Consecutive identical detail & kind (keystrokes like paste, copy, shortcut, screenshots)
+    let count = 1;
+    let j = i + 1;
+    while (j < entries.length && entries[j].kind === current.kind && entries[j].detail === current.detail) {
+      count++;
+      j++;
+    }
+
+    const isSuspicious =
+      /paste|storm|switch_storm/i.test(current.detail) ||
+      /claude|chatgpt|openai|copilot|aside/i.test(current.detail);
+
+    if (count > 1) {
+      out.push({
+        ts: current.ts,
+        kind: current.kind,
+        detail: `${current.detail} (${count}×)`,
+        count,
+        isSuspicious,
+      });
+      i = j;
+    } else {
+      out.push({
+        ts: current.ts,
+        kind: current.kind,
+        detail: current.detail,
+        count: 1,
+        isSuspicious,
+      });
+      i++;
+    }
+  }
+  return out;
+}
+
+export function getTimelineEntryIcon(entry: { kind: string; detail: string }): IconSvgElement {
+  if (entry.kind === 'VOICE') return Mic01Icon;
+  if (entry.kind === 'IMAGE') return Camera01Icon;
+  if (entry.kind === 'KEYSTROKE') {
+    if (/paste/i.test(entry.detail)) return ClipboardIcon;
+    if (/copy/i.test(entry.detail)) return Copy01Icon;
+    return KeyboardIcon;
+  }
+  // APP
+  if (/switch/i.test(entry.detail)) return ArrowLeftRightIcon;
+  if (/claude|chatgpt|openai|copilot|aside/i.test(entry.detail)) return Robot01Icon;
+  if (/chrome|firefox|safari|edge|browser/i.test(entry.detail)) return BrowserIcon;
+  return LaptopIcon;
+}
+
+export function TimelineStepper({ entries }: { entries: SummarizedTimelineEntry[] }) {
+  return (
+    <Box sx={{ position: 'relative', py: 0.4 }}>
+      {entries.map((item, idx) => {
+        const isLast = idx === entries.length - 1;
+        const Icon = getTimelineEntryIcon(item);
+        const iconColor = item.isSuspicious ? '#DC2626' : '#6B7280';
+        const nodeBg = item.isSuspicious ? 'rgba(220, 38, 38, 0.08)' : '#F3F4F6';
+        const nodeBorder = item.isSuspicious ? 'rgba(220, 38, 38, 0.25)' : '#E5E7EB';
+
+        return (
+          <Box
+            key={idx}
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              position: 'relative',
+              pb: isLast ? 0.3 : 1,
+            }}
+          >
+            {/* Timestamp */}
+            <Typography
+              sx={{
+                fontSize: '0.625rem',
+                color: DARK_TEXT_MUTED,
+                fontFamily: 'monospace',
+                width: 54,
+                flexShrink: 0,
+                pt: '2px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {formatClock(item.ts)}
+            </Typography>
+
+            {/* Vertical connector track + Node icon */}
+            <Box
+              sx={{
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                width: 22,
+                flexShrink: 0,
+                mr: 0.8,
+              }}
+            >
+              {!isLast && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 18,
+                    bottom: -4,
+                    width: '2px',
+                    bgcolor: 'rgba(0,0,0,0.07)',
+                    zIndex: 0,
+                  }}
+                />
+              )}
+
+              <Box
+                sx={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: '6px',
+                  bgcolor: nodeBg,
+                  border: `1px solid ${nodeBorder}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 1,
+                  color: iconColor,
+                }}
+              >
+                <HugeiconsIcon icon={Icon} size={11} color={iconColor} />
+              </Box>
+            </Box>
+
+            {/* Event detail */}
+            <Box sx={{ flex: 1, minWidth: 0, pt: '1px' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, mb: 0.2 }}>
+                <Typography
+                  sx={{
+                    fontSize: '0.55rem',
+                    fontWeight: 700,
+                    color: item.isSuspicious ? '#DC2626' : DARK_TEXT_MUTED,
+                    letterSpacing: '0.03em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {item.kind}
+                </Typography>
+                {item.count && item.count > 1 && (
+                  <Box
+                    sx={{
+                      px: 0.5,
+                      py: 0.1,
+                      borderRadius: '3px',
+                      bgcolor: item.isSuspicious ? 'rgba(220, 38, 38, 0.12)' : 'rgba(0,0,0,0.06)',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: '0.55rem',
+                        fontWeight: 700,
+                        color: item.isSuspicious ? '#DC2626' : '#374151',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {item.count}×
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+              <Typography
+                sx={{
+                  fontSize: '0.675rem',
+                  color: DARK_TEXT_SECONDARY,
+                  lineHeight: 1.35,
+                  fontWeight: item.isSuspicious ? 600 : 400,
+                  wordBreak: 'break-word',
+                }}
+              >
+                {item.detail}
+              </Typography>
+            </Box>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
+export function CorrelationCard({ correlation }: { correlation: Correlation }) {
   const color = getImpactColor(correlation.impact);
   return (
     <Box sx={{ display: 'flex', gap: 0.6, alignItems: 'flex-start', px: 1, py: 0.5, borderRadius: '6px', bgcolor: `${color}10`, border: `1px solid ${color}20` }}>
-      <CorrelationIcon sx={{ fontSize: 11, color, mt: '2px', flexShrink: 0 }} />
+      <HugeiconsIcon icon={ArrowLeftRightIcon} size={11} color={color} style={{ marginTop: '2px', flexShrink: 0 }} />
       <Box sx={{ flex: 1 }}>
         <Typography sx={{ fontSize: '0.625rem', color: DARK_TEXT, lineHeight: 1.4 }}>{correlation.finding}</Typography>
         <Box sx={{ display: 'flex', gap: 0.3, mt: 0.3, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -191,12 +525,113 @@ function CorrelationCard({ correlation }: { correlation: Correlation }) {
   );
 }
 
+function ModalityCard({
+  label,
+  icon,
+  modality,
+}: {
+  label: string;
+  icon: any;
+  modality: { risk_level?: string; risk_score?: number; summary?: string; signals?: string[]; evidence?: string[] };
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const color = getRiskColor(modality.risk_level || 'LOW');
+  const hasDetails = Boolean(
+    (modality.signals && modality.signals.length > 0) ||
+      (modality.evidence && modality.evidence.length > 0) ||
+      modality.summary
+  );
+
+  return (
+    <Box sx={{ borderRadius: '8px', border: `1px solid ${color}20`, bgcolor: `${color}08`, overflow: 'hidden' }}>
+      <Box
+        onClick={() => hasDetails && setExpanded(!expanded)}
+        sx={{
+          px: 1.2,
+          py: 0.7,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          cursor: hasDetails ? 'pointer' : 'default',
+          '&:hover': hasDetails ? { bgcolor: `${color}12` } : {},
+          transition: 'background 0.15s',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.7 }}>
+          <Box sx={{ color, display: 'flex', alignItems: 'center' }}>
+            <HugeiconsIcon icon={icon} size={14} color={color} />
+          </Box>
+          <Typography sx={{ fontSize: '0.7rem', fontWeight: 600, color: DARK_TEXT }}>{label}</Typography>
+          <Chip
+            label={modality.risk_level?.toUpperCase() || 'N/A'}
+            size="small"
+            sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${color}20`, color, '& .MuiChip-label': { px: 0.5 } }}
+          />
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: getScoreColor(modality.risk_score ?? 0) }}>
+            {modality.risk_score ?? 0}
+          </Typography>
+          {hasDetails && (
+            <HugeiconsIcon icon={expanded ? ArrowUp01Icon : ArrowDown01Icon} size={12} color={DARK_TEXT_MUTED} />
+          )}
+        </Box>
+      </Box>
+      <Collapse in={expanded}>
+        <Box sx={{ px: 1.2, pb: 1, pt: 0.3 }}>
+          {modality.summary && (
+            <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.5, mb: 0.6, fontStyle: 'italic' }}>
+              {modality.summary}
+            </Typography>
+          )}
+          {modality.signals && modality.signals.length > 0 && (
+            <Box sx={{ mb: 0.6 }}>
+              <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, color: DARK_TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.4 }}>
+                Signals
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
+                {modality.signals.map((s, i) => (
+                  <Chip
+                    key={i}
+                    label={formatSignal(s)}
+                    size="small"
+                    sx={{ height: 18, fontSize: '0.55rem', fontWeight: 500, bgcolor: `${color}15`, color, border: `1px solid ${color}25`, '& .MuiChip-label': { px: 0.6 } }}
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+          {modality.evidence && modality.evidence.length > 0 && (
+            <Box>
+              <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, color: DARK_TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.3 }}>
+                Evidence
+              </Typography>
+              {modality.evidence.map((item, i) => (
+                <Box key={i} sx={{ display: 'flex', gap: 0.5, mb: 0.2, alignItems: 'flex-start' }}>
+                  <Box sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: color, mt: '5px', flexShrink: 0 }} />
+                  <Typography sx={{ fontSize: '0.625rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.4 }}>{item}</Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </Box>
+      </Collapse>
+    </Box>
+  );
+}
+
 export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScreenshot }: { result: WindowResult; isLatest: boolean; onExpandScreenshot: (urls: string[], startIndex: number) => void }) {
   const [expanded, setExpanded] = useState(isLatest);
   const color = getRiskColor(result.risk);
-  const hasModalities = result.per_modality && (result.per_modality.app_metadata || result.per_modality.keystroke || result.per_modality.voice);
-  const hasCorrelations = result.correlations && result.correlations.length > 0;
-  const hasExpandable = hasModalities || hasCorrelations || result.timeline_note;
+  const hasModalities = Boolean(
+    result.per_modality &&
+      (result.per_modality.app_metadata ||
+        result.per_modality.keystroke ||
+        result.per_modality.voice)
+  );
+  const hasCorrelations = Boolean(result.correlations && result.correlations.length > 0);
+  const hasExpandable = Boolean(hasModalities || hasCorrelations || result.timeline_note);
+  const headline = result.narrative || result.summary;
 
   return (
     <Box sx={{ mb: 0.8, borderRadius: '10px', border: `1px solid ${isLatest ? color + '30' : DARK_BORDER}`, bgcolor: isLatest ? `${color}08` : DARK_SURFACE, overflow: 'hidden', transition: 'border-color 0.2s' }}>
@@ -207,7 +642,7 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
             {result.confidence && (
               <Tooltip title={`Confidence: ${result.confidence}`} arrow>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}>
-                  <ShieldIcon sx={{ fontSize: 11, color: getConfidenceColor(result.confidence) }} />
+                  <HugeiconsIcon icon={Shield01Icon} size={11} color={getConfidenceColor(result.confidence)} />
                   <Typography sx={{ fontSize: '0.55rem', color: getConfidenceColor(result.confidence), fontWeight: 600 }}>{result.confidence}</Typography>
                 </Box>
               </Tooltip>
@@ -215,7 +650,11 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_MUTED }}>{formatDateTime(result.processed_at)}</Typography>
-            {hasExpandable && <Box sx={{ color: DARK_TEXT_MUTED, display: 'flex', '& svg': { fontSize: 16 } }}>{expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}</Box>}
+            {hasExpandable && (
+              <Box sx={{ color: DARK_TEXT_MUTED, display: 'flex', alignItems: 'center' }}>
+                <HugeiconsIcon icon={expanded ? ArrowUp01Icon : ArrowDown01Icon} size={14} color={DARK_TEXT_MUTED} />
+              </Box>
+            )}
           </Box>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
@@ -224,14 +663,45 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
             <Typography sx={{ fontSize: '0.6rem', color: DARK_TEXT_MUTED }}>/100</Typography>
           </Box>
           {result.per_modality && (
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              {result.per_modality.app_metadata && <Tooltip title={`Apps: ${result.per_modality.app_metadata.risk_score}`} arrow><Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}><ScreenIcon sx={{ fontSize: 11, color: getRiskColor(result.per_modality.app_metadata.risk_level) }} /><Typography sx={{ fontSize: '0.55rem', fontWeight: 600, color: getRiskColor(result.per_modality.app_metadata.risk_level) }}>{result.per_modality.app_metadata.risk_score}</Typography></Box></Tooltip>}
-              {result.per_modality.keystroke && <Tooltip title={`Keys: ${result.per_modality.keystroke.risk_score}`} arrow><Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}><KeyboardIcon sx={{ fontSize: 11, color: getRiskColor(result.per_modality.keystroke.risk_level) }} /><Typography sx={{ fontSize: '0.55rem', fontWeight: 600, color: getRiskColor(result.per_modality.keystroke.risk_level) }}>{result.per_modality.keystroke.risk_score}</Typography></Box></Tooltip>}
-              {result.per_modality.voice && <Tooltip title={`Voice: ${result.per_modality.voice.risk_score}`} arrow><Box sx={{ display: 'flex', alignItems: 'center', gap: 0.2 }}><VoiceIcon sx={{ fontSize: 11, color: getRiskColor(result.per_modality.voice.risk_level) }} /><Typography sx={{ fontSize: '0.55rem', fontWeight: 600, color: getRiskColor(result.per_modality.voice.risk_level) }}>{result.per_modality.voice.risk_score}</Typography></Box></Tooltip>}
+            <Box sx={{ display: 'flex', gap: 0.6, alignItems: 'center' }}>
+              {result.per_modality.app_metadata && (
+                <Tooltip title={`Apps: ${result.per_modality.app_metadata.risk_score}/100 (${result.per_modality.app_metadata.risk_level})`} arrow>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, bgcolor: `${getRiskColor(result.per_modality.app_metadata.risk_level)}12`, px: 0.5, py: 0.2, borderRadius: '4px' }}>
+                    <HugeiconsIcon icon={LaptopIcon} size={11} color={getRiskColor(result.per_modality.app_metadata.risk_level)} />
+                    <Typography sx={{ fontSize: '0.55rem', fontWeight: 700, color: getRiskColor(result.per_modality.app_metadata.risk_level) }}>
+                      {result.per_modality.app_metadata.risk_score}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+              )}
+              {result.per_modality.keystroke && (
+                <Tooltip title={`Keys: ${result.per_modality.keystroke.risk_score}/100 (${result.per_modality.keystroke.risk_level})`} arrow>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, bgcolor: `${getRiskColor(result.per_modality.keystroke.risk_level)}12`, px: 0.5, py: 0.2, borderRadius: '4px' }}>
+                    <HugeiconsIcon icon={KeyboardIcon} size={11} color={getRiskColor(result.per_modality.keystroke.risk_level)} />
+                    <Typography sx={{ fontSize: '0.55rem', fontWeight: 700, color: getRiskColor(result.per_modality.keystroke.risk_level) }}>
+                      {result.per_modality.keystroke.risk_score}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+              )}
+              {result.per_modality.voice && (
+                <Tooltip title={`Voice: ${result.per_modality.voice.risk_score}/100 (${result.per_modality.voice.risk_level})`} arrow>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, bgcolor: `${getRiskColor(result.per_modality.voice.risk_level)}12`, px: 0.5, py: 0.2, borderRadius: '4px' }}>
+                    <HugeiconsIcon icon={Mic01Icon} size={11} color={getRiskColor(result.per_modality.voice.risk_level)} />
+                    <Typography sx={{ fontSize: '0.55rem', fontWeight: 700, color: getRiskColor(result.per_modality.voice.risk_level) }}>
+                      {result.per_modality.voice.risk_score}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+              )}
             </Box>
           )}
         </Box>
-        {result.summary && <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: expanded ? 5 : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{result.summary}</Typography>}
+        {headline && (
+          <Box>
+            <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: expanded ? 5 : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{headline}</Typography>
+          </Box>
+        )}
       </Box>
       <Collapse in={expanded}>
         <Box sx={{ px: 1.2, pb: 1.2, pt: 0.2 }}>
@@ -239,21 +709,29 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
             <Box sx={{ mb: 1 }}>
               <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: DARK_TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.5 }}>Breakdown</Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                {result.per_modality!.app_metadata && <ModalityCard label="Apps" icon={<ScreenIcon />} modality={result.per_modality!.app_metadata} />}
-                {result.per_modality!.keystroke && <ModalityCard label="Keystrokes" icon={<KeyboardIcon />} modality={result.per_modality!.keystroke} />}
-                {result.per_modality!.voice && <ModalityCard label="Voice" icon={<VoiceIcon />} modality={result.per_modality!.voice} />}
+                {result.per_modality!.app_metadata && (
+                  <ModalityCard label="Apps" icon={LaptopIcon} modality={result.per_modality!.app_metadata} />
+                )}
+                {result.per_modality!.keystroke && (
+                  <ModalityCard label="Keystrokes" icon={KeyboardIcon} modality={result.per_modality!.keystroke} />
+                )}
+                {result.per_modality!.voice && (
+                  <ModalityCard label="Voice" icon={Mic01Icon} modality={result.per_modality!.voice} />
+                )}
               </Box>
             </Box>
           )}
           {hasCorrelations && (
             <Box sx={{ mb: 0.8 }}>
               <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: DARK_TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.5 }}>Correlations</Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4 }}>{result.correlations!.map((c, i) => <CorrelationCard key={i} correlation={c} />)}</Box>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4 }}>
+                {result.correlations!.map((c, i) => <CorrelationCard key={i} correlation={c} />)}
+              </Box>
             </Box>
           )}
           {result.timeline_note && (
             <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'flex-start', px: 1, py: 0.5, borderRadius: '6px', bgcolor: 'rgba(0,0,0,0.03)' }}>
-              <TimelineIcon sx={{ fontSize: 11, color: DARK_TEXT_MUTED, mt: '2px', flexShrink: 0 }} />
+              <HugeiconsIcon icon={Clock01Icon} size={11} color={DARK_TEXT_MUTED} style={{ marginTop: '2px', flexShrink: 0 }} />
               <Typography sx={{ fontSize: '0.625rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.4 }}>{result.timeline_note}</Typography>
             </Box>
           )}
@@ -273,7 +751,7 @@ export function ImageAnalysisCard({ result: ia, onExpand }: { result: ImageAnaly
       <Box sx={{ p: 1.2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <CameraIcon sx={{ fontSize: 14, color: iaColor }} />
+            <HugeiconsIcon icon={Camera01Icon} size={14} color={iaColor} />
             <Chip label={ia.risk?.toUpperCase()} size="small" sx={{ height: 20, fontSize: '0.6rem', fontWeight: 700, bgcolor: `${iaColor}15`, color: iaColor }} />
             <Typography sx={{ fontSize: '0.55rem', color: DARK_TEXT_MUTED }}>{ia.image_count} images</Typography>
           </Box>
@@ -406,7 +884,7 @@ function RollingSummaryCard({ results }: { results: WindowResult[] }) {
   const latest = results[results.length - 1];
   const trend = computeTrend(results);
   const topSignals = getTopSignals(results);
-  const TrendIcon = trend.direction === 'up' ? TrendUpIcon : trend.direction === 'down' ? TrendDownIcon : TrendFlatIcon;
+  const trendIcon = trend.direction === 'up' ? ArrowUpRight01Icon : trend.direction === 'down' ? ArrowDownRight01Icon : ArrowRight01Icon;
   const trendColor = trend.direction === 'up' ? '#ef4444' : trend.direction === 'down' ? '#22c55e' : DARK_TEXT_MUTED;
   const trendLabel = trend.direction === 'up' ? 'Rising' : trend.direction === 'down' ? 'Declining' : 'Stable';
 
@@ -415,7 +893,7 @@ function RollingSummaryCard({ results }: { results: WindowResult[] }) {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
         <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: DARK_TEXT_MUTED }}>Summary</Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
-          <TrendIcon sx={{ fontSize: 13, color: trendColor }} />
+          <HugeiconsIcon icon={trendIcon} size={13} color={trendColor} />
           <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, color: trendColor }}>
             {trendLabel}{trend.priorAvg > 0 ? ` (${trend.priorAvg} → ${trend.recentAvg})` : ''}
           </Typography>
@@ -461,7 +939,9 @@ function WindowGroupHeader({ group, isExpanded, onToggle }: { group: WindowGroup
       <Typography sx={{ fontSize: '0.65rem', color: DARK_TEXT_SECONDARY, flex: 1 }}>
         {count === 1 ? '1 window' : `${count} windows`} · {timeRange}
       </Typography>
-      <UnfoldMoreIcon sx={{ fontSize: 14, color: DARK_TEXT_MUTED, transform: isExpanded ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s' }} />
+      <Box sx={{ display: 'flex', alignItems: 'center', color: DARK_TEXT_MUTED, transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.15s' }}>
+        <HugeiconsIcon icon={ArrowDown01Icon} size={14} color={DARK_TEXT_MUTED} />
+      </Box>
     </Box>
   );
 }
@@ -523,7 +1003,7 @@ export default function AnalyticsPanel({
               <Button
                 variant="outlined"
                 size="small"
-                startIcon={<VideoCallIcon sx={{ fontSize: '14px !important' }} />}
+                startIcon={<HugeiconsIcon icon={ComputerVideoCallIcon} size={14} />}
                 onClick={() =>
                   window.open(
                     interview.provider_metadata.join_url,
@@ -562,7 +1042,7 @@ export default function AnalyticsPanel({
                 <Button
                   variant="outlined"
                   size="small"
-                  startIcon={<CameraIcon sx={{ fontSize: '14px !important' }} />}
+                  startIcon={<HugeiconsIcon icon={Camera01Icon} size={14} />}
                   onClick={() => {
                     riskData.incrementPendingImageAnalysis(1);
                     riskData.emitCaptureScreenshots();
@@ -651,7 +1131,7 @@ export default function AnalyticsPanel({
                   <Typography sx={{ fontSize: '0.6rem', color: DARK_TEXT_SECONDARY }}>Latest</Typography>
                   {latestResult.confidence && (
                     <Tooltip title={`Confidence: ${latestResult.confidence}`} arrow>
-                      <Chip icon={<ShieldIcon sx={{ fontSize: '9px !important' }} />} label={latestResult.confidence} size="small" sx={{ height: 16, fontSize: '0.5rem', fontWeight: 600, bgcolor: `${getConfidenceColor(latestResult.confidence)}18`, color: getConfidenceColor(latestResult.confidence), '& .MuiChip-icon': { color: getConfidenceColor(latestResult.confidence), ml: 0.3 }, '& .MuiChip-label': { px: 0.4 } }} />
+                      <Chip icon={<HugeiconsIcon icon={Shield01Icon} size={9} color={getConfidenceColor(latestResult.confidence)} />} label={latestResult.confidence} size="small" sx={{ height: 16, fontSize: '0.5rem', fontWeight: 600, bgcolor: `${getConfidenceColor(latestResult.confidence)}18`, color: getConfidenceColor(latestResult.confidence), '& .MuiChip-icon': { color: getConfidenceColor(latestResult.confidence), ml: 0.3 }, '& .MuiChip-label': { px: 0.4 } }} />
                     </Tooltip>
                   )}
                 </Box>
@@ -660,7 +1140,7 @@ export default function AnalyticsPanel({
               <LinearProgress variant="determinate" value={latestResult.score} sx={{ height: 5, borderRadius: 3, bgcolor: 'rgba(0,0,0,0.04)', '& .MuiLinearProgress-bar': { bgcolor: getScoreColor(latestResult.score), borderRadius: 3 } }} />
               {totalCorrelations > 0 && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3, mt: 0.5 }}>
-                  <WarningIcon sx={{ fontSize: 10, color: '#f59e0b' }} />
+                  <HugeiconsIcon icon={Alert02Icon} size={10} color="#f59e0b" />
                   <Typography sx={{ fontSize: '0.6rem', color: '#f59e0b', fontWeight: 600 }}>{totalCorrelations} correlation{totalCorrelations !== 1 ? 's' : ''} detected</Typography>
                 </Box>
               )}
@@ -769,7 +1249,7 @@ export default function AnalyticsPanel({
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 1.5 }}>
               <Box sx={{ width: 40, height: 40, borderRadius: '12px', bgcolor: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <DotIcon sx={{ fontSize: 14, color: DARK_TEXT_MUTED }} />
+                <HugeiconsIcon icon={Alert02Icon} size={18} color={DARK_TEXT_MUTED} />
               </Box>
               <Box sx={{ textAlign: 'center' }}>
                 <Typography sx={{ fontSize: '0.8rem', fontWeight: 500, color: DARK_TEXT, mb: 0.3 }}>No alerts yet</Typography>
@@ -864,14 +1344,11 @@ export default function AnalyticsPanel({
           id="analytics-tabpanel-2"
           aria-labelledby="analytics-tab-2"
           sx={{
-            flex: 1, overflow: 'auto', px: 1.5, py: 1, minHeight: 0,
+            flex: 1, overflow: 'auto', minHeight: 0,
             '&::-webkit-scrollbar': { width: '4px' },
             '&::-webkit-scrollbar-thumb': { background: 'rgba(0,0,0,0.15)', borderRadius: '4px' },
           }}
         >
-          {/* Capture button moved to the header row alongside Start/Stop */}
-
-          {/* Screenshot analysis results */}
           {imageAnalysisResults.length > 0 ? (
             <Box>
               {[...imageAnalysisResults].reverse().map((ia) => (
@@ -881,7 +1358,7 @@ export default function AnalyticsPanel({
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 1.5 }}>
               <Box sx={{ width: 40, height: 40, borderRadius: '12px', bgcolor: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <CameraIcon sx={{ fontSize: 18, color: DARK_TEXT_MUTED }} />
+                <HugeiconsIcon icon={Camera01Icon} size={18} color={DARK_TEXT_MUTED} />
               </Box>
               <Box sx={{ textAlign: 'center' }}>
                 <Typography sx={{ fontSize: '0.8rem', fontWeight: 500, color: DARK_TEXT, mb: 0.3 }}>No screenshots yet</Typography>
@@ -958,7 +1435,7 @@ export function TranscriptFeed({
         }}
       >
         <Box sx={{ width: 40, height: 40, borderRadius: '12px', bgcolor: 'rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <VoiceIcon sx={{ fontSize: 18, color: DARK_TEXT_MUTED }} />
+          <HugeiconsIcon icon={Mic01Icon} size={18} color={DARK_TEXT_MUTED} />
         </Box>
         <Box sx={{ textAlign: 'center' }}>
           <Typography sx={{ fontSize: '0.8rem', fontWeight: 500, color: DARK_TEXT, mb: 0.3 }}>
@@ -1190,7 +1667,7 @@ export function ScreenshotLightbox({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  });
+  }, [index, urls.length]);
 
   const arrowBtn = {
     position: 'absolute' as const, top: '50%', transform: 'translateY(-50%)',

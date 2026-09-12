@@ -59,10 +59,17 @@ describe('PostAnalysisPanel', () => {
     expect(screen.getByText('Acme Corp')).toBeInTheDocument();
   });
 
-  test('shows the consent / monitoring-coverage line', async () => {
+  test('shows the consent / monitoring-coverage line with interview end time instead of literal "end"', async () => {
+    getById.mockResolvedValue({
+      success: true,
+      data: { ...session, scheduled_end_at: '2026-07-01T11:00:00Z', actual_end_at: '2026-07-01T10:45:00Z' },
+    });
     render(<PostAnalysisPanel />);
     await screen.findByRole('heading', { name: 'Jane Doe' });
     expect(screen.getByText('Monitoring coverage')).toBeInTheDocument();
+    const coverageVal = screen.getByText('Monitoring coverage').parentElement?.querySelector('.pa-meta-val');
+    expect(coverageVal?.textContent).not.toContain('end');
+    expect(coverageVal?.textContent).toMatch(/–/);
   });
 
   test('copy-transcript writes the transcript to the clipboard', async () => {
@@ -84,4 +91,17 @@ describe('PostAnalysisPanel', () => {
     expect(screen.queryByText('0')).not.toBeInTheDocument();
     expect(screen.queryByText('ANALYSIS_FAILED')).not.toBeInTheDocument();
   });
+
+  test('renders modality breakdown bars and classic signal cards', async () => {
+    render(<PostAnalysisPanel />);
+    expect(await screen.findByRole('heading', { name: 'Jane Doe' })).toBeInTheDocument();
+    expect(screen.getByText('Score Breakdown')).toBeInTheDocument();
+    expect(screen.getByText('Keystroke')).toBeInTheDocument();
+    expect(screen.getByText('Voice')).toBeInTheDocument();
+    expect(screen.getAllByText('App Usage').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('heading', { name: /Voice Analysis/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Keystroke Analysis/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /App Usage/i })).toBeInTheDocument();
+  });
 });
+

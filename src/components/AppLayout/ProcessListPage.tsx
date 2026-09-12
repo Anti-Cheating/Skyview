@@ -1,32 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SearchField } from '../common/SearchField';
 import { useNavigate } from 'react-router-dom';
-import { Box, Chip } from '@mui/material';
+import { Box } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { TOKENS } from '../../theme';
 import { PageTitle, Secondary, Caption } from '../layout/Typography';
 import { ActionButton } from '../common/ActionButton';
 import { DataTable, type DataTableColumn } from '../common/DataTable';
+import { StatusTag } from '../common/StatusTag';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { ProcessService } from '../../services/process.service';
 import type { ProcessListItem } from '../../types/process.types';
-
-function StatusPill({ status }: { status: ProcessListItem['status'] }) {
-  const done = status === 'COMPLETED';
-  return (
-    <Chip
-      label={done ? 'Completed' : 'In progress'}
-      size="small"
-      sx={{
-        height: 22,
-        fontSize: '0.7rem',
-        fontWeight: 600,
-        bgcolor: done ? 'rgba(76,217,100,0.14)' : 'rgba(59,130,246,0.12)',
-        color: done ? '#047857' : '#2563EB',
-      }}
-    />
-  );
-}
 
 export default function ProcessListPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
@@ -62,20 +46,8 @@ export default function ProcessListPage({ embedded = false }: { embedded?: boole
         key: 'candidate',
         header: 'Candidate',
         render: (p) => (
-          <Box
-            component="button"
-            onClick={() => navigate(`/interviews/${p.id}`)}
-            sx={{
-              minWidth: 0,
-              textAlign: 'left',
-              background: 'none',
-              border: 'none',
-              p: 0,
-              cursor: 'pointer',
-              '&:hover .cand-name': { color: TOKENS.brand },
-            }}
-          >
-            <Box className="cand-name" sx={{ fontSize: '0.875rem', fontWeight: 500, color: TOKENS.textPrimary }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Box sx={{ fontSize: '0.875rem', fontWeight: 500, color: TOKENS.textPrimary }}>
               {`${p.candidate.first_name} ${p.candidate.last_name}`.trim() || p.candidate.email}
             </Box>
             <Caption sx={{ color: TOKENS.textSecondary, fontSize: '0.8125rem' }}>
@@ -95,7 +67,7 @@ export default function ProcessListPage({ embedded = false }: { embedded?: boole
           </Box>
         ),
       },
-      { key: 'status', header: 'Status', width: 140, render: (p) => <StatusPill status={p.status} /> },
+      { key: 'status', header: 'Status', width: 140, render: (p) => <StatusTag status={p.status} /> },
       {
         key: 'updated',
         header: 'Updated',
@@ -152,6 +124,7 @@ export default function ProcessListPage({ embedded = false }: { embedded?: boole
         columns={columns}
         rows={rows}
         rowKey={(r) => r.id}
+        onRowClick={(p) => navigate(`/interviews/${p.id}`)}
         loading={loading}
         emptyText="No interviews yet. Create one to get started."
         pagination={{

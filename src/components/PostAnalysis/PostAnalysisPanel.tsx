@@ -1,33 +1,37 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowBack as BackIcon, ContentCopy as CopyIcon, FileDownload as ExportIcon } from "@mui/icons-material";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { LaptopIcon, KeyboardIcon, Mic01Icon, ComputerIcon } from "@hugeicons/core-free-icons";
 import { ENV } from "../../config/env";
 import { STORAGE_KEYS } from "../../config/constants";
 import { MOCK_ANALYSIS_SCENARIOS, type MockScenario } from "../../mockData/postAnalysisMock";
 import { InterviewService } from "../../services/interview.service";
 import { refreshAccessToken } from "../../services/api.service";
 import type { InterviewSession } from "../../types/interview.types";
+import { formatClock } from "../../utils/dateFormat";
+import AnalysisRunningAnimation from "./AnalysisRunningAnimation";
 import "./PostAnalysisPanel.css";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-/** Render a summary (newline-joined "- bullet" string) as a clean list instead
- * of one flat paragraph. A short leading "Label:" is shown in bold so sections
- * read as headings. Same data, nicer layout. */
 function renderBullet(line: string) {
   const m = line.match(/^([^:]{2,28}):\s+(.+)$/s);
-  return m ? (<><strong>{m[1]}:</strong> {m[2]}</>) : <>{line}</>;
+  if (m) {
+    return <><strong>{m[1]}:</strong> {m[2]}</>;
+  }
+  return line;
 }
+
 function Bullets({ text, empty, className }: { text?: string; empty: string; className?: string }) {
   const lines = String(text ?? "")
-    .split("\n")
-    .map((l) => l.replace(/^\s*[-•*]\s*/, "").trim())
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^[-•*]\s*/, "").trim())
     .filter(Boolean);
-  if (lines.length === 0) return <p className={className}>{empty}</p>;
-  if (lines.length === 1) return <p className={className}>{renderBullet(lines[0]!)}</p>;
+  if (lines.length === 0) return <p className={className ?? "pa-body"}>{empty}</p>;
   return (
-    <ul className={className} style={{ margin: 0, paddingLeft: 18 }}>
+    <ul className={className ?? "pa-body"} style={{ margin: 0, paddingLeft: 18 }}>
       {lines.map((l, i) => (
-        <li key={i} style={{ margin: "3px 0" }}>{renderBullet(l)}</li>
+        <li key={i} style={{ margin: "4px 0" }}>{renderBullet(l)}</li>
       ))}
     </ul>
   );
@@ -67,8 +71,8 @@ function parseTranscript(raw: string): ChatEntry[] {
 
     const windowMatch = part.match(/^\[Window\s*(\d+)\]$/i);
     if (windowMatch) {
-      // Skip window markers — don't show them in the chat
-      currentRole = null;
+      // Skip the marker itself, but keep the current speaker so text that
+      // follows "[Window N]" before the next role tag isn't dropped.
       i++;
       continue;
     }
@@ -217,66 +221,156 @@ const RiskGauge: React.FC<{ score: number; level: string; riskColor: string }> =
   );
 };
 
-// ── Score breakdown cards (each modality independent 0-100) ──────────────────
+// ── Score breakdown radial cards (each modality independent 0-100) ───────────
 interface ModalityRow {
   label: string;
   score: number | null;
   summary: string;
+  icon?: any;
 }
 
-const scoreColor = (s: number) => {
-  const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
-  const rgb = (r: number, g: number, b: number) => `rgb(${r},${g},${b})`;
-  if (s >= 70) {
-    const t = Math.min((s - 70) / 30, 1);
-    return rgb(lerp(248, 153, t), lerp(113, 27, t), lerp(113, 27, t));
+function getModalityMeta(score: number | null | undefined) {
+  if (score === null || score === undefined) {
+    return {
+      label: "N/A",
+      stroke: "#D1D5DB",
+      track: "#E5E7EB",
+      pillBg: "#9CA3AF",
+      pillText: "#FFFFFF",
+    };
   }
-  if (s >= 45) {
-    const t = (s - 45) / 24;
-    return rgb(lerp(253, 249, t), lerp(186, 115, t), lerp(116, 22, t));
+  if (score >= 75) {
+    return {
+      label: "CRITICAL",
+      stroke: "#DC2626",
+      track: "#FEE2E2",
+      pillBg: "#DC2626",
+      pillText: "#FFFFFF",
+    };
   }
-  if (s >= 20) {
-    const t = (s - 20) / 24;
-    return rgb(lerp(254, 234, t), lerp(240, 179, t), lerp(138, 8, t));
+  if (score >= 50) {
+    return {
+      label: "HIGH RISK",
+      stroke: "#EA580C",
+      track: "#FFEDD5",
+      pillBg: "#EA580C",
+      pillText: "#FFFFFF",
+    };
   }
-  const t = Math.min(s / 19, 1);
-  return rgb(lerp(134, 22, t), lerp(239, 163, t), lerp(172, 74, t));
-};
+  if (score >= 25) {
+    return {
+      label: "MEDIUM",
+      stroke: "#D97706",
+      track: "#FEF3C7",
+      pillBg: "#D97706",
+      pillText: "#FFFFFF",
+    };
+  }
+  if (score > 5) {
+    return {
+      label: "LOW RISK",
+      stroke: "#16A34A",
+      track: "#DCFCE7",
+      pillBg: "#16A34A",
+      pillText: "#FFFFFF",
+    };
+  }
+  return {
+    label: "CLEAN",
+    stroke: "#16A34A",
+    track: "#DCFCE7",
+    pillBg: "#16A34A",
+    pillText: "#FFFFFF",
+  };
+}
+
+const CIRCUMFERENCE = 2 * Math.PI * 35; // ~219.91
 
 const ScoreBreakdown: React.FC<{ rows: ModalityRow[] }> = ({ rows }) => {
   const [animated, setAnimated] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
-  useEffect(() => { const t = setTimeout(() => setAnimated(true), 150); return () => clearTimeout(t); }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setAnimated(true), 120);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
-    <div className="sb-grid">
-      {rows.map(({ label, score, summary }) => {
-        const val = score ?? 0;
-        const barColor = score !== null ? scoreColor(val) : "#D1D5DB";
+    <div className="sb-radial-grid">
+      {rows.map(({ label, score, summary, icon: IconComponent }) => {
+        const hasScore = score !== null && score !== undefined;
+        const val = hasScore ? Math.round(score) : 0;
+        const meta = getModalityMeta(score);
         const isHovered = hovered === label;
+        const dashOffset = animated && hasScore
+          ? CIRCUMFERENCE * (1 - Math.min(Math.max(val, 0), 100) / 100)
+          : CIRCUMFERENCE;
+
         return (
           <div
             key={label}
-            className="sb-card"
+            className="sb-radial-card"
             onMouseEnter={() => setHovered(label)}
             onMouseLeave={() => setHovered(null)}
           >
-            <div className="sb-card-header">
-              <span className="sb-label">{label}</span>
-              <span className="sb-score" style={{ color: barColor }}>
-                {score !== null ? val : "—"}
-              </span>
+            <div className="sb-radial-info">
+              {IconComponent && (
+                <div className="sb-radial-icon">
+                  <HugeiconsIcon icon={IconComponent} size={30} />
+                </div>
+              )}
+              <span className="sb-radial-label">{label}</span>
             </div>
-            <div className="sb-track">
-              <div
-                className="sb-fill"
-                style={{
-                  width: animated ? `${val}%` : "0%",
-                  background: barColor,
-                  transition: animated ? "width 0.9s cubic-bezier(0.34,1.1,0.64,1)" : "none",
-                }}
-              />
+
+            <div className="sb-radial-meter">
+              <svg className="sb-radial-svg" viewBox="0 0 84 84">
+                <circle
+                  cx={42}
+                  cy={42}
+                  r={35}
+                  fill="none"
+                  stroke={meta.track}
+                  strokeWidth={5.5}
+                />
+                {hasScore && (
+                  <circle
+                    cx={42}
+                    cy={42}
+                    r={35}
+                    fill="none"
+                    stroke={meta.stroke}
+                    strokeWidth={5.5}
+                    strokeLinecap="round"
+                    strokeDasharray={CIRCUMFERENCE}
+                    strokeDashoffset={dashOffset}
+                    transform="rotate(-90 42 42)"
+                    style={{
+                      transition: "stroke-dashoffset 0.9s cubic-bezier(0.34, 1.15, 0.64, 1)",
+                    }}
+                  />
+                )}
+              </svg>
+
+              <div className="sb-radial-content">
+                {hasScore ? (
+                  <>
+                    <div className="sb-radial-score-val">
+                      <span className="sb-radial-num">{val}</span>
+                      <span className="sb-radial-denom">/100</span>
+                    </div>
+                    <span
+                      className="sb-radial-pill"
+                      style={{ background: meta.pillBg, color: meta.pillText }}
+                    >
+                      {meta.label}
+                    </span>
+                  </>
+                ) : (
+                  <span className="sb-radial-na">N/A</span>
+                )}
+              </div>
             </div>
+
             {isHovered && summary && (
               <div className="sb-tooltip">{summary}</div>
             )}
@@ -305,6 +399,9 @@ interface PostAnalysis {
   keystroke_score: number | null; voice_score: number | null;
   image_score: number | null; app_score: number | null;
   risk_score: number; final_summary: string;
+  score_reason: string;
+  content_summary: { heading: string; bullets: string[] }[];
+  finding_summary: { severity: "HIGH" | "MEDIUM" | "LOW"; description: string; timestamps: string[] }[];
   detected_app_categories: DetectedAppCategory[];
   created_at: string; status?: string;
   /** Consent coverage windows (GDPR): which portions of the interview
@@ -313,10 +410,9 @@ interface PostAnalysis {
 }
 
 function normalizeAnalysis(raw: Record<string, unknown>): PostAnalysis {
-  // overall_score === null means the final synthesis LLM call failed or
-  // returned unparseable output (see Cortex postAnalysisService.ts) — that
-  // is NOT a real "0/Low" verdict, so it must never be coerced into one.
-  const analysisFailed = raw.overall_score === null || raw.risk_level === "ANALYSIS_FAILED";
+  // Anything that isn't a real number (null OR undefined OR non-numeric)
+  // means the synthesis step produced no score — never a "0/Low" verdict.
+  const analysisFailed = typeof raw.overall_score !== "number" || raw.risk_level === "ANALYSIS_FAILED";
   const overall = typeof raw.overall_score === "number" ? raw.overall_score : 0;
   const toScore = (v: unknown) => (typeof v === "number" ? v : null);
   return {
@@ -337,6 +433,19 @@ function normalizeAnalysis(raw: Record<string, unknown>): PostAnalysis {
     image_score: toScore(raw.image_score),
     app_score: toScore(raw.app_score),
     final_summary: String(raw.final_summary ?? ""),
+    score_reason: String(raw.score_reason ?? ""),
+    content_summary: Array.isArray(raw.content_summary)
+      ? (raw.content_summary as unknown[])
+          .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
+          .map((s) => ({
+            heading: typeof s.heading === "string" ? s.heading : String(s.heading ?? ""),
+            bullets: Array.isArray(s.bullets) ? s.bullets.map((b) => String(b)) : [],
+          }))
+          .filter((s) => s.heading || s.bullets.length > 0)
+      : [],
+    finding_summary: Array.isArray(raw.finding_summary)
+      ? (raw.finding_summary as { severity: "HIGH" | "MEDIUM" | "LOW"; description: string; timestamps: string[] }[])
+      : [],
     detected_app_categories: Array.isArray(raw.detected_app_categories)
       ? (raw.detected_app_categories as DetectedAppCategory[])
       : [],
@@ -379,6 +488,8 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => { if (copyTimer.current) clearTimeout(copyTimer.current); }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -399,10 +510,16 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
         ]);
         if (cancelled) return;
         if (analysisRes.success && analysisRes.data) {
-          setAnalysis(normalizeAnalysis(analysisRes.data));
+          const normalized = normalizeAnalysis(analysisRes.data);
+          setAnalysis(normalized);
           if (sessionRes.success && sessionRes.data) setSession(sessionRes.data);
           setError(null);
           setLoading(false);
+          // A 200 whose row is still "pending" means analysis is running —
+          // keep polling instead of parking on the spinner forever.
+          if (normalized.status === "pending" && attempt < 24) {
+            pollTimer = setTimeout(() => load(attempt + 1), 5000);
+          }
         } else {
           setError(analysisRes.message || "Failed to fetch analysis");
           setLoading(false);
@@ -424,6 +541,7 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
     load();
     return () => { cancelled = true; if (pollTimer) clearTimeout(pollTimer); };
   }, [sessionId, mockScenario, pendingPoll]);
+
 
   const handleExportPDF = async () => {
     if (!sessionId || pdfLoading) return;
@@ -462,7 +580,8 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
     try {
       await navigator.clipboard.writeText(raw);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
     } catch (_) {
       // fallback
       const ta = document.createElement("textarea");
@@ -472,7 +591,8 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
       document.execCommand("copy");
       ta.remove();
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -487,10 +607,14 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   if (loading) {
     // Embedded: stay invisible — the host shows its own loader (button spinner).
     if (embedded) return null;
-    return (
+    return pendingPoll ? (
+      <div className="pa-state" style={{ padding: '24px 16px' }}>
+        <AnalysisRunningAnimation />
+      </div>
+    ) : (
       <div className="pa-state">
         <div className="pa-spinner" />
-        <p>{pendingPoll ? "Analysis is running — this may take a moment." : "Loading analysis…"}</p>
+        <p>Loading analysis…</p>
       </div>
     );
   }
@@ -504,7 +628,11 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   }
   if (!analysis) return <div className="pa-state"><p>No analysis available</p></div>;
   if (analysis.status === "pending") {
-    return <div className="pa-state"><div className="pa-spinner" /><p>Analysis is being processed…</p></div>;
+    return (
+      <div className="pa-state" style={{ padding: '24px 16px' }}>
+        <AnalysisRunningAnimation />
+      </div>
+    );
   }
   if (analysis.analysis_failed) {
     return (
@@ -528,14 +656,6 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   };
   const riskColor = getRiskColor(analysis.risk_level);
 
-  const modalityRows: ModalityRow[] = [
-    { label: "Keystroke", score: analysis.keystroke_score, summary: analysis.keystroke_summary },
-    { label: "Voice",     score: analysis.voice_score,     summary: analysis.voice_summary },
-    { label: "Image",     score: analysis.image_score,     summary: analysis.image_summary },
-    { label: "App Usage", score: analysis.app_score,       summary: analysis.app_summary ?? "" },
-  ];
-  const hasModalityScores = modalityRows.some(r => r.score !== null);
-
   const candidateP = session?.interview_session_participants?.find(p => p.candidate_id && p.candidate);
   const interviewerP = session?.interview_session_participants?.find(p => p.interviewer_id && p.interviewer);
   const candidate = candidateP?.candidate;
@@ -543,6 +663,14 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   const companyName = session?.company?.name;
   const interviewDate = session?.scheduled_start_at ? formatDate(session.scheduled_start_at) : "";
   const candidateName = candidate ? `${candidate.first_name} ${candidate.last_name}`.trim() : "Candidate";
+
+  const modalityRows: ModalityRow[] = [
+    { label: "App Usage", score: analysis.app_score, summary: analysis.app_summary ?? "", icon: LaptopIcon },
+    { label: "Keystroke", score: analysis.keystroke_score, summary: analysis.keystroke_summary, icon: KeyboardIcon },
+    { label: "Voice", score: analysis.voice_score, summary: analysis.voice_summary, icon: Mic01Icon },
+    { label: "Screen Capture", score: analysis.image_score, summary: analysis.image_summary, icon: ComputerIcon },
+  ];
+  const hasModalityScores = modalityRows.some((r) => r.score !== null);
 
   return (
     <div className={`pa-root${embedded ? " pa-embedded" : ""}`} ref={printRef}>
@@ -615,11 +743,16 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
               <span className="pa-meta-label">Monitoring coverage</span>
               <span className="pa-meta-val">
                 {analysis.consent_windows
-                  .map((w) =>
-                    `${new Date(w.given_at).toLocaleTimeString()} – ${
-                      w.revoked_at ? new Date(w.revoked_at).toLocaleTimeString() : 'end'
-                    }`
-                  )
+                  .map((w) => {
+                    const startStr = formatClock(w.given_at) || new Date(w.given_at).toLocaleTimeString();
+                    const interviewEnd = session?.actual_end_at || session?.scheduled_end_at;
+                    const endStr = w.revoked_at
+                      ? (formatClock(w.revoked_at) || new Date(w.revoked_at).toLocaleTimeString())
+                      : interviewEnd
+                        ? (formatClock(interviewEnd) || new Date(interviewEnd).toLocaleTimeString())
+                        : 'end';
+                    return `${startStr} – ${endStr}`;
+                  })
                   .join(', ')}
                 {analysis.consent_windows.some((w) => w.revoked_at) &&
                   ' (consent was withdrawn during this interview)'}
@@ -629,24 +762,26 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
         </div>
       </header>
 
-      {/* ── Score + Donut ────────────────────────────────────────────────── */}
+      {/* ── Score + Donut / Breakdown ────────────────────────────────────── */}
       <div className="pa-charts-row">
         <section className="pa-card pa-gauge-card">
           <h3 className="pa-card-title">Overall Score</h3>
           <RiskGauge score={analysis.risk_score} level={analysis.risk_level} riskColor={riskColor} />
-          <p className="pa-card-note">Aggregated across voice, keystrokes and app usage.</p>
         </section>
 
         <section className="pa-card pa-donut-card">
           <h3 className="pa-card-title">Score Breakdown</h3>
-          {hasModalityScores
-            ? <ScoreBreakdown rows={modalityRows} />
-            : <p className="pa-body pa-body-sm" style={{ textAlign: "center", paddingTop: "2rem" }}>No modality score data available.</p>
-          }
+          {hasModalityScores ? (
+            <ScoreBreakdown rows={modalityRows} />
+          ) : (
+            <p className="pa-body pa-body-sm" style={{ textAlign: "center", paddingTop: "2rem" }}>
+              No modality score data available.
+            </p>
+          )}
         </section>
       </div>
 
-      {/* ── Summary ──────────────────────────────────────────────────────── */}
+      {/* ── Interview Summary ────────────────────────────────────────────── */}
       <section className="pa-card pa-summary-card">
         <h3 className="pa-card-title">Interview Summary</h3>
         <Bullets className="pa-body" text={analysis.final_summary} empty="No summary available." />
@@ -655,25 +790,31 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
       {/* ── Signal cards ─────────────────────────────────────────────────── */}
       <div className="pa-signals">
         <section className="pa-card pa-signal-card">
-          <h3 className="pa-card-title">Voice Analysis</h3>
+          <h3 className="pa-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <HugeiconsIcon icon={Mic01Icon} size={18} /> Voice Analysis
+          </h3>
           <Bullets className="pa-body pa-body-sm" text={analysis.voice_summary} empty="No voice data recorded." />
         </section>
         <section className="pa-card pa-signal-card">
-          <h3 className="pa-card-title">Keystroke Analysis</h3>
+          <h3 className="pa-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <HugeiconsIcon icon={KeyboardIcon} size={18} /> Keystroke Analysis
+          </h3>
           <Bullets className="pa-body pa-body-sm" text={analysis.keystroke_summary} empty="No keystroke data recorded." />
         </section>
         <section className="pa-card pa-signal-card">
-          <h3 className="pa-card-title">App Usage</h3>
+          <h3 className="pa-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <HugeiconsIcon icon={LaptopIcon} size={18} /> App Usage
+          </h3>
           <Bullets className="pa-body pa-body-sm" text={analysis.app_summary} empty="No app usage data recorded." />
         </section>
       </div>
 
-      {/* ── App categories ───────────────────────────────────────────────── */}
-      {analysis.detected_app_categories?.length > 0 && (
+      {/* ── Detected Application Categories ─────────────────────────────── */}
+      {analysis.detected_app_categories.length > 0 && (
         <section className="pa-card">
           <h3 className="pa-card-title">Detected Application Categories</h3>
           <div className="pa-cats">
-            {analysis.detected_app_categories.map(cat => (
+            {analysis.detected_app_categories.map((cat) => (
               <div key={cat.categoryId} className="pa-cat"
                 style={{ borderLeftColor: getRiskColor(cat.riskLevel) }}>
                 <div className="pa-cat-header">
@@ -684,7 +825,7 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
                 </div>
                 <p className="pa-cat-score">Risk score {cat.riskScore}/100</p>
                 <div className="pa-cat-apps">
-                  {cat.apps.map(a => <span key={a} className="pa-app-tag">{a}</span>)}
+                  {cat.apps.map((a) => <span key={a} className="pa-app-tag">{a}</span>)}
                 </div>
               </div>
             ))}

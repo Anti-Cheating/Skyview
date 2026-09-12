@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import AnalyticsPanel from '../../../src/components/Monitoring/AnalyticsPanel';
+import AnalyticsPanel, { summarizeTimeline, filterTimelineToWindow } from '../../../src/components/Monitoring/AnalyticsPanel';
 import type {
   UseRiskSocketReturn,
   WindowResult,
@@ -355,8 +355,11 @@ describe('AnalyticsPanel', () => {
     await userEvent.click(screen.getAllByRole('tab')[1]);
 
     expect(screen.getByText('Auto Analysis')).toBeInTheDocument();
-    // Summary text shows both in the RollingSummaryCard and the WindowCard.
+    // Summary shows in both the RollingSummaryCard and the WindowCard.
     expect(screen.getAllByText(/Heavy AI-tool usage/).length).toBeGreaterThan(0);
+    // Micro-timeline is removed from WindowCard for a clean interface
+    expect(screen.queryByText(/Timeline \(/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Evidence \(/)).not.toBeInTheDocument();
     // Breakdown modality labels present (auto-expanded since latest)
     expect(screen.getByText('Apps')).toBeInTheDocument();
     expect(screen.getByText('Keystrokes')).toBeInTheDocument();
@@ -498,7 +501,7 @@ describe('AnalyticsPanel', () => {
     renderPanel({ pulseAlerts: alerts });
     // Alerts tab is the default (activeTab 0)
     expect(screen.getByText('AI Tools')).toBeInTheDocument();
-    expect(screen.getByText('ChatGPT')).toBeInTheDocument();
+    expect(screen.getByText(/ChatGPT/)).toBeInTheDocument();
     expect(screen.getByText('Paste Detected')).toBeInTheDocument();
     expect(screen.getByText('Screenshot taken')).toBeInTheDocument();
     // Badge count on the Alerts tab ("1") also appears as an app-count badge,
@@ -542,4 +545,113 @@ describe('AnalyticsPanel', () => {
     expect(screen.getByText('Candidate')).toBeInTheDocument();
     expect(screen.getByText('no role here')).toBeInTheDocument();
   });
+
+  // ── Timeline summarization & stepper ──
+
+  test('summarizeTimeline collapses repeated keystrokes, ping-pong switches, and voice', () => {
+    const raw = [
+      { ts: 1000, kind: 'APP', detail: 'opened Cursor — "solution.ts"' },
+      { ts: 2000, kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+      { ts: 3000, kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+      { ts: 4000, kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+      { ts: 5000, kind: 'APP', detail: 'closed Cursor, opened Chrome — "Claude"' },
+      { ts: 6000, kind: 'APP', detail: 'closed Chrome, opened Cursor — "solution.ts"' },
+      { ts: 7000, kind: 'APP', detail: 'closed Cursor, opened Chrome — "Claude"' },
+      { ts: 8000, kind: 'APP', detail: 'closed Chrome, opened Cursor — "solution.ts"' },
+      { ts: 9000, kind: 'VOICE', detail: 'candidate: "Let me check"' },
+      { ts: 10000, kind: 'VOICE', detail: 'candidate: "the function logic"' },
+    ];
+
+    const summarized = summarizeTimeline(raw);
+    expect(summarized).toHaveLength(4);
+    expect(summarized[0].detail).toBe('opened Cursor — "solution.ts"');
+    expect(summarized[1].detail).toBe('pasted in Cursor (3×)');
+    expect(summarized[1].count).toBe(3);
+    expect(summarized[2].detail).toBe('Rapid switching between Cursor and Chrome (4×)');
+    expect(summarized[2].count).toBe(4);
+    expect(summarized[3].detail).toContain('candidate: "Let me check the function logic"');
+    expect(summarized[3].count).toBe(2);
+  });
+
+  test('summarizeTimeline helper correctly summarizes entries', () => {
+    const raw = [
+      { ts: Date.parse('2026-07-05T10:00:01Z'), kind: 'APP', detail: 'opened Cursor — "code.ts"' },
+      { ts: Date.parse('2026-07-05T10:00:02Z'), kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+      { ts: Date.parse('2026-07-05T10:00:03Z'), kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+      { ts: Date.parse('2026-07-05T10:00:04Z'), kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+    ];
+    const summarized = summarizeTimeline(raw);
+    expect(summarized).toHaveLength(2);
+    expect(summarized[1].detail).toBe('pasted in Cursor (3×)');
+  });
+
+  test('filterTimelineToWindow excludes older historical events outside the 30s window', () => {
+    const end = Date.parse('2026-07-05T10:30:48Z');
+    const events = [
+      // 15 minutes to 1 minute ago (should be filtered out)
+      { ts: Date.parse('2026-07-05T10:15:51Z'), kind: 'KEYSTROKE', detail: 'shortcut cmd+tab in Cursor' },
+      { ts: Date.parse('2026-07-05T10:15:52Z'), kind: 'KEYSTROKE', detail: 'shortcut cmd+tab in Google Chrome' },
+      { ts: Date.parse('2026-07-05T10:20:00Z'), kind: 'KEYSTROKE', detail: 'shortcut enter in Cursor' },
+      { ts: Date.parse('2026-07-05T10:30:10Z'), kind: 'KEYSTROKE', detail: 'shortcut delete in Cursor' }, // 38s before end
+      // Inside 30s window (10:30:18Z to 10:30:48Z)
+      { ts: Date.parse('2026-07-05T10:30:46Z'), kind: 'KEYSTROKE', detail: 'shortcut delete in Cursor' },
+      { ts: Date.parse('2026-07-05T10:30:48Z'), kind: 'APP', detail: 'closed python3, opened Storage' },
+    ];
+
+    const windowOnly = filterTimelineToWindow(events, '2026-07-05T10:30:48Z');
+    expect(windowOnly).toHaveLength(2);
+    expect(windowOnly[0].detail).toBe('shortcut delete in Cursor');
+    expect(windowOnly[1].detail).toBe('closed python3, opened Storage');
+  });
+
+  test('WindowCard keeps live cards clean without micro-timeline', async () => {
+    const end = Date.parse('2026-07-05T10:30:48Z');
+    const windowResult = win({
+      risk: 'medium',
+      score: 45,
+      processed_at: '2026-07-05T10:30:48Z',
+      timeline: [
+        { ts: end - 15_000, kind: 'KEYSTROKE', detail: 'shortcut delete in Cursor' },
+        { ts: end, kind: 'APP', detail: 'closed python3, opened Storage' },
+      ],
+      evidence: [
+        { claim: 'Storage app opened', source: 'app_metadata', confidence: 'medium' },
+      ],
+    });
+
+    renderPanel({ results: [windowResult], latestResult: windowResult });
+    await userEvent.click(screen.getAllByRole('tab')[1]);
+
+    // Micro-timeline and bottom Evidence section are omitted from WindowCard
+    expect(screen.queryByText(/Timeline \(/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Evidence \(/)).not.toBeInTheDocument();
+  });
+
+  test('WindowCard displays modality quick badges and expandable modality breakdown', async () => {
+    const windowResult = win({
+      risk: 'high',
+      score: 78,
+      processed_at: '2026-07-05T10:30:48Z',
+      per_modality: {
+        app_metadata: { risk_level: 'high', risk_score: 85, summary: 'ChatGPT window active.' },
+        keystroke: { risk_level: 'medium', risk_score: 60, summary: '140 WPM burst paste.' },
+        voice: { risk_level: 'low', risk_score: 12, summary: 'Steady voice pace.' },
+      },
+    });
+
+    renderPanel({ results: [windowResult], latestResult: windowResult });
+    await userEvent.click(screen.getAllByRole('tab')[1]);
+
+    // Modality quick score pills in header
+    expect(screen.getAllByText('85').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('60').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('12').length).toBeGreaterThanOrEqual(1);
+
+    // Modality breakdown section
+    expect(screen.getByText('Breakdown')).toBeInTheDocument();
+    expect(screen.getByText('Apps')).toBeInTheDocument();
+    expect(screen.getByText('Keystrokes')).toBeInTheDocument();
+    expect(screen.getByText('Voice')).toBeInTheDocument();
+  });
 });
+

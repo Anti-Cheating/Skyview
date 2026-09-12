@@ -16,6 +16,22 @@ export interface Correlation {
   impact: 'weak' | 'moderate' | 'strong';
 }
 
+export interface EvidenceCitation {
+  claim: string;
+  source?: string;
+  timestamp?: string;
+  confidence?: 'weak' | 'moderate' | 'strong' | string;
+}
+
+export interface TimelineEntry {
+  ts: number;
+  kind: 'APP' | 'KEYSTROKE' | 'VOICE' | string;
+  /** Action label only — char count for copy/paste/type, never the actual
+   *  text. Full content only ever appears in Evidence / the narrative. */
+  detail: string;
+  speakerRole?: 'interviewer' | 'candidate' | string;
+}
+
 export interface WindowResult {
   window_id: string;
   session_id: string;
@@ -32,6 +48,12 @@ export interface WindowResult {
   };
   correlations?: Correlation[];
   timeline_note?: string;
+  /** Cause->effect narrative over the merged timeline. */
+  narrative?: string;
+  /** Evidence citations backing the score. */
+  evidence?: EvidenceCitation[];
+  /** The merged chronological timeline itself. */
+  timeline?: TimelineEntry[];
 }
 
 export interface ImageAnalysisResult {
@@ -176,12 +198,27 @@ function mergeImageResults(a: ImageAnalysisResult[], b: ImageAnalysisResult[]): 
   return [...map.values()].sort((x, y) => byTime(x.processed_at, y.processed_at));
 }
 
+// Capture spinner safety-net: if no image-analysis-result lands within this
+// window, assume the request was dropped/errored and release the spinner.
+const IMAGE_ANALYSIS_TIMEOUT_MS = 45_000;
+
+// Two pulses can legitimately share a timestamp (a detection pulse and a
+// keyboard/activity pulse fired the same second) — dedup on content, not time.
+const pulseKey = (p: PulseAlert) =>
+  [
+    p.timestamp,
+    p.detections.map(d => `${d.categoryId}:${[...d.apps].sort().join(',')}`).sort().join('|'),
+    [...p.activities].sort().join(','),
+    (p.keyboardAlerts ?? []).map(k => `${k.type}:${k.app ?? ''}`).sort().join('|'),
+  ].join('#');
+
 function mergePulse(a: PulseAlert[], b: PulseAlert[]): PulseAlert[] {
   const seen = new Set<string>();
   const out: PulseAlert[] = [];
   for (const p of [...a, ...b].sort((x, y) => byTime(x.timestamp, y.timestamp))) {
-    if (seen.has(p.timestamp)) continue;
-    seen.add(p.timestamp);
+    const key = pulseKey(p);
+    if (seen.has(key)) continue;
+    seen.add(key);
     out.push(p);
   }
   return out;
@@ -217,6 +254,9 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
   // MonitoringView seeds it from the session payload's has_open_consent.
   const [consentStatus, setConsentStatus] = useState<{ status: 'given' | 'declined' | 'revoked'; at: string } | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  // Safety-net timers so a dropped/errored image-analysis result can't leave
+  // the Capture button spinning forever. One timer per pending request.
+  const pendingImageTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const setInitialConsentStatus = useCallback((status: { status: 'given' | 'declined' | 'revoked'; at: string } | null) => {
     setConsentStatus((prev) => prev ?? status);
@@ -230,6 +270,12 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
 
   const incrementPendingImageAnalysis = useCallback((count: number) => {
     setPendingImageAnalysisCount(prev => prev + count);
+    for (let i = 0; i < count; i++) {
+      const t = setTimeout(() => {
+        setPendingImageAnalysisCount(prev => Math.max(0, prev - 1));
+      }, IMAGE_ANALYSIS_TIMEOUT_MS);
+      pendingImageTimers.current.push(t);
+    }
   }, []);
 
   const emitCaptureScreenshots = useCallback(() => {
@@ -286,6 +332,10 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     console.log('[RiskSocket] Image analysis result received:', result);
     setImageAnalysisResults(prev => mergeImageResults(prev, [result]));
     setPendingImageAnalysisCount(prev => Math.max(0, prev - 1));
+    // A real result landed — retire one safety-net timer so it can't
+    // double-decrement a later still-pending request.
+    const t = pendingImageTimers.current.shift();
+    if (t) clearTimeout(t);
   }, []);
 
   useEffect(() => {
@@ -316,6 +366,10 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     socket.on('disconnect', () => {
       console.log('[RiskSocket] Disconnected');
       setIsConnected(false);
+      // Results can't arrive on a dead socket — clear the spinners.
+      setPendingImageAnalysisCount(0);
+      pendingImageTimers.current.forEach(clearTimeout);
+      pendingImageTimers.current = [];
     });
 
     socket.on('window-result', handleWindowResult);

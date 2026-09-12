@@ -16,7 +16,7 @@
  *   3. Join Meeting — opens the meeting URL in a new tab
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -72,6 +72,12 @@ export default function CandidateJoinPage() {
   const [meetingOpened, setMeetingOpened] = useState(false);
   const [exchanging, setExchanging] = useState(false);
   const [exchangeError, setExchangeError] = useState<string | null>(null);
+  // Guards against firing two exchange POSTs for the same token. React 18
+  // StrictMode double-mounts effects in dev, and the `cancelled` flag only
+  // suppresses the second response's state update — the network request
+  // still goes out. A single in-flight exchange per token avoids the
+  // duplicate POST that trips Cortex's rate limiter.
+  const exchangeStartedFor = useRef<string | null>(null);
 
   // ── Magic-link exchange ──────────────────────────────────────────
   // Public route: no PrivateRoute gate. If the URL carries ?t=<token>
@@ -81,23 +87,33 @@ export default function CandidateJoinPage() {
     if (user) return; // already signed in (e.g. re-visit on the same tab)
     const token = new URLSearchParams(location.search).get('t');
     if (!token || !interviewId) return;
-    let cancelled = false;
+    // One exchange per (interview, token) — survives StrictMode remounts.
+    const exchangeKey = `${interviewId}:${token}`;
+    if (exchangeStartedFor.current === exchangeKey) return;
+    exchangeStartedFor.current = exchangeKey;
     setExchanging(true);
     (async () => {
       const result = await SessionJoinService.exchangeJoinToken(interviewId, token);
-      if (cancelled) return;
       if (!result.ok) {
+        // Genuine failure — let a future mount retry this token.
+        exchangeStartedFor.current = null;
         setExchangeError(result.error);
         setExchanging(false);
         return;
       }
+      // Persist + clear `exchanging` unconditionally. A per-mount `mounted`
+      // flag would be FALSE on the discarded first StrictMode mount's
+      // closure, so guarding setExchanging(false) with it leaves the
+      // "Signing you in" spinner stuck forever. The ref dedupe already
+      // guarantees a single exchange; the component is mounted after the
+      // StrictMode remount settles, so these setState calls are safe.
       localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, result.data.accessToken);
       localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, result.data.refreshToken);
       localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(result.data.user));
       await refreshAuth();
       setExchanging(false);
     })();
-    return () => { cancelled = true; };
+    // No cleanup that flips a mount flag — the ref dedupe handles StrictMode.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interviewId]);
 
@@ -140,35 +156,46 @@ export default function CandidateJoinPage() {
   // in the payload to grab the candidate's own participant_id for
   // helper.join() (see effect below); that field is preserved by
   // projectForCandidate with evaluation internals stripped.
+  // Dedupe key survives StrictMode's unmount→remount (refs persist), so the
+  // single in-flight load always resolves onto the live component and clears
+  // `loading`. A per-mount `cancelled` flag would let the remount suppress
+  // setLoading(false) and hang the spinner forever. The ref also drops stale
+  // writes when the user genuinely navigates to a different interview.
+  const interviewLoadKey = useRef<string | null>(null);
   useEffect(() => {
     if (!interviewId || !user?.id) return;
-    let cancelled = false;
+    const key = `${interviewId}:${user.id}`;
+    if (interviewLoadKey.current === key) return;
+    interviewLoadKey.current = key;
     (async () => {
       try {
         const resp = await InterviewService.getById(interviewId);
-        if (cancelled) return;
+        if (interviewLoadKey.current !== key) return; // superseded
         if (resp.success && resp.data) {
           setInterview(resp.data);
         } else {
           setError(resp.message || 'Interview not found');
         }
       } catch (err: any) {
-        if (!cancelled) setError(err?.message || 'Failed to load interview');
+        if (interviewLoadKey.current === key) setError(err?.message || 'Failed to load interview');
       } finally {
-        if (!cancelled) setLoading(false);
+        if (interviewLoadKey.current === key) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
   }, [interviewId, user?.id, navigate]);
 
   // ── Load consent state once the interview is known ────────────────
+  const consentLoadKey = useRef<string | null>(null);
   useEffect(() => {
     if (!interview || !interviewId) return;
-    let cancelled = false;
+    // Same ref-keyed dedupe as the interview load: survives StrictMode
+    // remounts and drops stale writes across interview changes.
+    if (consentLoadKey.current === interviewId) return;
+    consentLoadKey.current = interviewId;
     (async () => {
       try {
         const resp = await ConsentService.text(interviewId);
-        if (cancelled) return;
+        if (consentLoadKey.current !== interviewId) return; // superseded
         if (resp.success && resp.data) {
           setConsentText(resp.data);
           setConsent(resp.data.consented ? 'given' : 'needed');
@@ -176,10 +203,9 @@ export default function CandidateJoinPage() {
           setError(resp.message || 'Failed to load consent details');
         }
       } catch (err: any) {
-        if (!cancelled) setError(err?.message || 'Failed to load consent details');
+        if (consentLoadKey.current === interviewId) setError(err?.message || 'Failed to load consent details');
       }
     })();
-    return () => { cancelled = true; };
   }, [interview, interviewId]);
 
   const handleAgree = useCallback(async () => {

@@ -200,4 +200,15 @@ export class InterviewService {
     );
     return { success: response.success, data: response.data, message: response.message };
   }
+
+  /** Fetch completed window analysis results for timeline rehydration and scrubbing. */
+  static async getWindows(sessionId: string): Promise<ApiResponse<{ results: any[]; total: number }>> {
+    const response = await ApiService.get<{ results: any[]; total: number }>(
+      `/interview-sessions/${sessionId}/windows`,
+      undefined,
+      'auth'
+    );
+    return { success: response.success, data: response.data, message: response.message };
+  }
 }
+

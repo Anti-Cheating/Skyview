@@ -177,3 +177,18 @@ export const SECONDARY_BUTTON_SX: SxProps<Theme> = {
     borderColor: '#D1D5DB',
   },
 };
+
+// Shared DateTimePicker slots. The hours column renders 12 first (12,1,2…11);
+// `order` moves it to the bottom so it reads 1→12.
+export const DATETIME_SLOT_PROPS = {
+  textField: { fullWidth: true, size: 'small' as const, sx: INPUT_SX },
+  popper: {
+    sx: {
+      '& .MuiMultiSectionDigitalClockSection-root:first-of-type': {
+        display: 'flex',
+        flexDirection: 'column',
+        '& .MuiMultiSectionDigitalClockSection-item:first-of-type': { order: 1 },
+      },
+    },
+  },
+};
