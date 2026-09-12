@@ -94,10 +94,10 @@ describe('PostAnalysisPanel', () => {
     expect(screen.getByText('Score Breakdown')).toBeInTheDocument();
     expect(screen.getByText('Keystroke')).toBeInTheDocument();
     expect(screen.getByText('Voice')).toBeInTheDocument();
-    expect(screen.getByText('App Usage')).toBeInTheDocument();
-    expect(screen.getByText('🎙️ Voice Analysis')).toBeInTheDocument();
-    expect(screen.getByText('⌨️ Keystroke Analysis')).toBeInTheDocument();
-    expect(screen.getByText('🖥️ App Usage')).toBeInTheDocument();
+    expect(screen.getAllByText('App Usage').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('heading', { name: /Voice Analysis/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Keystroke Analysis/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /App Usage/i })).toBeInTheDocument();
   });
 
   test('renders the interactive Session Integrity Timeline Scrubber when windows exist', async () => {
@@ -140,7 +140,7 @@ describe('PostAnalysisPanel', () => {
     });
 
     render(<PostAnalysisPanel />);
-    expect(await screen.findByText('Session Integrity Timeline Scrubber')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Timeline' })).toBeInTheDocument();
     expect(screen.getByText(/Window #/i)).toBeInTheDocument();
     expect(screen.getByText(/Micro-Events in this 30s Window/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /All \(2\)/ })).toBeInTheDocument();

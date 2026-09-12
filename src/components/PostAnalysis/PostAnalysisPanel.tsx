@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowBack as BackIcon, ContentCopy as CopyIcon, FileDownload as ExportIcon } from "@mui/icons-material";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { LaptopIcon, KeyboardIcon, Mic01Icon } from "@hugeicons/core-free-icons";
 import { ENV } from "../../config/env";
 import { STORAGE_KEYS } from "../../config/constants";
 import { MOCK_ANALYSIS_SCENARIOS, type MockScenario } from "../../mockData/postAnalysisMock";
@@ -11,24 +13,6 @@ import AnalysisRunningAnimation from "./AnalysisRunningAnimation";
 import "./PostAnalysisPanel.css";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function ContentSummarySections({ sections }: { sections: { heading: string; bullets: string[] }[] }) {
-  if (sections.length === 0) return <p className="pa-body">No summary available.</p>;
-  return (
-    <div className="pa-topic-sections">
-      {sections.map((s, i) => (
-        <div key={i} className="pa-topic-section">
-          <h4 className="pa-topic-heading">{s.heading}</h4>
-          <ul className="pa-body" style={{ margin: 0, paddingLeft: 18 }}>
-            {(s.bullets ?? []).map((b, j) => (
-              <li key={j} style={{ margin: "3px 0" }}>{b}</li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function renderBullet(line: string) {
   const m = line.match(/^([^:]{2,28}):\s+(.+)$/s);
   if (m) {
@@ -47,29 +31,6 @@ function Bullets({ text, empty, className }: { text?: string; empty: string; cla
     <ul className={className ?? "pa-body"} style={{ margin: 0, paddingLeft: 18 }}>
       {lines.map((l, i) => (
         <li key={i} style={{ margin: "4px 0" }}>{renderBullet(l)}</li>
-      ))}
-    </ul>
-  );
-}
-
-const SEVERITY_COLOR: Record<string, string> = { HIGH: "#DC2626", MEDIUM: "#F97316", LOW: "#9CA3AF" };
-
-
-// Note: each finding still carries `timestamps` in the data (the anti-
-// hallucination guardrail lives there — see resolveChunkFindings /
-// filterFindingSummaryTimestamps in postAnalysisService.ts), but v1
-// deliberately does not render them — no [Jump→] target exists yet.
-function FindingSummaryList({ findings }: { findings: { severity: string; description: string; timestamps: string[] }[] }) {
-  if (findings.length === 0) return <p className="pa-body">No flagged behavior detected.</p>;
-  return (
-    <ul className="pa-finding-list">
-      {findings.map((f, i) => (
-        <li key={i} className="pa-finding-item">
-          <span className="pa-finding-severity" style={{ color: SEVERITY_COLOR[f.severity?.toUpperCase()] ?? "#9CA3AF" }}>
-            {f.severity?.toUpperCase()}
-          </span>
-          <span className="pa-finding-desc">{f.description}</span>
-        </li>
       ))}
     </ul>
   );
@@ -434,11 +395,8 @@ const SessionTimelineScrubber: React.FC<{
       <div className="pa-scrubber-header">
         <div>
           <h3 className="pa-card-title" style={{ margin: 0 }}>
-            Session Integrity Timeline Scrubber
+            Timeline
           </h3>
-          <p style={{ fontSize: "12px", color: "var(--pa-muted)", margin: "4px 0 0" }}>
-            Click any 30-second window segment to inspect forensic micro-events and modality breakdown.
-          </p>
         </div>
         <div className="pa-scrubber-controls">
           <button
@@ -509,17 +467,17 @@ const SessionTimelineScrubber: React.FC<{
           <div className="pa-snapshot-modalities">
             {appMod && (
               <span className="pa-snapshot-pill" style={{ color: getRiskColor(appMod.risk_level || "LOW") }}>
-                🖥️ Apps: {appMod.risk_score ?? 0}/100
+                <HugeiconsIcon icon={LaptopIcon} size={14} style={{ verticalAlign: "middle", marginRight: 4 }} /> Apps: {appMod.risk_score ?? 0}/100
               </span>
             )}
             {keyMod && (
               <span className="pa-snapshot-pill" style={{ color: getRiskColor(keyMod.risk_level || "LOW") }}>
-                ⌨️ Keys: {keyMod.risk_score ?? 0}/100
+                <HugeiconsIcon icon={KeyboardIcon} size={14} style={{ verticalAlign: "middle", marginRight: 4 }} /> Keys: {keyMod.risk_score ?? 0}/100
               </span>
             )}
             {voiceMod && (
               <span className="pa-snapshot-pill" style={{ color: getRiskColor(voiceMod.risk_level || "LOW") }}>
-                🎙️ Voice: {voiceMod.risk_score ?? 0}/100
+                <HugeiconsIcon icon={Mic01Icon} size={14} style={{ verticalAlign: "middle", marginRight: 4 }} /> Voice: {voiceMod.risk_score ?? 0}/100
               </span>
             )}
           </div>
@@ -569,21 +527,21 @@ const SessionTimelineScrubber: React.FC<{
                   className={`pa-snapshot-filter-btn${filterModality === "APP" ? " is-active" : ""}`}
                   onClick={() => setFilterModality("APP")}
                 >
-                  🖥️ Apps ({appCount})
+                  <HugeiconsIcon icon={LaptopIcon} size={14} style={{ verticalAlign: "middle", marginRight: 4 }} /> Apps ({appCount})
                 </button>
                 <button
                   type="button"
                   className={`pa-snapshot-filter-btn${filterModality === "KEYSTROKE" ? " is-active" : ""}`}
                   onClick={() => setFilterModality("KEYSTROKE")}
                 >
-                  ⌨️ Keystrokes ({keyCount})
+                  <HugeiconsIcon icon={KeyboardIcon} size={14} style={{ verticalAlign: "middle", marginRight: 4 }} /> Keystrokes ({keyCount})
                 </button>
                 <button
                   type="button"
                   className={`pa-snapshot-filter-btn${filterModality === "VOICE" ? " is-active" : ""}`}
                   onClick={() => setFilterModality("VOICE")}
                 >
-                  🎙️ Voice ({voiceCount})
+                  <HugeiconsIcon icon={Mic01Icon} size={14} style={{ verticalAlign: "middle", marginRight: 4 }} /> Voice ({voiceCount})
                 </button>
               </div>
             </div>
@@ -1025,7 +983,6 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
         <section className="pa-card pa-gauge-card">
           <h3 className="pa-card-title">Overall Score</h3>
           <RiskGauge score={analysis.risk_score} level={analysis.risk_level} riskColor={riskColor} />
-          <p className="pa-card-note">{analysis.score_reason || "Aggregated across voice, keystrokes and app usage."}</p>
         </section>
 
         <section className="pa-card pa-donut-card">
@@ -1040,17 +997,13 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
         </section>
       </div>
 
-      {/* ── Summary — content only, topic-segmented from the transcript ──── */}
+      {/* ── Interview Summary ────────────────────────────────────────────── */}
       <section className="pa-card pa-summary-card">
         <h3 className="pa-card-title">Interview Summary</h3>
-        {analysis.content_summary.length === 0 && analysis.final_summary.trim() ? (
-          <Bullets className="pa-body" text={analysis.final_summary} empty="No summary available." />
-        ) : (
-          <ContentSummarySections sections={analysis.content_summary} />
-        )}
+        <Bullets className="pa-body" text={analysis.final_summary} empty="No summary available." />
       </section>
 
-      {/* ── Session Integrity Timeline Scrubber ──────────────────────────── */}
+      {/* ── Timeline ─────────────────────────────────────────────────────── */}
       {scrubberWindows.length > 0 && (
         <SessionTimelineScrubber windows={scrubberWindows} getRiskColor={getRiskColor} />
       )}
@@ -1058,26 +1011,24 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
       {/* ── 3 Classic Modality Signals ───────────────────────────────────── */}
       <div className="pa-signals">
         <section className="pa-card pa-signal-card">
-          <h3 className="pa-card-title">🎙️ Voice Analysis</h3>
+          <h3 className="pa-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <HugeiconsIcon icon={Mic01Icon} size={18} /> Voice Analysis
+          </h3>
           <Bullets className="pa-body pa-body-sm" text={analysis.voice_summary} empty="No voice data recorded." />
         </section>
         <section className="pa-card pa-signal-card">
-          <h3 className="pa-card-title">⌨️ Keystroke Analysis</h3>
+          <h3 className="pa-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <HugeiconsIcon icon={KeyboardIcon} size={18} /> Keystroke Analysis
+          </h3>
           <Bullets className="pa-body pa-body-sm" text={analysis.keystroke_summary} empty="No keystroke data recorded." />
         </section>
         <section className="pa-card pa-signal-card">
-          <h3 className="pa-card-title">🖥️ App Usage</h3>
+          <h3 className="pa-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <HugeiconsIcon icon={LaptopIcon} size={18} /> App Usage
+          </h3>
           <Bullets className="pa-body pa-body-sm" text={analysis.app_summary} empty="No app usage data recorded." />
         </section>
       </div>
-
-      {/* ── Finding Summary — flagged behavior only, session-wide, grouped ── */}
-      {analysis.finding_summary.length > 0 && (
-        <section className="pa-card pa-summary-card">
-          <h3 className="pa-card-title">Finding Summary</h3>
-          <FindingSummaryList findings={analysis.finding_summary} />
-        </section>
-      )}
 
       {/* ── Detected Application Categories ─────────────────────────────── */}
       {analysis.detected_app_categories.length > 0 && (

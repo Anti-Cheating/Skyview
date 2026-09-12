@@ -600,8 +600,8 @@ describe('AnalyticsPanel', () => {
 
     // Verify modality filters and formatted tags
     expect(screen.getByText('All (4)')).toBeInTheDocument();
-    expect(screen.getByText('🖥️ Apps (1)')).toBeInTheDocument();
-    expect(screen.getByText('⌨️ Keys (3)')).toBeInTheDocument();
+    expect(screen.getByText(/Apps \(1\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Keys \(3\)/)).toBeInTheDocument();
     expect(screen.getAllByText(/\[KEYSTROKE\]/).length).toBe(3);
   });
 

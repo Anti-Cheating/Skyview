@@ -126,14 +126,6 @@ function formatSignal(signal: string): string {
   return signal.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function formatClock24(ts?: number | string | Date): string {
-  if (!ts) return '';
-  const d = new Date(ts);
-  if (isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
 /* ── Sub-components ── */
 
 /** One row per event — timeline lines, never side-by-side, always stacked
@@ -173,13 +165,15 @@ function SubSection({
   count,
   children,
   action,
+  defaultOpen = false,
 }: {
   label: string;
   count: number;
   children: React.ReactNode;
   action?: React.ReactNode;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <Box sx={{ mb: 0.8 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 0.3 }}>
@@ -721,7 +715,7 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
       <Collapse in={expanded}>
         <Box sx={{ px: 1.2, pb: 1.2, pt: 0.2 }}>
           {hasModalities && (
-            <SubSection label="Modality Breakdown" count={3}>
+            <SubSection label="Modality Breakdown" count={3} defaultOpen={true}>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4, mt: 0.4 }}>
                 {result.per_modality!.app_metadata && (
                   <ModalityCard label="Apps" icon={LaptopIcon} modality={result.per_modality!.app_metadata} />
@@ -745,16 +739,17 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
                     size="small"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setShowRaw((prev) => !prev);
+                      setShowRaw(!showRaw);
                     }}
                     sx={{
-                      fontSize: '0.55rem',
-                      textTransform: 'none',
-                      py: 0,
-                      px: 0.6,
-                      minWidth: 0,
-                      color: '#2563EB',
+                      fontSize: '0.625rem',
                       fontWeight: 600,
+                      p: '1px 6px',
+                      minWidth: 0,
+                      color: showRaw ? '#2563EB' : DARK_TEXT_MUTED,
+                      textTransform: 'none',
+                      borderRadius: '4px',
+                      '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' },
                     }}
                   >
                     {showRaw ? `Summarized (${summarizedTimeline.length})` : `Raw (${rawTimeline.length})`}
@@ -763,7 +758,16 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
               }
             >
               {/* Modality Filter Pills */}
-              <Box sx={{ display: 'flex', gap: 0.5, mb: 0.8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  mb: 0.8,
+                  mt: 0.2,
+                  flexWrap: 'wrap',
+                }}
+              >
                 <Box
                   component="button"
                   type="button"
@@ -807,7 +811,9 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
                       cursor: 'pointer',
                     }}
                   >
-                    🖥️ Apps ({appCount})
+                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
+                      <HugeiconsIcon icon={LaptopIcon} size={11} /> Apps ({appCount})
+                    </Box>
                   </Box>
                 )}
                 {keyCount > 0 && (
@@ -831,7 +837,9 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
                       cursor: 'pointer',
                     }}
                   >
-                    ⌨️ Keys ({keyCount})
+                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
+                      <HugeiconsIcon icon={KeyboardIcon} size={11} /> Keys ({keyCount})
+                    </Box>
                   </Box>
                 )}
                 {voiceCount > 0 && (
@@ -855,7 +863,9 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
                       cursor: 'pointer',
                     }}
                   >
-                    🎙️ Voice ({voiceCount})
+                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
+                      <HugeiconsIcon icon={Mic01Icon} size={11} /> Voice ({voiceCount})
+                    </Box>
                   </Box>
                 )}
               </Box>
@@ -877,7 +887,7 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
                     const isVoice = rawKind === 'VOICE' || rawKind === 'TRANSCRIPT' || rawKind === 'AUDIO';
                     const displayKind = isVoice ? 'VOICE' : rawKind;
                     const kindColor = displayKind === 'APP' ? '#2563EB' : displayKind === 'KEYSTROKE' ? '#D97706' : '#16A34A';
-                    const timeStr = formatClock24(item.ts);
+                    const timeStr = formatClock(item.ts);
                     const kindTag = `[${displayKind}]`.padEnd(11, ' ');
 
                     return (
@@ -900,7 +910,7 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
                         {timeStr && (
                           <Typography
                             component="span"
-                            sx={{ fontSize: '0.65rem', color: '#64748B', fontFamily: 'monospace', flexShrink: 0, width: 56 }}
+                            sx={{ fontSize: '0.65rem', color: '#64748B', fontFamily: 'monospace', flexShrink: 0, minWidth: 72 }}
                           >
                             {timeStr}
                           </Typography>
