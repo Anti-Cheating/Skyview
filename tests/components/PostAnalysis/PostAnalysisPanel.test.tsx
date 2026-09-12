@@ -12,12 +12,10 @@ vi.mock('react-router-dom', () => ({
 
 const getPostAnalysis = vi.fn();
 const getById = vi.fn();
-const getWindows = vi.fn();
 vi.mock('../../../src/services/interview.service', () => ({
   InterviewService: {
     getPostAnalysis: (...a: unknown[]) => getPostAnalysis(...a),
     getById: (...a: unknown[]) => getById(...a),
-    getWindows: (...a: unknown[]) => getWindows(...a),
   },
 }));
 
@@ -47,7 +45,6 @@ const session = {
 beforeEach(() => {
   getPostAnalysis.mockResolvedValue({ success: true, data: rawAnalysis });
   getById.mockResolvedValue({ success: true, data: session });
-  getWindows.mockResolvedValue({ success: true, data: { results: [], total: 0 } });
   Object.defineProperty(navigator, 'clipboard', {
     value: { writeText: vi.fn().mockResolvedValue(undefined) },
     configurable: true,
@@ -62,10 +59,17 @@ describe('PostAnalysisPanel', () => {
     expect(screen.getByText('Acme Corp')).toBeInTheDocument();
   });
 
-  test('shows the consent / monitoring-coverage line', async () => {
+  test('shows the consent / monitoring-coverage line with interview end time instead of literal "end"', async () => {
+    getById.mockResolvedValue({
+      success: true,
+      data: { ...session, scheduled_end_at: '2026-07-01T11:00:00Z', actual_end_at: '2026-07-01T10:45:00Z' },
+    });
     render(<PostAnalysisPanel />);
     await screen.findByRole('heading', { name: 'Jane Doe' });
     expect(screen.getByText('Monitoring coverage')).toBeInTheDocument();
+    const coverageVal = screen.getByText('Monitoring coverage').parentElement?.querySelector('.pa-meta-val');
+    expect(coverageVal?.textContent).not.toContain('end');
+    expect(coverageVal?.textContent).toMatch(/–/);
   });
 
   test('copy-transcript writes the transcript to the clipboard', async () => {
@@ -99,56 +103,5 @@ describe('PostAnalysisPanel', () => {
     expect(screen.getByRole('heading', { name: /Keystroke Analysis/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /App Usage/i })).toBeInTheDocument();
   });
-
-  test('renders the interactive Session Integrity Timeline Scrubber when windows exist', async () => {
-    getWindows.mockResolvedValue({
-      success: true,
-      data: {
-        total: 2,
-        results: [
-          {
-            window_id: 'w1',
-            risk: 'Low',
-            score: 15,
-            summary: 'Initial pleasantries and question intro.',
-            processed_at: '2026-07-01T10:00:30Z',
-            timeline: [{ ts: 1720000010000, kind: 'APP', detail: 'opened VS Code' }],
-            per_modality: {
-              app_metadata: { risk_level: 'Low', risk_score: 10 },
-              keystroke: { risk_level: 'Low', risk_score: 12 },
-              voice: { risk_level: 'Low', risk_score: 8 },
-            },
-          },
-          {
-            window_id: 'w2',
-            risk: 'High',
-            score: 75,
-            summary: 'Pasted 120 chars from Chrome.',
-            processed_at: '2026-07-01T10:01:00Z',
-            timeline: [
-              { ts: 1720000040000, kind: 'APP', detail: 'opened Chrome — "ChatGPT"' },
-              { ts: 1720000050000, kind: 'KEYSTROKE', detail: 'paste (Cmd+V) in VS Code (120 chars)' },
-            ],
-            per_modality: {
-              app_metadata: { risk_level: 'High', risk_score: 80 },
-              keystroke: { risk_level: 'High', risk_score: 75 },
-              voice: { risk_level: 'Low', risk_score: 10 },
-            },
-          },
-        ],
-      },
-    });
-
-    render(<PostAnalysisPanel />);
-    expect(await screen.findByRole('heading', { name: 'Timeline' })).toBeInTheDocument();
-    expect(screen.getByText(/Window #/i)).toBeInTheDocument();
-    expect(screen.getByText(/Micro-Events in this 30s Window/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /All \(2\)/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Apps \(1\)/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Keystrokes \(1\)/ })).toBeInTheDocument();
-    expect(screen.getByText(/\[APP\]/)).toBeInTheDocument();
-    expect(screen.getByText(/opened Chrome — "ChatGPT"/)).toBeInTheDocument();
-    expect(screen.getByText(/\[KEYSTROKE\]/)).toBeInTheDocument();
-    expect(screen.getByText(/paste \(Cmd\+V\) in VS Code/)).toBeInTheDocument();
-  });
 });
+

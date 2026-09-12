@@ -335,18 +335,19 @@ describe('AnalyticsPanel', () => {
     expect(screen.getAllByText('Connecting...').length).toBeGreaterThan(0);
   });
 
-  test('Analysis tab renders a single WindowCard (auto-expanded latest) with Timeline + Evidence', async () => {
+  test('Analysis tab renders a single WindowCard (auto-expanded latest) with full breakdown', async () => {
     const detailed = win({
       risk: 'critical',
       score: 95,
       confidence: 'medium',
       summary: 'Heavy AI-tool usage detected across the window.',
-      timeline: [
-        { ts: Date.parse('2026-07-05T10:00:05Z'), kind: 'APP', detail: 'ChatGPT foreground' },
-        { ts: Date.parse('2026-07-05T10:00:10Z'), kind: 'KEYSTROKE', detail: 'paste 320 chars' },
-      ],
-      evidence: [
-        { claim: 'ChatGPT window visible', source: 'app_metadata', confidence: 'strong' },
+      per_modality: {
+        app_metadata: modality({ risk_level: 'critical', risk_score: 90, signals: ['ai_tool_open'], evidence: ['ChatGPT window visible'], summary: 'AI tool foreground' }),
+        keystroke: modality({ risk_level: 'high', risk_score: 80 }),
+        voice: modality({ risk_level: 'no', risk_score: 5 }),
+      },
+      correlations: [
+        { finding: 'Paste burst followed app switch', signals_involved: ['paste', 'app_switch'], impact: 'moderate' },
       ],
       timeline_note: 'Spike right after the coding question was asked.',
     });
@@ -356,15 +357,22 @@ describe('AnalyticsPanel', () => {
     expect(screen.getByText('Auto Analysis')).toBeInTheDocument();
     // Summary shows in both the RollingSummaryCard and the WindowCard.
     expect(screen.getAllByText(/Heavy AI-tool usage/).length).toBeGreaterThan(0);
-    // The card auto-expands (latest) → Timeline + Evidence sub-section headers
-    // carry their counts, e.g. "Timeline (2)" / "Evidence (1)".
-    expect(screen.getByText(/Timeline \(2\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Evidence \(1\)/)).toBeInTheDocument();
-    // timeline_note renders only when there's no narrative (this row has none).
+    // Micro-timeline is removed from WindowCard for a clean interface
+    expect(screen.queryByText(/Timeline \(/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Evidence \(/)).not.toBeInTheDocument();
+    // Breakdown modality labels present (auto-expanded since latest)
+    expect(screen.getByText('Apps')).toBeInTheDocument();
+    expect(screen.getByText('Keystrokes')).toBeInTheDocument();
+    expect(screen.getByText('Voice')).toBeInTheDocument();
+    // Correlations + timeline note
+    expect(screen.getByText(/Paste burst followed app switch/)).toBeInTheDocument();
     expect(screen.getByText(/Spike right after the coding question/)).toBeInTheDocument();
 
-    // Sub-sections are collapsed by default — expand Evidence to reveal the citation.
-    await userEvent.click(screen.getByText(/Evidence \(1\)/));
+    // Expand a ModalityCard to reveal its signals/evidence/summary
+    await userEvent.click(screen.getByText('Apps'));
+    expect(screen.getByText('AI tool foreground')).toBeInTheDocument();
+    expect(screen.getAllByText("Signals").length).toBeGreaterThan(0);
+    expect(screen.getByText('Evidence')).toBeInTheDocument();
     expect(screen.getByText('ChatGPT window visible')).toBeInTheDocument();
   });
 
@@ -565,44 +573,16 @@ describe('AnalyticsPanel', () => {
     expect(summarized[3].count).toBe(2);
   });
 
-  test('WindowCard shows summarized timeline count and toggles to raw view', async () => {
-    const detailed = win({
-      risk: 'high',
-      score: 80,
-      confidence: 'high',
-      summary: 'Heavy repeated pasting',
-      timeline: [
-        { ts: Date.parse('2026-07-05T10:00:01Z'), kind: 'APP', detail: 'opened Cursor — "code.ts"' },
-        { ts: Date.parse('2026-07-05T10:00:02Z'), kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
-        { ts: Date.parse('2026-07-05T10:00:03Z'), kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
-        { ts: Date.parse('2026-07-05T10:00:04Z'), kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
-      ],
-    });
-
-    renderPanel({ results: [detailed], latestResult: detailed });
-    await userEvent.click(screen.getAllByRole('tab')[1]);
-
-    // Header displays summarized count (2: opened Cursor + pasted in Cursor (3×))
-    expect(screen.getByText(/Timeline \(2\)/)).toBeInTheDocument();
-
-    // Toggle button to view raw entries appears since raw (4) > summarized (2)
-    const rawBtn = screen.getByRole('button', { name: /Raw \(4\)/ });
-    expect(rawBtn).toBeInTheDocument();
-
-    // Expand the Timeline SubSection
-    await userEvent.click(screen.getByText(/Timeline \(2\)/));
-    expect(screen.getByText('pasted in Cursor (3×)')).toBeInTheDocument();
-
-    // Click to switch to Raw view
-    await userEvent.click(rawBtn);
-    expect(screen.getByRole('button', { name: /Summarized \(2\)/ })).toBeInTheDocument();
-    expect(screen.getAllByText('pasted in Cursor').length).toBe(3);
-
-    // Verify modality filters and formatted tags
-    expect(screen.getByText('All (4)')).toBeInTheDocument();
-    expect(screen.getByText(/Apps \(1\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Keys \(3\)/)).toBeInTheDocument();
-    expect(screen.getAllByText(/\[KEYSTROKE\]/).length).toBe(3);
+  test('summarizeTimeline helper correctly summarizes entries', () => {
+    const raw = [
+      { ts: Date.parse('2026-07-05T10:00:01Z'), kind: 'APP', detail: 'opened Cursor — "code.ts"' },
+      { ts: Date.parse('2026-07-05T10:00:02Z'), kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+      { ts: Date.parse('2026-07-05T10:00:03Z'), kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+      { ts: Date.parse('2026-07-05T10:00:04Z'), kind: 'KEYSTROKE', detail: 'pasted in Cursor' },
+    ];
+    const summarized = summarizeTimeline(raw);
+    expect(summarized).toHaveLength(2);
+    expect(summarized[1].detail).toBe('pasted in Cursor (3×)');
   });
 
   test('filterTimelineToWindow excludes older historical events outside the 30s window', () => {
@@ -624,28 +604,27 @@ describe('AnalyticsPanel', () => {
     expect(windowOnly[1].detail).toBe('closed python3, opened Storage');
   });
 
-  test('WindowCard filters out past events and only renders the 30s window count', async () => {
+  test('WindowCard keeps live cards clean without micro-timeline', async () => {
     const end = Date.parse('2026-07-05T10:30:48Z');
     const windowResult = win({
       risk: 'medium',
       score: 45,
       processed_at: '2026-07-05T10:30:48Z',
       timeline: [
-        // 10 minutes ago
-        { ts: end - 600_000, kind: 'KEYSTROKE', detail: 'shortcut cmd+tab in Cursor' },
-        { ts: end - 500_000, kind: 'KEYSTROKE', detail: 'shortcut cmd+tab in Chrome' },
-        // Inside 30-second window
         { ts: end - 15_000, kind: 'KEYSTROKE', detail: 'shortcut delete in Cursor' },
         { ts: end, kind: 'APP', detail: 'closed python3, opened Storage' },
+      ],
+      evidence: [
+        { claim: 'Storage app opened', source: 'app_metadata', confidence: 'medium' },
       ],
     });
 
     renderPanel({ results: [windowResult], latestResult: windowResult });
     await userEvent.click(screen.getAllByRole('tab')[1]);
 
-    // Header displays 2 (only the 2 events within the 30-second window, not 4)
-    expect(screen.getByText(/Timeline \(2\)/)).toBeInTheDocument();
-    expect(screen.queryByText(/Timeline \(4\)/)).not.toBeInTheDocument();
+    // Micro-timeline and bottom Evidence section are omitted from WindowCard
+    expect(screen.queryByText(/Timeline \(/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Evidence \(/)).not.toBeInTheDocument();
   });
 
   test('WindowCard displays modality quick badges and expandable modality breakdown', async () => {
@@ -668,9 +647,8 @@ describe('AnalyticsPanel', () => {
     expect(screen.getAllByText('60').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('12').length).toBeGreaterThanOrEqual(1);
 
-    // Modality breakdown subsection
-    expect(screen.getByText(/Modality Breakdown \(3\)/)).toBeInTheDocument();
-    await userEvent.click(screen.getByText(/Modality Breakdown \(3\)/));
+    // Modality breakdown section
+    expect(screen.getByText('Breakdown')).toBeInTheDocument();
     expect(screen.getByText('Apps')).toBeInTheDocument();
     expect(screen.getByText('Keystrokes')).toBeInTheDocument();
     expect(screen.getByText('Voice')).toBeInTheDocument();

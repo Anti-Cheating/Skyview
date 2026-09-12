@@ -141,7 +141,7 @@ export function TimelineRow({ time, kind, detail }: { time: string; kind: string
   );
 }
 
-function EvidenceRow({ item }: { item: EvidenceCitation }) {
+export function EvidenceRow({ item }: { item: EvidenceCitation }) {
   const color = getImpactColor((item.confidence as Correlation['impact']) || 'weak');
   return (
     <Box sx={{ display: 'flex', gap: 0.6, alignItems: 'flex-start', px: 1, py: 0.5, borderRadius: '6px', bgcolor: `${color}10`, border: `1px solid ${color}20`, mb: 0.4 }}>
@@ -160,7 +160,7 @@ function EvidenceRow({ item }: { item: EvidenceCitation }) {
 
 /** A collapsible sub-section within an expanded WindowCard — Timeline and
  *  Evidence each get their own independent expand state, default collapsed. */
-function SubSection({
+export function SubSection({
   label,
   count,
   children,
@@ -357,7 +357,7 @@ export function summarizeTimeline(
   return out;
 }
 
-function getTimelineEntryIcon(entry: { kind: string; detail: string }): IconSvgElement {
+export function getTimelineEntryIcon(entry: { kind: string; detail: string }): IconSvgElement {
   if (entry.kind === 'VOICE') return Mic01Icon;
   if (entry.kind === 'IMAGE') return Camera01Icon;
   if (entry.kind === 'KEYSTROKE') {
@@ -372,7 +372,7 @@ function getTimelineEntryIcon(entry: { kind: string; detail: string }): IconSvgE
   return LaptopIcon;
 }
 
-function TimelineStepper({ entries }: { entries: SummarizedTimelineEntry[] }) {
+export function TimelineStepper({ entries }: { entries: SummarizedTimelineEntry[] }) {
   return (
     <Box sx={{ position: 'relative', py: 0.4 }}>
       {entries.map((item, idx) => {
@@ -507,6 +507,24 @@ function TimelineStepper({ entries }: { entries: SummarizedTimelineEntry[] }) {
   );
 }
 
+export function CorrelationCard({ correlation }: { correlation: Correlation }) {
+  const color = getImpactColor(correlation.impact);
+  return (
+    <Box sx={{ display: 'flex', gap: 0.6, alignItems: 'flex-start', px: 1, py: 0.5, borderRadius: '6px', bgcolor: `${color}10`, border: `1px solid ${color}20` }}>
+      <HugeiconsIcon icon={ArrowLeftRightIcon} size={11} color={color} style={{ marginTop: '2px', flexShrink: 0 }} />
+      <Box sx={{ flex: 1 }}>
+        <Typography sx={{ fontSize: '0.625rem', color: DARK_TEXT, lineHeight: 1.4 }}>{correlation.finding}</Typography>
+        <Box sx={{ display: 'flex', gap: 0.3, mt: 0.3, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Chip label={correlation.impact.toUpperCase()} size="small" sx={{ height: 14, fontSize: '0.45rem', fontWeight: 700, bgcolor: `${color}20`, color, '& .MuiChip-label': { px: 0.4 } }} />
+          {correlation.signals_involved?.map((s, i) => (
+            <Typography key={i} sx={{ fontSize: '0.55rem', color: DARK_TEXT_SECONDARY }}>{formatSignal(s)}{i < correlation.signals_involved.length - 1 ? ',' : ''}</Typography>
+          ))}
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
 function ModalityCard({
   label,
   icon,
@@ -519,38 +537,39 @@ function ModalityCard({
   const [expanded, setExpanded] = useState(false);
   const color = getRiskColor(modality.risk_level || 'LOW');
   const hasDetails = Boolean(
-    modality.summary ||
-      (modality.signals && modality.signals.length > 0) ||
-      (modality.evidence && modality.evidence.length > 0)
+    (modality.signals && modality.signals.length > 0) ||
+      (modality.evidence && modality.evidence.length > 0) ||
+      modality.summary
   );
 
   return (
-    <Box sx={{ borderRadius: '8px', border: `1px solid ${DARK_BORDER}`, bgcolor: DARK_BG, overflow: 'hidden', mb: 0.5 }}>
+    <Box sx={{ borderRadius: '8px', border: `1px solid ${color}20`, bgcolor: `${color}08`, overflow: 'hidden' }}>
       <Box
         onClick={() => hasDetails && setExpanded(!expanded)}
         sx={{
+          px: 1.2,
+          py: 0.7,
           display: 'flex',
-          justifyContent: 'space-between',
           alignItems: 'center',
-          px: 1,
-          py: 0.6,
+          justifyContent: 'space-between',
           cursor: hasDetails ? 'pointer' : 'default',
-          '&:hover': hasDetails ? { bgcolor: `${color}06` } : {},
+          '&:hover': hasDetails ? { bgcolor: `${color}12` } : {},
+          transition: 'background 0.15s',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.7 }}>
           <Box sx={{ color, display: 'flex', alignItems: 'center' }}>
-            <HugeiconsIcon icon={icon} size={13} color={color} />
+            <HugeiconsIcon icon={icon} size={14} color={color} />
           </Box>
-          <Typography sx={{ fontSize: '0.675rem', fontWeight: 600, color: DARK_TEXT }}>{label}</Typography>
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+          <Typography sx={{ fontSize: '0.7rem', fontWeight: 600, color: DARK_TEXT }}>{label}</Typography>
           <Chip
-            label={modality.risk_level?.toUpperCase() || 'LOW'}
+            label={modality.risk_level?.toUpperCase() || 'N/A'}
             size="small"
             sx={{ height: 16, fontSize: '0.5rem', fontWeight: 700, bgcolor: `${color}20`, color, '& .MuiChip-label': { px: 0.5 } }}
           />
-          <Typography sx={{ fontSize: '0.675rem', fontWeight: 700, color: getScoreColor(modality.risk_score ?? 0), minWidth: 20, textAlign: 'right' }}>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, color: getScoreColor(modality.risk_score ?? 0) }}>
             {modality.risk_score ?? 0}
           </Typography>
           {hasDetails && (
@@ -559,26 +578,34 @@ function ModalityCard({
         </Box>
       </Box>
       <Collapse in={expanded}>
-        <Box sx={{ px: 1, pb: 0.8, pt: 0.4, borderTop: `1px solid ${DARK_BORDER}` }}>
+        <Box sx={{ px: 1.2, pb: 1, pt: 0.3 }}>
           {modality.summary && (
-            <Typography sx={{ fontSize: '0.625rem', color: DARK_TEXT_SECONDARY, mb: 0.5, lineHeight: 1.4 }}>
+            <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.5, mb: 0.6, fontStyle: 'italic' }}>
               {modality.summary}
             </Typography>
           )}
           {modality.signals && modality.signals.length > 0 && (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.3, mb: 0.5 }}>
-              {modality.signals.map((s, i) => (
-                <Chip
-                  key={i}
-                  label={formatSignal(s)}
-                  size="small"
-                  sx={{ height: 16, fontSize: '0.5rem', bgcolor: `${color}15`, color, '& .MuiChip-label': { px: 0.4 } }}
-                />
-              ))}
+            <Box sx={{ mb: 0.6 }}>
+              <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, color: DARK_TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.4 }}>
+                Signals
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
+                {modality.signals.map((s, i) => (
+                  <Chip
+                    key={i}
+                    label={formatSignal(s)}
+                    size="small"
+                    sx={{ height: 18, fontSize: '0.55rem', fontWeight: 500, bgcolor: `${color}15`, color, border: `1px solid ${color}25`, '& .MuiChip-label': { px: 0.6 } }}
+                  />
+                ))}
+              </Box>
             </Box>
           )}
           {modality.evidence && modality.evidence.length > 0 && (
             <Box>
+              <Typography sx={{ fontSize: '0.6rem', fontWeight: 600, color: DARK_TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.3 }}>
+                Evidence
+              </Typography>
               {modality.evidence.map((item, i) => (
                 <Box key={i} sx={{ display: 'flex', gap: 0.5, mb: 0.2, alignItems: 'flex-start' }}>
                   <Box sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: color, mt: '5px', flexShrink: 0 }} />
@@ -595,50 +622,15 @@ function ModalityCard({
 
 export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScreenshot }: { result: WindowResult; isLatest: boolean; onExpandScreenshot: (urls: string[], startIndex: number) => void }) {
   const [expanded, setExpanded] = useState(isLatest);
-  const [showRaw, setShowRaw] = useState(false);
-  const [timelineModalityFilter, setTimelineModalityFilter] = useState<'ALL' | 'APP' | 'KEYSTROKE' | 'VOICE'>('ALL');
   const color = getRiskColor(result.risk);
-  const rawTimeline = useMemo(() => {
-    return filterTimelineToWindow(
-      result.timeline || [],
-      result.processed_at,
-      (result as any).window_end_time || (result as any).end_time
-    );
-  }, [result.timeline, result.processed_at, (result as any).window_end_time, (result as any).end_time]);
-  const hasTimeline = rawTimeline.length > 0;
-  const summarizedTimeline = useMemo(() => summarizeTimeline(rawTimeline), [rawTimeline]);
-  const displayTimeline = showRaw ? (rawTimeline as SummarizedTimelineEntry[]) : summarizedTimeline;
-  const canToggleRaw = rawTimeline.length > summarizedTimeline.length;
-
-  const appCount = useMemo(() => rawTimeline.filter(e => e.kind?.toUpperCase() === 'APP').length, [rawTimeline]);
-  const keyCount = useMemo(() => rawTimeline.filter(e => e.kind?.toUpperCase() === 'KEYSTROKE').length, [rawTimeline]);
-  const voiceCount = useMemo(() => rawTimeline.filter(e => {
-    const k = e.kind?.toUpperCase();
-    return k === 'VOICE' || k === 'TRANSCRIPT' || k === 'AUDIO';
-  }).length, [rawTimeline]);
-
-  const filteredDisplayTimeline = useMemo(() => {
-    if (timelineModalityFilter === 'ALL') return displayTimeline;
-    if (timelineModalityFilter === 'VOICE') {
-      return displayTimeline.filter(e => {
-        const k = e.kind?.toUpperCase();
-        return k === 'VOICE' || k === 'TRANSCRIPT' || k === 'AUDIO';
-      });
-    }
-    return displayTimeline.filter(e => e.kind?.toUpperCase() === timelineModalityFilter);
-  }, [displayTimeline, timelineModalityFilter]);
-  const hasEvidence = result.evidence && result.evidence.length > 0;
   const hasModalities = Boolean(
     result.per_modality &&
       (result.per_modality.app_metadata ||
         result.per_modality.keystroke ||
         result.per_modality.voice)
   );
-  const hasExpandable = Boolean(
-    hasModalities || result.narrative || hasTimeline || hasEvidence || result.timeline_note
-  );
-  // Narrative is the headline now — fall back to the old summary field for
-  // rows analyzed before this rolled out (they'll never have narrative).
+  const hasCorrelations = Boolean(result.correlations && result.correlations.length > 0);
+  const hasExpandable = Boolean(hasModalities || hasCorrelations || result.timeline_note);
   const headline = result.narrative || result.summary;
 
   return (
@@ -707,7 +699,6 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
         </Box>
         {headline && (
           <Box>
-            <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: DARK_TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.2 }}>Summary</Typography>
             <Typography sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: expanded ? 5 : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{headline}</Typography>
           </Box>
         )}
@@ -715,8 +706,9 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
       <Collapse in={expanded}>
         <Box sx={{ px: 1.2, pb: 1.2, pt: 0.2 }}>
           {hasModalities && (
-            <SubSection label="Modality Breakdown" count={3} defaultOpen={true}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4, mt: 0.4 }}>
+            <Box sx={{ mb: 1 }}>
+              <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: DARK_TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.5 }}>Breakdown</Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                 {result.per_modality!.app_metadata && (
                   <ModalityCard label="Apps" icon={LaptopIcon} modality={result.per_modality!.app_metadata} />
                 )}
@@ -727,229 +719,17 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
                   <ModalityCard label="Voice" icon={Mic01Icon} modality={result.per_modality!.voice} />
                 )}
               </Box>
-            </SubSection>
+            </Box>
           )}
-          {hasTimeline && (
-            <SubSection
-              label="Timeline"
-              count={summarizedTimeline.length}
-              action={
-                canToggleRaw ? (
-                  <Button
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowRaw(!showRaw);
-                    }}
-                    sx={{
-                      fontSize: '0.625rem',
-                      fontWeight: 600,
-                      p: '1px 6px',
-                      minWidth: 0,
-                      color: showRaw ? '#2563EB' : DARK_TEXT_MUTED,
-                      textTransform: 'none',
-                      borderRadius: '4px',
-                      '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' },
-                    }}
-                  >
-                    {showRaw ? `Summarized (${summarizedTimeline.length})` : `Raw (${rawTimeline.length})`}
-                  </Button>
-                ) : undefined
-              }
-            >
-              {/* Modality Filter Pills */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0.5,
-                  mb: 0.8,
-                  mt: 0.2,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <Box
-                  component="button"
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setTimelineModalityFilter('ALL');
-                  }}
-                  sx={{
-                    fontSize: '0.58rem',
-                    fontWeight: 600,
-                    px: 0.6,
-                    py: 0.2,
-                    borderRadius: '4px',
-                    border: '1px solid',
-                    borderColor: timelineModalityFilter === 'ALL' ? '#2563EB' : '#E2E8F0',
-                    bgcolor: timelineModalityFilter === 'ALL' ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
-                    color: timelineModalityFilter === 'ALL' ? '#2563EB' : DARK_TEXT_MUTED,
-                    cursor: 'pointer',
-                  }}
-                >
-                  All ({rawTimeline.length})
-                </Box>
-                {appCount > 0 && (
-                  <Box
-                    component="button"
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTimelineModalityFilter('APP');
-                    }}
-                    sx={{
-                      fontSize: '0.58rem',
-                      fontWeight: 600,
-                      px: 0.6,
-                      py: 0.2,
-                      borderRadius: '4px',
-                      border: '1px solid',
-                      borderColor: timelineModalityFilter === 'APP' ? '#2563EB' : '#E2E8F0',
-                      bgcolor: timelineModalityFilter === 'APP' ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
-                      color: timelineModalityFilter === 'APP' ? '#2563EB' : DARK_TEXT_MUTED,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
-                      <HugeiconsIcon icon={LaptopIcon} size={11} /> Apps ({appCount})
-                    </Box>
-                  </Box>
-                )}
-                {keyCount > 0 && (
-                  <Box
-                    component="button"
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTimelineModalityFilter('KEYSTROKE');
-                    }}
-                    sx={{
-                      fontSize: '0.58rem',
-                      fontWeight: 600,
-                      px: 0.6,
-                      py: 0.2,
-                      borderRadius: '4px',
-                      border: '1px solid',
-                      borderColor: timelineModalityFilter === 'KEYSTROKE' ? '#2563EB' : '#E2E8F0',
-                      bgcolor: timelineModalityFilter === 'KEYSTROKE' ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
-                      color: timelineModalityFilter === 'KEYSTROKE' ? '#2563EB' : DARK_TEXT_MUTED,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
-                      <HugeiconsIcon icon={KeyboardIcon} size={11} /> Keys ({keyCount})
-                    </Box>
-                  </Box>
-                )}
-                {voiceCount > 0 && (
-                  <Box
-                    component="button"
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTimelineModalityFilter('VOICE');
-                    }}
-                    sx={{
-                      fontSize: '0.58rem',
-                      fontWeight: 600,
-                      px: 0.6,
-                      py: 0.2,
-                      borderRadius: '4px',
-                      border: '1px solid',
-                      borderColor: timelineModalityFilter === 'VOICE' ? '#2563EB' : '#E2E8F0',
-                      bgcolor: timelineModalityFilter === 'VOICE' ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
-                      color: timelineModalityFilter === 'VOICE' ? '#2563EB' : DARK_TEXT_MUTED,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
-                      <HugeiconsIcon icon={Mic01Icon} size={11} /> Voice ({voiceCount})
-                    </Box>
-                  </Box>
-                )}
+          {hasCorrelations && (
+            <Box sx={{ mb: 0.8 }}>
+              <Typography sx={{ fontSize: '0.6rem', fontWeight: 700, color: DARK_TEXT_MUTED, textTransform: 'uppercase', letterSpacing: '0.05em', mb: 0.5 }}>Correlations</Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4 }}>
+                {result.correlations!.map((c, i) => <CorrelationCard key={i} correlation={c} />)}
               </Box>
-
-              {showRaw ? (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 0.4,
-                    bgcolor: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '6px',
-                    p: 0.8,
-                  }}
-                >
-                  {filteredDisplayTimeline.map((item, idx) => {
-                    const rawKind = item.kind?.toUpperCase() || 'EVENT';
-                    const isVoice = rawKind === 'VOICE' || rawKind === 'TRANSCRIPT' || rawKind === 'AUDIO';
-                    const displayKind = isVoice ? 'VOICE' : rawKind;
-                    const kindColor = displayKind === 'APP' ? '#2563EB' : displayKind === 'KEYSTROKE' ? '#D97706' : '#16A34A';
-                    const timeStr = formatClock(item.ts);
-                    const kindTag = `[${displayKind}]`.padEnd(11, ' ');
-
-                    return (
-                      <Box
-                        key={idx}
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'baseline',
-                          gap: 0.8,
-                          lineHeight: 1.45,
-                          fontFamily: 'monospace',
-                        }}
-                      >
-                        <Typography
-                          component="span"
-                          sx={{ fontSize: '0.75rem', fontWeight: 700, color: kindColor, flexShrink: 0, userSelect: 'none' }}
-                        >
-                          ○
-                        </Typography>
-                        {timeStr && (
-                          <Typography
-                            component="span"
-                            sx={{ fontSize: '0.65rem', color: '#64748B', fontFamily: 'monospace', flexShrink: 0, minWidth: 72 }}
-                          >
-                            {timeStr}
-                          </Typography>
-                        )}
-                        <Typography
-                          component="span"
-                          sx={{
-                            fontSize: '0.65rem',
-                            fontWeight: 700,
-                            color: kindColor,
-                            fontFamily: 'monospace',
-                            flexShrink: 0,
-                            width: 84,
-                            whiteSpace: 'pre',
-                          }}
-                        >
-                          {kindTag}
-                        </Typography>
-                        <Typography
-                          component="span"
-                          sx={{ fontSize: '0.675rem', color: DARK_TEXT_SECONDARY, flex: 1, wordBreak: 'break-word' }}
-                        >
-                          {item.detail}
-                        </Typography>
-                      </Box>
-                    );
-                  })}
-                </Box>
-              ) : (
-                <TimelineStepper entries={filteredDisplayTimeline} />
-              )}
-            </SubSection>
+            </Box>
           )}
-          {hasEvidence && (
-            <SubSection label="Evidence" count={result.evidence!.length}>
-              {result.evidence!.map((item, i) => <EvidenceRow key={i} item={item} />)}
-            </SubSection>
-          )}
-          {!result.narrative && result.timeline_note && (
+          {result.timeline_note && (
             <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'flex-start', px: 1, py: 0.5, borderRadius: '6px', bgcolor: 'rgba(0,0,0,0.03)' }}>
               <HugeiconsIcon icon={Clock01Icon} size={11} color={DARK_TEXT_MUTED} style={{ marginTop: '2px', flexShrink: 0 }} />
               <Typography sx={{ fontSize: '0.625rem', color: DARK_TEXT_SECONDARY, lineHeight: 1.4 }}>{result.timeline_note}</Typography>

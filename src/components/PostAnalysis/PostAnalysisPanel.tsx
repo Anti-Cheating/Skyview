@@ -1,14 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowBack as BackIcon, ContentCopy as CopyIcon, FileDownload as ExportIcon } from "@mui/icons-material";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { LaptopIcon, KeyboardIcon, Mic01Icon } from "@hugeicons/core-free-icons";
+import { LaptopIcon, KeyboardIcon, Mic01Icon, ComputerIcon } from "@hugeicons/core-free-icons";
 import { ENV } from "../../config/env";
 import { STORAGE_KEYS } from "../../config/constants";
 import { MOCK_ANALYSIS_SCENARIOS, type MockScenario } from "../../mockData/postAnalysisMock";
 import { InterviewService } from "../../services/interview.service";
 import { refreshAccessToken } from "../../services/api.service";
 import type { InterviewSession } from "../../types/interview.types";
+import { formatClock } from "../../utils/dateFormat";
 import AnalysisRunningAnimation from "./AnalysisRunningAnimation";
 import "./PostAnalysisPanel.css";
 
@@ -220,66 +221,156 @@ const RiskGauge: React.FC<{ score: number; level: string; riskColor: string }> =
   );
 };
 
-// ── Score breakdown cards (each modality independent 0-100) ──────────────────
+// ── Score breakdown radial cards (each modality independent 0-100) ───────────
 interface ModalityRow {
   label: string;
   score: number | null;
   summary: string;
+  icon?: any;
 }
 
-const scoreColor = (s: number) => {
-  const lerp = (a: number, b: number, t: number) => Math.round(a + (b - a) * t);
-  const rgb = (r: number, g: number, b: number) => `rgb(${r},${g},${b})`;
-  if (s >= 70) {
-    const t = Math.min((s - 70) / 30, 1);
-    return rgb(lerp(248, 153, t), lerp(113, 27, t), lerp(113, 27, t));
+function getModalityMeta(score: number | null | undefined) {
+  if (score === null || score === undefined) {
+    return {
+      label: "N/A",
+      stroke: "#D1D5DB",
+      track: "#E5E7EB",
+      pillBg: "#9CA3AF",
+      pillText: "#FFFFFF",
+    };
   }
-  if (s >= 45) {
-    const t = (s - 45) / 24;
-    return rgb(lerp(253, 249, t), lerp(186, 115, t), lerp(116, 22, t));
+  if (score >= 75) {
+    return {
+      label: "CRITICAL",
+      stroke: "#DC2626",
+      track: "#FEE2E2",
+      pillBg: "#DC2626",
+      pillText: "#FFFFFF",
+    };
   }
-  if (s >= 20) {
-    const t = (s - 20) / 24;
-    return rgb(lerp(254, 234, t), lerp(240, 179, t), lerp(138, 8, t));
+  if (score >= 50) {
+    return {
+      label: "HIGH RISK",
+      stroke: "#EA580C",
+      track: "#FFEDD5",
+      pillBg: "#EA580C",
+      pillText: "#FFFFFF",
+    };
   }
-  const t = Math.min(s / 19, 1);
-  return rgb(lerp(134, 22, t), lerp(239, 163, t), lerp(172, 74, t));
-};
+  if (score >= 25) {
+    return {
+      label: "MEDIUM",
+      stroke: "#D97706",
+      track: "#FEF3C7",
+      pillBg: "#D97706",
+      pillText: "#FFFFFF",
+    };
+  }
+  if (score > 5) {
+    return {
+      label: "LOW RISK",
+      stroke: "#16A34A",
+      track: "#DCFCE7",
+      pillBg: "#16A34A",
+      pillText: "#FFFFFF",
+    };
+  }
+  return {
+    label: "CLEAN",
+    stroke: "#16A34A",
+    track: "#DCFCE7",
+    pillBg: "#16A34A",
+    pillText: "#FFFFFF",
+  };
+}
+
+const CIRCUMFERENCE = 2 * Math.PI * 35; // ~219.91
 
 const ScoreBreakdown: React.FC<{ rows: ModalityRow[] }> = ({ rows }) => {
   const [animated, setAnimated] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
-  useEffect(() => { const t = setTimeout(() => setAnimated(true), 150); return () => clearTimeout(t); }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setAnimated(true), 120);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
-    <div className="sb-grid">
-      {rows.map(({ label, score, summary }) => {
-        const val = score ?? 0;
-        const barColor = score !== null ? scoreColor(val) : "#D1D5DB";
+    <div className="sb-radial-grid">
+      {rows.map(({ label, score, summary, icon: IconComponent }) => {
+        const hasScore = score !== null && score !== undefined;
+        const val = hasScore ? Math.round(score) : 0;
+        const meta = getModalityMeta(score);
         const isHovered = hovered === label;
+        const dashOffset = animated && hasScore
+          ? CIRCUMFERENCE * (1 - Math.min(Math.max(val, 0), 100) / 100)
+          : CIRCUMFERENCE;
+
         return (
           <div
             key={label}
-            className="sb-card"
+            className="sb-radial-card"
             onMouseEnter={() => setHovered(label)}
             onMouseLeave={() => setHovered(null)}
           >
-            <div className="sb-card-header">
-              <span className="sb-label">{label}</span>
-              <span className="sb-score" style={{ color: barColor }}>
-                {score !== null ? val : "—"}
-              </span>
+            <div className="sb-radial-info">
+              {IconComponent && (
+                <div className="sb-radial-icon">
+                  <HugeiconsIcon icon={IconComponent} size={30} />
+                </div>
+              )}
+              <span className="sb-radial-label">{label}</span>
             </div>
-            <div className="sb-track">
-              <div
-                className="sb-fill"
-                style={{
-                  width: animated ? `${val}%` : "0%",
-                  background: barColor,
-                  transition: animated ? "width 0.9s cubic-bezier(0.34,1.1,0.64,1)" : "none",
-                }}
-              />
+
+            <div className="sb-radial-meter">
+              <svg className="sb-radial-svg" viewBox="0 0 84 84">
+                <circle
+                  cx={42}
+                  cy={42}
+                  r={35}
+                  fill="none"
+                  stroke={meta.track}
+                  strokeWidth={5.5}
+                />
+                {hasScore && (
+                  <circle
+                    cx={42}
+                    cy={42}
+                    r={35}
+                    fill="none"
+                    stroke={meta.stroke}
+                    strokeWidth={5.5}
+                    strokeLinecap="round"
+                    strokeDasharray={CIRCUMFERENCE}
+                    strokeDashoffset={dashOffset}
+                    transform="rotate(-90 42 42)"
+                    style={{
+                      transition: "stroke-dashoffset 0.9s cubic-bezier(0.34, 1.15, 0.64, 1)",
+                    }}
+                  />
+                )}
+              </svg>
+
+              <div className="sb-radial-content">
+                {hasScore ? (
+                  <>
+                    <div className="sb-radial-score-val">
+                      <span className="sb-radial-num">{val}</span>
+                      <span className="sb-radial-denom">/100</span>
+                    </div>
+                    <span
+                      className="sb-radial-pill"
+                      style={{ background: meta.pillBg, color: meta.pillText }}
+                    >
+                      {meta.label}
+                    </span>
+                  </>
+                ) : (
+                  <span className="sb-radial-na">N/A</span>
+                )}
+              </div>
             </div>
+
             {isHovered && summary && (
               <div className="sb-tooltip">{summary}</div>
             )}
@@ -289,298 +380,6 @@ const ScoreBreakdown: React.FC<{ rows: ModalityRow[] }> = ({ rows }) => {
     </div>
   );
 };
-
-// ── Timeline Scrubber Component ──────────────────────────────────────────────
-export interface ScrubberWindow {
-  id: string;
-  index: number;
-  risk: string;
-  score: number;
-  summary: string;
-  processed_at: string;
-  per_modality?: {
-    app_metadata?: { risk_level?: string; risk_score?: number; summary?: string };
-    keystroke?: { risk_level?: string; risk_score?: number; summary?: string };
-    voice?: { risk_level?: string; risk_score?: number; summary?: string };
-  };
-  timeline?: { ts: number; kind: string; detail: string; speakerRole?: string }[];
-  startOffsetSec: number;
-  endOffsetSec: number;
-}
-
-const SessionTimelineScrubber: React.FC<{
-  windows: ScrubberWindow[];
-  getRiskColor: (risk: string) => string;
-}> = ({ windows, getRiskColor }) => {
-  const [selectedIdx, setSelectedIdx] = useState<number>(() => {
-    if (windows.length === 0) return 0;
-    const highRiskIdx = windows.findIndex((w) =>
-      ["CRITICAL", "SEVERE", "HIGH"].includes(w.risk?.toUpperCase())
-    );
-    return highRiskIdx >= 0 ? highRiskIdx : 0;
-  });
-
-  if (windows.length === 0) return null;
-
-  const selected = windows[selectedIdx] || windows[0];
-  const flaggedIndices = windows
-    .map((w, idx) => ({
-      idx,
-      isFlagged: ["CRITICAL", "SEVERE", "HIGH", "MEDIUM"].includes(w.risk?.toUpperCase()),
-    }))
-    .filter((w) => w.isFlagged)
-    .map((w) => w.idx);
-
-  const handlePrevFlagged = () => {
-    const prev = [...flaggedIndices].reverse().find((i) => i < selectedIdx);
-    if (prev !== undefined) setSelectedIdx(prev);
-  };
-
-  const handleNextFlagged = () => {
-    const next = flaggedIndices.find((i) => i > selectedIdx);
-    if (next !== undefined) setSelectedIdx(next);
-  };
-
-  const formatSec = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  };
-
-  const totalSec = windows[windows.length - 1].endOffsetSec;
-  const timeLabels = [
-    "00:00",
-    formatSec(Math.round(totalSec * 0.25)),
-    formatSec(Math.round(totalSec * 0.5)),
-    formatSec(Math.round(totalSec * 0.75)),
-    formatSec(totalSec),
-  ];
-
-  const appMod = selected.per_modality?.app_metadata;
-  const keyMod = selected.per_modality?.keystroke;
-  const voiceMod = selected.per_modality?.voice;
-
-  const [filterModality, setFilterModality] = useState<"ALL" | "APP" | "KEYSTROKE" | "VOICE">("ALL");
-
-  const format24hTime = (ts?: number | string) => {
-    if (!ts) return "";
-    const d = new Date(ts);
-    if (isNaN(d.getTime())) return "";
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  };
-
-  const totalEvents = selected.timeline?.length || 0;
-  const appCount = selected.timeline?.filter((e) => e.kind?.toUpperCase() === "APP").length || 0;
-  const keyCount = selected.timeline?.filter((e) => e.kind?.toUpperCase() === "KEYSTROKE").length || 0;
-  const voiceCount = selected.timeline?.filter((e) => {
-    const k = e.kind?.toUpperCase();
-    return k === "VOICE" || k === "TRANSCRIPT" || k === "AUDIO";
-  }).length || 0;
-
-  const filteredTimeline = useMemo(() => {
-    if (!selected.timeline) return [];
-    if (filterModality === "ALL") return selected.timeline;
-    if (filterModality === "VOICE") {
-      return selected.timeline.filter((e) => {
-        const k = e.kind?.toUpperCase();
-        return k === "VOICE" || k === "TRANSCRIPT" || k === "AUDIO";
-      });
-    }
-    return selected.timeline.filter((e) => e.kind?.toUpperCase() === filterModality);
-  }, [selected.timeline, filterModality]);
-
-  return (
-    <section className="pa-card pa-scrubber-card">
-      <div className="pa-scrubber-header">
-        <div>
-          <h3 className="pa-card-title" style={{ margin: 0 }}>
-            Timeline
-          </h3>
-        </div>
-        <div className="pa-scrubber-controls">
-          <button
-            type="button"
-            className="pa-jump-btn"
-            onClick={handlePrevFlagged}
-            disabled={!flaggedIndices.some((i) => i < selectedIdx)}
-            title="Jump to previous flagged window"
-          >
-            ◀ Prev Flagged
-          </button>
-          <button
-            type="button"
-            className="pa-jump-btn"
-            onClick={handleNextFlagged}
-            disabled={!flaggedIndices.some((i) => i > selectedIdx)}
-            title="Jump to next flagged window"
-          >
-            Next Flagged ▶
-          </button>
-        </div>
-      </div>
-
-      <div className="pa-scrubber-track" role="tablist" aria-label="Timeline Segments">
-        {windows.map((w, idx) => {
-          const color = getRiskColor(w.risk);
-          const isSelected = idx === selectedIdx;
-          return (
-            <div
-              key={w.id || idx}
-              className={`pa-scrubber-seg${isSelected ? " is-active" : ""}`}
-              style={{ background: color }}
-              onClick={() => setSelectedIdx(idx)}
-              title={`Window #${idx + 1} (${formatSec(w.startOffsetSec)} – ${formatSec(w.endOffsetSec)}): ${w.risk?.toUpperCase()} Risk (${w.score}/100)`}
-            />
-          );
-        })}
-      </div>
-
-      <div className="pa-scrubber-labels">
-        {timeLabels.map((lbl, i) => (
-          <span key={i}>{lbl}</span>
-        ))}
-      </div>
-
-      {/* ── Active Window Snapshot Card ── */}
-      <div className="pa-snapshot-card">
-        <div className="pa-snapshot-top">
-          <div className="pa-snapshot-meta">
-            <span className="pa-snapshot-title">
-              Window #{selected.index + 1} ({formatSec(selected.startOffsetSec)} – {formatSec(selected.endOffsetSec)})
-            </span>
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                padding: "2px 8px",
-                borderRadius: "4px",
-                background: `${getRiskColor(selected.risk)}15`,
-                color: getRiskColor(selected.risk),
-                border: `1px solid ${getRiskColor(selected.risk)}40`,
-              }}
-            >
-              {selected.risk?.toUpperCase()} RISK ({selected.score}/100)
-            </span>
-          </div>
-
-          <div className="pa-snapshot-modalities">
-            {appMod && (
-              <span className="pa-snapshot-pill" style={{ color: getRiskColor(appMod.risk_level || "LOW") }}>
-                <HugeiconsIcon icon={LaptopIcon} size={14} style={{ verticalAlign: "middle", marginRight: 4 }} /> Apps: {appMod.risk_score ?? 0}/100
-              </span>
-            )}
-            {keyMod && (
-              <span className="pa-snapshot-pill" style={{ color: getRiskColor(keyMod.risk_level || "LOW") }}>
-                <HugeiconsIcon icon={KeyboardIcon} size={14} style={{ verticalAlign: "middle", marginRight: 4 }} /> Keys: {keyMod.risk_score ?? 0}/100
-              </span>
-            )}
-            {voiceMod && (
-              <span className="pa-snapshot-pill" style={{ color: getRiskColor(voiceMod.risk_level || "LOW") }}>
-                <HugeiconsIcon icon={Mic01Icon} size={14} style={{ verticalAlign: "middle", marginRight: 4 }} /> Voice: {voiceMod.risk_score ?? 0}/100
-              </span>
-            )}
-          </div>
-        </div>
-
-        {selected.summary && (
-          <p className="pa-snapshot-narrative">
-            <strong>Summary:</strong> {selected.summary}
-          </p>
-        )}
-
-        {selected.timeline && selected.timeline.length > 0 ? (
-          <div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "8px",
-                flexWrap: "wrap",
-                gap: "8px",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  color: "var(--pa-muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                }}
-              >
-                Micro-Events in this 30s Window ({totalEvents})
-              </div>
-
-              {/* Modality Filter Tabs */}
-              <div className="pa-snapshot-filter-bar">
-                <button
-                  type="button"
-                  className={`pa-snapshot-filter-btn${filterModality === "ALL" ? " is-active" : ""}`}
-                  onClick={() => setFilterModality("ALL")}
-                >
-                  All ({totalEvents})
-                </button>
-                <button
-                  type="button"
-                  className={`pa-snapshot-filter-btn${filterModality === "APP" ? " is-active" : ""}`}
-                  onClick={() => setFilterModality("APP")}
-                >
-                  <HugeiconsIcon icon={LaptopIcon} size={14} style={{ verticalAlign: "middle", marginRight: 4 }} /> Apps ({appCount})
-                </button>
-                <button
-                  type="button"
-                  className={`pa-snapshot-filter-btn${filterModality === "KEYSTROKE" ? " is-active" : ""}`}
-                  onClick={() => setFilterModality("KEYSTROKE")}
-                >
-                  <HugeiconsIcon icon={KeyboardIcon} size={14} style={{ verticalAlign: "middle", marginRight: 4 }} /> Keystrokes ({keyCount})
-                </button>
-                <button
-                  type="button"
-                  className={`pa-snapshot-filter-btn${filterModality === "VOICE" ? " is-active" : ""}`}
-                  onClick={() => setFilterModality("VOICE")}
-                >
-                  <HugeiconsIcon icon={Mic01Icon} size={14} style={{ verticalAlign: "middle", marginRight: 4 }} /> Voice ({voiceCount})
-                </button>
-              </div>
-            </div>
-
-            <div className="pa-snapshot-events">
-              {filteredTimeline.map((ev, i) => {
-                const rawKind = ev.kind?.toUpperCase() || "EVENT";
-                const isVoice = rawKind === "VOICE" || rawKind === "TRANSCRIPT" || rawKind === "AUDIO";
-                const kind = isVoice ? "VOICE" : rawKind;
-                const kindColor = kind === "APP" ? "#2563EB" : kind === "KEYSTROKE" ? "#D97706" : "#16A34A";
-                const timeStr = format24hTime(ev.ts);
-                const kindTag = `[${kind}]`.padEnd(11, " ");
-
-                return (
-                  <div key={i} className="pa-snapshot-event">
-                    <span className="pa-snapshot-dot" style={{ color: kindColor }}>○</span>
-                    {timeStr && <span className="pa-snapshot-time">{timeStr}</span>}
-                    <span className="pa-snapshot-kind" style={{ color: kindColor }}>
-                      {kindTag}
-                    </span>
-                    <span className="pa-snapshot-detail">
-                      {ev.speakerRole ? `[${ev.speakerRole}]: ` : ""}{ev.detail}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <p style={{ fontSize: "12px", color: "var(--pa-faint)", margin: 0 }}>
-            No micro-events recorded during this 30-second window.
-          </p>
-        )}
-      </div>
-    </section>
-  );
-};
-
-
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface DetectedAppCategory {
@@ -685,7 +484,6 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
 
   const [analysis, setAnalysis] = useState<PostAnalysis | null>(null);
   const [session, setSession] = useState<InterviewSession | null>(null);
-  const [scrubberWindows, setScrubberWindows] = useState<ScrubberWindow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -706,34 +504,15 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
       if (!sessionId) { setError("Session ID not found"); setLoading(false); return; }
 
       try {
-        const [analysisRes, sessionRes, windowsRes] = await Promise.all([
+        const [analysisRes, sessionRes] = await Promise.all([
           InterviewService.getPostAnalysis(sessionId),
           InterviewService.getById(sessionId),
-          typeof InterviewService.getWindows === "function"
-            ? InterviewService.getWindows(sessionId).catch(() => ({ success: false, data: { results: [], total: 0 } }))
-            : Promise.resolve({ success: false, data: { results: [], total: 0 } }),
         ]);
         if (cancelled) return;
         if (analysisRes.success && analysisRes.data) {
           const normalized = normalizeAnalysis(analysisRes.data);
           setAnalysis(normalized);
           if (sessionRes.success && sessionRes.data) setSession(sessionRes.data);
-          if (windowsRes?.success && Array.isArray((windowsRes as any).data?.results)) {
-            const rawWindows = (windowsRes as any).data.results;
-            const parsed: ScrubberWindow[] = rawWindows.map((w: any, idx: number) => ({
-              id: String(w.window_id || w.id || idx),
-              index: idx,
-              risk: String(w.risk || "Low"),
-              score: Number(w.score ?? 0),
-              summary: String(w.narrative || w.summary || ""),
-              processed_at: String(w.processed_at || ""),
-              per_modality: w.per_modality,
-              timeline: Array.isArray(w.timeline) ? w.timeline : [],
-              startOffsetSec: idx * 30,
-              endOffsetSec: (idx + 1) * 30,
-            }));
-            setScrubberWindows(parsed);
-          }
           setError(null);
           setLoading(false);
           // A 200 whose row is still "pending" means analysis is running —
@@ -886,10 +665,10 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
   const candidateName = candidate ? `${candidate.first_name} ${candidate.last_name}`.trim() : "Candidate";
 
   const modalityRows: ModalityRow[] = [
-    { label: "Keystroke", score: analysis.keystroke_score, summary: analysis.keystroke_summary },
-    { label: "Voice",     score: analysis.voice_score,     summary: analysis.voice_summary },
-    { label: "Image",     score: analysis.image_score,     summary: analysis.image_summary },
-    { label: "App Usage", score: analysis.app_score,       summary: analysis.app_summary ?? "" },
+    { label: "App Usage", score: analysis.app_score, summary: analysis.app_summary ?? "", icon: LaptopIcon },
+    { label: "Keystroke", score: analysis.keystroke_score, summary: analysis.keystroke_summary, icon: KeyboardIcon },
+    { label: "Voice", score: analysis.voice_score, summary: analysis.voice_summary, icon: Mic01Icon },
+    { label: "Screen Capture", score: analysis.image_score, summary: analysis.image_summary, icon: ComputerIcon },
   ];
   const hasModalityScores = modalityRows.some((r) => r.score !== null);
 
@@ -964,11 +743,16 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
               <span className="pa-meta-label">Monitoring coverage</span>
               <span className="pa-meta-val">
                 {analysis.consent_windows
-                  .map((w) =>
-                    `${new Date(w.given_at).toLocaleTimeString()} – ${
-                      w.revoked_at ? new Date(w.revoked_at).toLocaleTimeString() : 'end'
-                    }`
-                  )
+                  .map((w) => {
+                    const startStr = formatClock(w.given_at) || new Date(w.given_at).toLocaleTimeString();
+                    const interviewEnd = session?.actual_end_at || session?.scheduled_end_at;
+                    const endStr = w.revoked_at
+                      ? (formatClock(w.revoked_at) || new Date(w.revoked_at).toLocaleTimeString())
+                      : interviewEnd
+                        ? (formatClock(interviewEnd) || new Date(interviewEnd).toLocaleTimeString())
+                        : 'end';
+                    return `${startStr} – ${endStr}`;
+                  })
                   .join(', ')}
                 {analysis.consent_windows.some((w) => w.revoked_at) &&
                   ' (consent was withdrawn during this interview)'}
@@ -1003,12 +787,7 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
         <Bullets className="pa-body" text={analysis.final_summary} empty="No summary available." />
       </section>
 
-      {/* ── Timeline ─────────────────────────────────────────────────────── */}
-      {scrubberWindows.length > 0 && (
-        <SessionTimelineScrubber windows={scrubberWindows} getRiskColor={getRiskColor} />
-      )}
-
-      {/* ── 3 Classic Modality Signals ───────────────────────────────────── */}
+      {/* ── Signal cards ─────────────────────────────────────────────────── */}
       <div className="pa-signals">
         <section className="pa-card pa-signal-card">
           <h3 className="pa-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
