@@ -12,6 +12,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { FormField } from '../common/FormField';
 import { ActionButton } from '../common/ActionButton';
+import { MeetingLinkField, type MeetingSelection } from '../common/MeetingLinkField';
+import { IntegrationsService } from '../../services/integrations.service';
 import { LABEL_SX, DATETIME_SLOT_PROPS } from '../common/formTokens';
 import { PageTitle, Secondary } from '../layout/Typography';
 import { TOKENS } from '../../theme';
@@ -41,7 +43,7 @@ export default function CreateProcessPage() {
   const [interviewerUserId, setInterviewerUserId] = useState('');
   const [startDateTime, setStartDateTime] = useState<Dayjs | null>(dayjs().add(1, 'hour').startOf('hour'));
   const [duration, setDuration] = useState(60);
-  const [meetingLink, setMeetingLink] = useState('');
+  const [meeting, setMeeting] = useState<MeetingSelection>({ provider: 'google_meet', link: '', googleAuto: false });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,11 +78,9 @@ export default function CreateProcessPage() {
     if (!interviewerUserId) return setError('Please pick an interviewer');
     if (!startDateTime || !startDateTime.isValid()) return setError('Valid start date and time are required');
     if (startDateTime.isBefore(dayjs())) return setError('Start time must be in the future');
-    if (!meetingLink.trim()) return setError('Meeting link is required');
-    try {
-      new URL(meetingLink.trim());
-    } catch {
-      return setError('Meeting link must be a valid URL');
+    if (!meeting.googleAuto) {
+      if (!meeting.link.trim()) return setError('Meeting link is required (or connect Google to auto-generate)');
+      try { new URL(meeting.link.trim()); } catch { return setError('Meeting link must be a valid URL'); }
     }
 
     setLoading(true);
@@ -88,6 +88,36 @@ export default function CreateProcessPage() {
     try {
       const startAt = startDateTime.toDate();
       const endAt = new Date(startAt.getTime() + duration * 60 * 1000);
+
+      // Resolve the meeting: generate a Google Meet event now (create), or use
+      // the pasted link. The generated event id is persisted so later edits
+      // patch the same calendar event and cancel deletes it.
+      let meeting_link = meeting.link.trim();
+      let google_event_id: string | undefined;
+      if (meeting.googleAuto) {
+        const interviewerEmail = members.find((m) => m.id === interviewerUserId)?.email;
+        const who = [candidateFirstName.trim(), candidateLastName.trim()].filter(Boolean).join(' ');
+        const gen = await IntegrationsService.generateMeet({
+          summary: `${role.trim()} · ${roundName.trim()}${who ? ` with ${who}` : ''}`,
+          startIso: startAt.toISOString(),
+          endIso: endAt.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          attendeeEmails: [candidateEmail.trim().toLowerCase(), interviewerEmail].filter(
+            (e): e is string => !!e && e.includes('@'),
+          ),
+        });
+        if (!gen.ok) {
+          setLoading(false);
+          return setError(
+            gen.reconnectRequired
+              ? 'Google connection expired — reconnect or paste a link.'
+              : `Could not generate a Meet link. ${gen.error} You can paste one instead.`,
+          );
+        }
+        meeting_link = gen.data.meetUrl;
+        google_event_id = gen.data.eventId;
+      }
+
       const resp = await ProcessService.create({
         role: role.trim(),
         description: description.trim() || null,
@@ -100,7 +130,8 @@ export default function CreateProcessPage() {
           scheduled_start_at: startAt.toISOString(),
           scheduled_end_at: endAt.toISOString(),
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          meeting_link: meetingLink.trim(),
+          meeting_link,
+          ...(google_event_id ? { google_event_id } : {}),
         },
       });
       if (resp.success && resp.data) {
@@ -164,8 +195,7 @@ export default function CreateProcessPage() {
                 })}
               </FormField>
             </Box>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
-              <FormField label="Meeting Link" required placeholder="https://meet.google.com/abc-defg-hij" value={meetingLink} onChange={(e) => setMeetingLink(e.target.value)} disabled={loading} />
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3, mb: 3 }}>
               <Box>
                 <Box sx={LABEL_SX}>
                   <span>Schedule</span>
@@ -188,6 +218,7 @@ export default function CreateProcessPage() {
                 ))}
               </FormField>
             </Box>
+            <MeetingLinkField value={meeting} onChange={setMeeting} disabled={loading} />
           </Box>
 
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, pt: 1 }}>

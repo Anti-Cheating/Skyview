@@ -13,6 +13,8 @@ import { TOKENS } from '../../theme';
 import { PageTitle, Secondary, Caption, CardTitle } from '../layout/Typography';
 import { ActionButton } from '../common/ActionButton';
 import { FormField } from '../common/FormField';
+import { MeetingLinkField, detectProvider, type MeetingSelection } from '../common/MeetingLinkField';
+import { IntegrationsService } from '../../services/integrations.service';
 import { LABEL_SX, DATETIME_SLOT_PROPS } from '../common/formTokens';
 import { DataTable, type DataTableColumn } from '../common/DataTable';
 import { Breadcrumb } from '../common/Breadcrumb';
@@ -243,6 +245,7 @@ export default function ProcessDetailPage() {
         <RoundDialog
           mode="add"
           processId={processId!}
+          role={data.role}
           candidate={candidate}
           members={members}
           defaultInterviewer={user?.id}
@@ -255,6 +258,7 @@ export default function ProcessDetailPage() {
         <RoundDialog
           mode="edit"
           processId={processId!}
+          role={data.role}
           candidate={candidate}
           members={members}
           round={editRound}
@@ -310,10 +314,11 @@ function DetailRow({ label, value, node }: { label: string; value?: string; node
 
 /** Add or edit a round. In edit mode it prefills from the existing session. */
 function RoundDialog({
-  mode, processId, candidate, members, defaultInterviewer, round, onClose, onSaved, onError,
+  mode, processId, role, candidate, members, defaultInterviewer, round, onClose, onSaved, onError,
 }: {
   mode: 'add' | 'edit';
   processId: string;
+  role: string;
   candidate: { email: string; first_name: string; last_name: string };
   members: TeamMember[];
   defaultInterviewer?: string;
@@ -328,8 +333,9 @@ function RoundDialog({
   const [origInterviewer, setOrigInterviewer] = useState('');
   const [startDateTime, setStartDateTime] = useState<Dayjs | null>(dayjs().add(1, 'hour').startOf('hour'));
   const [duration, setDuration] = useState(60);
-  const [meetingLink, setMeetingLink] = useState('');
+  const [meeting, setMeeting] = useState<MeetingSelection>({ provider: 'google_meet', link: '', googleAuto: false });
   const [origMeetingLink, setOrigMeetingLink] = useState('');
+  const [origEventId, setOrigEventId] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -343,8 +349,16 @@ function RoundDialog({
         setInterviewerUserId(iv);
         setOrigInterviewer(iv);
         const link = (s.provider_metadata?.join_url as string | undefined) ?? '';
-        setMeetingLink(link);
+        const eventId = (s.provider_metadata?.google_event_id as string | undefined) ?? undefined;
         setOrigMeetingLink(link);
+        setOrigEventId(eventId);
+        // Managed (we own the Meet event) → auto mode; else reflect the pasted
+        // link under its real provider.
+        setMeeting(
+          eventId
+            ? { provider: 'google_meet', link: '', googleAuto: true }
+            : { provider: detectProvider(link), link, googleAuto: false },
+        );
         const start = dayjs(s.scheduled_start_at);
         setStartDateTime(start);
         setDuration(Math.max(15, Math.round(dayjs(s.scheduled_end_at).diff(start, 'minute'))));
@@ -357,39 +371,94 @@ function RoundDialog({
     if (!roundName.trim()) return setError('Round name is required');
     if (!interviewerUserId) return setError('Pick an interviewer');
     if (!startDateTime || !startDateTime.isValid() || startDateTime.isBefore(dayjs())) return setError('Pick a valid future time');
-    if (!meetingLink.trim()) return setError('Meeting link is required');
-    try { new URL(meetingLink.trim()); } catch { return setError('Meeting link must be a valid URL'); }
+    if (!meeting.googleAuto) {
+      if (!meeting.link.trim()) return setError('Meeting link is required (or connect Google to auto-generate)');
+      try { new URL(meeting.link.trim()); } catch { return setError('Meeting link must be a valid URL'); }
+    }
     setSaving(true);
     setError(null);
     try {
       const startAt = startDateTime.toDate();
       const endAt = new Date(startAt.getTime() + duration * 60 * 1000);
+      const who = [candidate.first_name, candidate.last_name].filter(Boolean).join(' ');
+      const interviewerEmail = members.find((m) => m.id === interviewerUserId)?.email;
+      const summary = `${role.trim()} · ${roundName.trim()}${who ? ` with ${who}` : ''}`;
+      const attendeeEmails = [candidate.email, interviewerEmail].filter((e): e is string => !!e && e.includes('@'));
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const genMeet = (existingEventId?: string) =>
+        IntegrationsService.generateMeet({
+          summary, startIso: startAt.toISOString(), endIso: endAt.toISOString(), timeZone: tz, attendeeEmails,
+          ...(existingEventId ? { existingEventId } : {}),
+        });
+      const genErr = (r: { reconnectRequired: boolean; error: string }) =>
+        setError(r.reconnectRequired ? 'Google connection expired — reconnect or paste a link.' : `Could not generate a Meet link. ${r.error} Paste one instead.`);
+
       if (mode === 'add') {
+        // New round: generate the event (if auto) then create.
+        let meetingLink = meeting.link.trim();
+        let eventId: string | undefined;
+        if (meeting.googleAuto) {
+          const gen = await genMeet();
+          if (!gen.ok) { setSaving(false); return genErr(gen); }
+          meetingLink = gen.data.meetUrl; eventId = gen.data.eventId;
+        }
         const r = await ProcessService.addRound(processId, {
           round_name: roundName.trim(),
           interviewer_user_id: interviewerUserId,
           scheduled_start_at: startAt.toISOString(),
           scheduled_end_at: endAt.toISOString(),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          meeting_link: meetingLink.trim(),
+          timezone: tz,
+          meeting_link: meetingLink,
+          ...(eventId ? { google_event_id: eventId } : {}),
         });
         if (r.success) onSaved(); else onError(r.message || 'Failed to add round');
-      } else if (round) {
-        const payload: Record<string, unknown> = {
-          round_name: roundName.trim(),
-          scheduled_start_at: startAt.toISOString(),
-          scheduled_end_at: endAt.toISOString(),
-        };
-        if (meetingLink.trim() !== origMeetingLink) payload.meeting_link = meetingLink.trim();
-        if (interviewerUserId && interviewerUserId !== origInterviewer) {
-          payload.interview_session_participants = [
-            { candidate_email: candidate.email, candidate_first_name: candidate.first_name, candidate_last_name: candidate.last_name },
-            { interviewer_user_id: interviewerUserId },
-          ];
-        }
-        const r = await InterviewService.update(round.id, payload);
-        if (r.success) onSaved(); else onError(r.message || 'Failed to update round');
+        return;
       }
+
+      if (!round) return;
+      const stayManaged = meeting.googleAuto && !!origEventId; // managed → managed (time edit)
+      const payload: Record<string, unknown> = {
+        round_name: roundName.trim(),
+        scheduled_start_at: startAt.toISOString(),
+        scheduled_end_at: endAt.toISOString(),
+      };
+      if (interviewerUserId && interviewerUserId !== origInterviewer) {
+        payload.interview_session_participants = [
+          { candidate_email: candidate.email, candidate_first_name: candidate.first_name, candidate_last_name: candidate.last_name },
+          { interviewer_user_id: interviewerUserId },
+        ];
+      }
+
+      // Ordering matters: the DB update enforces guards (e.g. an imminent
+      // session can't be rescheduled). We must NOT mutate the calendar until
+      // the DB write succeeds, or the two desync.
+      if (stayManaged) {
+        // Managed time-only edit: link/event unchanged → update DB FIRST, then
+        // patch the calendar event to the new time. If the DB write is blocked,
+        // we never touch Google.
+        const r = await InterviewService.update(round.id, payload);
+        if (!r.success) { onError(r.message || 'Failed to update round'); return; }
+        const patched = await genMeet(origEventId); // patch (same link, moves it)
+        if (!patched.ok) genErr(patched); // DB already saved; surface the calendar hiccup only
+        onSaved();
+        return;
+      }
+
+      // Switching provider (→ managed, or → manual/paste). Resolve the link,
+      // send it so the backend re-parses and deletes any event we no longer own.
+      let meetingLink = meeting.link.trim();
+      let eventId: string | undefined;
+      if (meeting.googleAuto) {
+        const gen = await genMeet(); // manual → managed: create a fresh event
+        if (!gen.ok) { setSaving(false); return genErr(gen); }
+        meetingLink = gen.data.meetUrl; eventId = gen.data.eventId;
+      }
+      if (meetingLink !== origMeetingLink || (eventId ?? '') !== (origEventId ?? '')) {
+        payload.meeting_link = meetingLink;
+        payload.google_event_id = eventId ?? null;
+      }
+      const r = await InterviewService.update(round.id, payload);
+      if (r.success) onSaved(); else onError(r.message || 'Failed to update round');
     } catch (e: any) {
       onError(e?.message || 'Failed to save round');
     } finally {
@@ -421,7 +490,12 @@ function RoundDialog({
             <FormField label="Duration" required select value={String(duration)} onChange={(e) => setDuration(Number(e.target.value))} disabled={saving}>
               {DURATIONS.map((d) => (<MenuItem key={d} value={String(d)}>{d} minutes</MenuItem>))}
             </FormField>
-            <FormField label="Meeting Link" required placeholder="https://meet.google.com/abc-defg-hij" value={meetingLink} onChange={(e) => setMeetingLink(e.target.value)} disabled={saving} />
+            <MeetingLinkField
+              value={meeting}
+              onChange={setMeeting}
+              disabled={saving}
+              hasExistingEvent={!!origEventId}
+            />
           </>
         )}
       </DialogContent>
