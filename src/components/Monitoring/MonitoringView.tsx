@@ -74,8 +74,8 @@ export default function MonitoringView() {
   const analysisOn = riskData.modalityState?.analysis ?? false;
 
   // Cortex is the single authority on session lifecycle. On mount we
-  // flip SCHEDULED → ACTIVE; a 10s heartbeat refreshes a Redis TTL;
-  // tab close (beforeunload) or an explicit End flips ACTIVE → COMPLETED.
+  // flip SCHEDULED → ACTIVE; a 10s heartbeat refreshes a Redis TTL; only
+  // an explicit End or the scheduled-end deadline flips ACTIVE → COMPLETED.
   useEffect(() => {
     if (!interviewId) return;
     let cancelled = false;
@@ -134,35 +134,16 @@ export default function MonitoringView() {
     return () => window.clearInterval(id);
   }, [interviewId, activated, navigate]);
 
-  useEffect(() => {
-    if (!interviewId) return;
-    // fetch keepalive lets POST outlive the tab; sendBeacon can't send
-    // Authorization headers so it's a poor fit for an authenticated route.
-    const beaconDeactivate = () => {
-      const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN) || '';
-      try {
-        fetch(`${ENV.AUTH_API_URL}/interview-sessions/${interviewId}/deactivate`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: '{}',
-          keepalive: true,
-        });
-      } catch {/* ignore */}
-    };
-    window.addEventListener('beforeunload', beaconDeactivate);
-    // Unmount does NOT deactivate: navigating away (dashboard, breadcrumb,
-    // back arrow) must leave the session ACTIVE so the interviewer can come
-    // back. Ending is explicit — the End Interview dialog or scheduled-end.
-    return () => window.removeEventListener('beforeunload', beaconDeactivate);
-  }, [interviewId]);
+  // Leaving never ends the session: closing the tab, navigating away or
+  // dropping offline all leave it ACTIVE so the interviewer (or another
+  // panelist) can come back. Cortex stops capture when the last viewer's
+  // socket disconnects. Ending is explicit: the End Interview dialog or
+  // the scheduled-end deadline.
 
   // Re-emit intent on (re)connect if Cortex tells us the session has no
   // active modality but we locally want it on. This covers:
-  //   • Tab refresh — Cortex's in-memory modality may have been cleared
-  //     by the beforeunload deactivate; after reload we want to restore.
+  //   • Tab refresh — Cortex clears its in-memory modality when the last
+  //     viewer disconnects; after reload we want to restore.
   //   • Fresh tab opening mid-session — catch-up from Cortex already
   //     lands on first connect, no action needed here.
   // Intent is stored in sessionStorage (since we removed local state).
