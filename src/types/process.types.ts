@@ -45,9 +45,9 @@ export interface RoundInput {
   scheduled_start_at: string;
   scheduled_end_at: string;
   timezone: string;
-  meeting_link: string;
-  /** Set when the Meet link was Trueyy-generated (managed calendar event). */
-  google_event_id?: string;
+  /** Pasted link; omit when generate_meet asks the backend to mint a Meet link. */
+  meeting_link?: string;
+  generate_meet?: boolean;
 }
 
 export interface CreateProcessInput {

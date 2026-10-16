@@ -3,10 +3,10 @@
  * round-scheduling form (CreateProcessPage + RoundDialog).
  *
  * It does NOT create anything itself. It emits a `MeetingSelection`; the
- * parent form resolves it on Save:
- *   - googleAuto → parent calls IntegrationsService.generateMeet (create or
- *     patch the existing event) and sends meeting_link + google_event_id.
- *   - manual     → parent sends the pasted meeting_link (no event id).
+ * parent form sends it on Save:
+ *   - googleAuto → `generate_meet: true`; Cortex creates the calendar event
+ *     (or keeps the round's existing one) and stores the link.
+ *   - manual     → the pasted `meeting_link`.
  *
  * This "generate on save" model means exactly one calendar event per
  * interview: created on save, patched on edit, deleted on cancel/replace —

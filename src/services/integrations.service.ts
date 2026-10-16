@@ -1,29 +1,13 @@
 /**
  * integrations.service — client wrapper for Cortex's /integrations/google/*
- * endpoints (Connect Google Calendar → generate Meet links).
+ * endpoints (connect / status / disconnect). Meet links themselves are minted
+ * by the backend when a round is saved with generate_meet.
  */
 import { ApiService } from './api.service';
 
 export interface GoogleConnectionStatus {
   connected: boolean;
   accountEmail: string | null;
-}
-
-export interface GenerateMeetInput {
-  summary: string;
-  description?: string;
-  startIso: string;
-  endIso: string;
-  timeZone: string;
-  attendeeEmails: string[];
-  /** Update this existing calendar event instead of creating a new one. */
-  existingEventId?: string;
-}
-
-export interface GeneratedMeet {
-  meetUrl: string;
-  eventId: string;
-  htmlLink: string | null;
 }
 
 export class IntegrationsService {
@@ -49,29 +33,5 @@ export class IntegrationsService {
 
   static async disconnectGoogle(): Promise<void> {
     await ApiService.post('/integrations/google/disconnect');
-  }
-
-  /**
-   * Generate a Meet link. Returns { ok, data } or a typed error so the
-   * caller can distinguish "reconnect needed" (409) from a transient failure.
-   */
-  static async generateMeet(
-    input: GenerateMeetInput,
-  ): Promise<
-    | { ok: true; data: GeneratedMeet }
-    | { ok: false; reconnectRequired: boolean; error: string }
-  > {
-    try {
-      const resp = await ApiService.post<GeneratedMeet>('/integrations/google/generate-meet', input);
-      if (resp.data?.meetUrl) return { ok: true, data: resp.data };
-      return { ok: false, reconnectRequired: false, error: 'No Meet link returned' };
-    } catch (err: any) {
-      const status = err?.status;
-      return {
-        ok: false,
-        reconnectRequired: status === 409,
-        error: err?.message || 'Could not generate a Meet link',
-      };
-    }
   }
 }
