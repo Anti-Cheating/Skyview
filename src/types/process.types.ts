@@ -24,7 +24,7 @@ export interface ProcessListItem {
   candidate: ProcessCandidate;
   rounds_total: number;
   rounds_done: number;
-  status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';
+  status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'MISSED';
   updated_at: string;
 }
 
@@ -35,13 +35,14 @@ export interface ProcessDetail {
   candidate: ProcessCandidate;
   created_at: string;
   created_by_name: string | null;
-  status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED';
+  status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'MISSED';
   rounds: RoundSummary[];
 }
 
 export interface RoundInput {
   round_name: string;
-  interviewer_user_id: string;
+  /** Team members taking this round — one participant row each. */
+  interviewer_user_ids: string[];
   scheduled_start_at: string;
   scheduled_end_at: string;
   timezone: string;

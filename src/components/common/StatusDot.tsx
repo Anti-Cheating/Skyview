@@ -17,6 +17,7 @@ export type SessionStatus =
   | 'ACTIVE'
   | 'COMPLETED'
   | 'CANCELLED'
+  | 'MISSED'
   | string;
 
 const STATUS_TOKENS: Record<
@@ -27,6 +28,7 @@ const STATUS_TOKENS: Record<
   ACTIVE:    { dot: '#4CD964', label: '#047857', pulse: true },
   COMPLETED: { dot: '#2E7D32', label: '#374151' },
   CANCELLED: { dot: '#EF4444', label: '#374151' },
+  MISSED:    { dot: '#F59E0B', label: '#92400E' },
 };
 
 function prettyLabel(s: string): string {

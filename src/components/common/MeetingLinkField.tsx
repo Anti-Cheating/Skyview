@@ -34,7 +34,7 @@ export interface MeetingSelection {
 }
 
 // Origin of the Cortex API — validates the connect popup's postMessage.
-const CORTEX_ORIGIN = (() => {
+export const CORTEX_ORIGIN = (() => {
   try {
     return new URL(ENV.AUTH_API_URL).origin;
   } catch {

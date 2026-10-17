@@ -23,6 +23,7 @@ import {
   Person as PersonIcon,
   Business as BusinessIcon,
   Videocam as StartIcon,
+  EventBusy as MissedIcon,
   BarChart as AnalyseIcon,
 } from '@mui/icons-material';
 import { InterviewService } from '../../services/interview.service';
@@ -383,7 +384,9 @@ export default function InterviewDetailPage() {
   }
 
   const isCompleted = session.status === 'COMPLETED';
-  const canStart = !isCompleted;
+  // Missed / cancelled rounds can't run — Cortex refuses /activate for both.
+  const isMissed = session.status === 'MISSED';
+  const canStart = !isCompleted && !isMissed && session.status !== 'CANCELLED';
   // ACTIVE means the interviewer left the monitoring view without ending —
   // re-entering resumes the live session rather than starting a new one.
   const isLive = session.status === 'ACTIVE';
@@ -466,6 +469,40 @@ export default function InterviewDetailPage() {
 
         {/* Disabled Start is hidden — in the heading it would just be
             noise; the status badge already says the session ended. */}
+        {/* Missed: a yellow card takes the Start button's place. */}
+        {isMissed && (
+          <Box
+            role="status"
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 1,
+              maxWidth: 320,
+              flexShrink: 0,
+              px: 1.5,
+              py: 1.25,
+              borderRadius: '8px',
+              bgcolor: '#FFFBEB',
+              border: '1px solid #FDE68A',
+              color: '#92400E',
+            }}
+          >
+            <MissedIcon sx={{ fontSize: 18, mt: '1px' }} />
+            <Box>
+              <Typography sx={{ fontSize: '0.8125rem', fontWeight: 700 }}>This round was missed</Typography>
+              <Typography sx={{ fontSize: '0.75rem', mt: 0.25 }}>
+                Its time passed and nobody started it. Pick a new time with Edit round to run it.
+              </Typography>
+              <Button
+                size="small"
+                onClick={() => navigate(`/interviews/${processId}`)}
+                sx={{ mt: 0.5, ml: -0.75, px: 0.75, minWidth: 0, textTransform: 'none', fontWeight: 700, fontSize: '0.75rem', color: '#92400E' }}
+              >
+                Reschedule
+              </Button>
+            </Box>
+          </Box>
+        )}
         {canStart && (
           <Button
             variant="contained"

@@ -8,7 +8,7 @@
  *     (Pulse / Window Analysis / Screenshots) plus Start/Stop monitoring buttons
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -29,7 +29,8 @@ import {
   FiberManualRecord as DotIcon,
   StopCircleOutlined as EndIcon,
 } from '@mui/icons-material';
-import { useRiskSocket } from '../../hooks/useRiskSocket';
+import { useRiskSocket, type PanelActivity } from '../../hooks/useRiskSocket';
+import { useSnackbar } from '../../contexts/SnackbarContext';
 import { useHelper } from '../../hooks/useHelper';
 import { InterviewService } from '../../services/interview.service';
 import { ENV } from '../../config/env';
@@ -44,6 +45,15 @@ import { TOKENS } from '../../theme';
 const LIGHT_BG = TOKENS.bgCard;
 const LIGHT_BORDER = TOKENS.border;
 const BRAND = TOKENS.brand;
+
+const ACTIVITY_TEXT: Record<PanelActivity['action'], string> = {
+  transcription_on: 'turned transcription on',
+  transcription_off: 'turned transcription off',
+  analysis_on: 'turned analysis on',
+  analysis_off: 'turned analysis off',
+  capture: "captured the candidate's screen",
+  ended: 'ended the interview',
+};
 
 export default function MonitoringView() {
   const { processId, roundId } = useParams<{ processId: string; roundId: string }>();
@@ -60,6 +70,17 @@ export default function MonitoringView() {
   const [endDialogOpen, setEndDialogOpen] = useState(false);
 
   const riskData = useRiskSocket(interviewId ?? null);
+  const { showInfo } = useSnackbar();
+
+  // Someone else watching (any company employee) acted — say who. When they
+  // ended the interview, everyone leaves with them.
+  useEffect(() => {
+    const a = riskData.panelActivity;
+    if (!a) return;
+    showInfo(`${a.actor.name} ${ACTIVITY_TEXT[a.action]}`);
+    if (a.action === 'ended') navigate('/interviews');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [riskData.panelActivity]);
   const helper = useHelper(2000);
 
   // Toggle state is server-authoritative now (Bug 12 fix). Cortex
@@ -147,9 +168,23 @@ export default function MonitoringView() {
   //   • Fresh tab opening mid-session — catch-up from Cortex already
   //     lands on first connect, no action needed here.
   // Intent is stored in sessionStorage (since we removed local state).
+  //
+  // Only ONCE per connection — on the first canonical state. Every later
+  // modality-state is another panelist's toggle: adopt it as this tab's
+  // intent. Re-emitting there switched their "off" straight back on.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (!riskData.isConnected) restoredRef.current = false;
+  }, [riskData.isConnected]);
   useEffect(() => {
     if (!interviewId || !riskData.isConnected || !activated) return;
     if (!riskData.modalityState) return; // wait for canonical state
+    if (restoredRef.current) {
+      sessionStorage.setItem(`skyview:txn:${interviewId}`, riskData.modalityState.transcription ? '1' : '0');
+      sessionStorage.setItem(`skyview:anl:${interviewId}`, riskData.modalityState.analysis ? '1' : '0');
+      return;
+    }
+    restoredRef.current = true;
     const wantTxn = sessionStorage.getItem(`skyview:txn:${interviewId}`) === '1';
     const wantAnl = sessionStorage.getItem(`skyview:anl:${interviewId}`) === '1';
     if (wantTxn && !riskData.modalityState.transcription) {
@@ -277,9 +312,10 @@ export default function MonitoringView() {
 
   // Leaving pauses capture but keeps the session ACTIVE and the on-intent
   // stored, so re-entering resumes whatever was running. Only End clears it.
+  // Back only leaves this page — like closing the tab. Stopping capture here
+  // would stop it for every panelist still watching; Cortex stops it itself
+  // when the last viewer's socket disconnects.
   const handleExit = () => {
-    if (transcriptionOn) riskData.emitStopTranscription();
-    if (analysisOn) riskData.emitStopAnalysis();
     // Back lands on the round we came from, not the interviews list.
     navigate(`/interviews/${processId}/rounds/${roundId}`);
   };

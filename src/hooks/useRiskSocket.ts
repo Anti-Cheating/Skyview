@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { ENV } from '../config/env';
+import { ApiService } from '../services/api.service';
 
 export interface ModalityRisk {
   risk_level: string;
@@ -144,6 +145,14 @@ export interface ModalityState {
   analysis: boolean;
 }
 
+/** Another viewer's action, from Cortex `panel-activity` — drives "who did it" toasts. */
+export interface PanelActivity {
+  action: 'transcription_on' | 'transcription_off' | 'analysis_on' | 'analysis_off' | 'capture' | 'ended';
+  actor: { id: string | null; name: string };
+  /** Receive time, so two identical actions in a row still count as new. */
+  at: number;
+}
+
 export interface UseRiskSocketReturn {
   results: WindowResult[];
   latestResult: WindowResult | null;
@@ -171,6 +180,8 @@ export interface UseRiskSocketReturn {
   // Server-authoritative toggle state. Null until the first
   // modality-state event lands (join-session catch-up).
   modalityState: ModalityState | null;
+  // Latest action by someone else watching this session; null until one happens.
+  panelActivity: PanelActivity | null;
   // Pre-join setup state pushed by the candidate's Jarvis extension. Null
   // means we haven't received any status yet (e.g. extension never connected
   // for this session, or it's an application-type interview).
@@ -250,6 +261,7 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
   const [pendingImageAnalysisCount, setPendingImageAnalysisCount] = useState(0);
   const [candidateStatus, setCandidateStatus] = useState<CandidateStatus | null>(null);
   const [modalityState, setModalityState] = useState<ModalityState | null>(null);
+  const [panelActivity, setPanelActivity] = useState<PanelActivity | null>(null);
   // Consent lifecycle (GDPR): null until the first event or initial seed;
   // MonitoringView seeds it from the session payload's has_open_consent.
   const [consentStatus, setConsentStatus] = useState<{ status: 'given' | 'declined' | 'revoked'; at: string } | null>(null);
@@ -366,6 +378,8 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     socket.on('disconnect', () => {
       console.log('[RiskSocket] Disconnected');
       setIsConnected(false);
+      // Forget the toggle state; the rejoin catch-up sends the current one.
+      setModalityState(null);
       // Results can't arrive on a dead socket — clear the spinners.
       setPendingImageAnalysisCount(0);
       pendingImageTimers.current.forEach(clearTimeout);
@@ -419,6 +433,10 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
       }
     );
 
+    socket.on('panel-activity', (data: Omit<PanelActivity, 'at'>) => {
+      setPanelActivity({ action: data.action, actor: data.actor, at: Date.now() });
+    });
+
     socket.on('live-transcript', (data: TranscriptFragment) => {
       // Normalize missing speaker_role to "candidate" to keep the pre-Phase-2
       // Falcon flow working unchanged.
@@ -461,11 +479,12 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     if (!sessionId) return;
     let cancelled = false;
 
-    const base = `${ENV.AUTH_API_URL}/interview-sessions/${sessionId}`;
-    const token = localStorage.getItem('auth_access_token') || '';
-    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-    const getJson = (url: string) =>
-      fetch(url, { headers }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    // These history reads need a staff login of the session's company.
+    // ApiService adds it and refreshes an expired token, so a long session
+    // doesn't silently come back with empty panels.
+    const base = `/interview-sessions/${sessionId}`;
+    const getJson = (path: string) =>
+      ApiService.get<any>(path).then(r => ({ data: r.data })).catch(() => null);
 
     // Window analysis tab
     getJson(`${base}/windows`).then(json => {
@@ -526,6 +545,7 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     emitStartAnalysis,
     emitStopAnalysis,
     modalityState,
+    panelActivity,
     candidateStatus,
     consentStatus,
     setInitialConsentStatus,

@@ -278,7 +278,12 @@ describe('useRiskSocket — rehydrate from Cortex history', () => {
           { text: 'no times', speaker_role: 'candidate', captured_at: '2026-07-05T00:00:01.000Z' },
         ] } };
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve(body),
+      });
     }));
   }
 

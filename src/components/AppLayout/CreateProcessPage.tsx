@@ -11,6 +11,7 @@ import { InvitesService, type TeamMember } from '../../services/invites.service'
 import { useAuth } from '../../contexts/AuthContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { FormField } from '../common/FormField';
+import { InterviewersField } from '../common/InterviewersField';
 import { ActionButton } from '../common/ActionButton';
 import { MeetingLinkField, type MeetingSelection } from '../common/MeetingLinkField';
 import { LABEL_SX, DATETIME_SLOT_PROPS } from '../common/formTokens';
@@ -39,7 +40,7 @@ export default function CreateProcessPage() {
 
   const [roundName, setRoundName] = useState('Technical');
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [interviewerUserId, setInterviewerUserId] = useState('');
+  const [interviewerIds, setInterviewerIds] = useState<string[]>([]);
   const [startDateTime, setStartDateTime] = useState<Dayjs | null>(dayjs().add(1, 'hour').startOf('hour'));
   const [duration, setDuration] = useState(60);
   const [meeting, setMeeting] = useState<MeetingSelection>({ provider: 'google_meet', link: '', googleAuto: false });
@@ -57,7 +58,7 @@ export default function CreateProcessPage() {
         const list = resp.data.items;
         setMembers(list);
         if (user?.id && list.some((m) => m.id === user.id)) {
-          setInterviewerUserId((prev) => prev || user.id!);
+          setInterviewerIds((prev) => (prev.length ? prev : [user.id!]));
         }
       } catch {
         /* dropdown stays empty; submit validation surfaces it */
@@ -74,7 +75,7 @@ export default function CreateProcessPage() {
     if (!candidateLastName.trim()) return setError('Candidate last name is required');
     if (!candidateEmail.trim() || !candidateEmail.includes('@')) return setError('Valid candidate email is required');
     if (!roundName.trim()) return setError('Round name is required');
-    if (!interviewerUserId) return setError('Please pick an interviewer');
+    if (interviewerIds.length === 0) return setError('Please pick at least one interviewer');
     if (!startDateTime || !startDateTime.isValid()) return setError('Valid start date and time are required');
     if (startDateTime.isBefore(dayjs())) return setError('Start time must be in the future');
     if (!meeting.googleAuto) {
@@ -96,7 +97,7 @@ export default function CreateProcessPage() {
         candidate_last_name: candidateLastName.trim(),
         first_round: {
           round_name: roundName.trim(),
-          interviewer_user_id: interviewerUserId,
+          interviewer_user_ids: interviewerIds,
           scheduled_start_at: startAt.toISOString(),
           scheduled_end_at: endAt.toISOString(),
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -145,25 +146,13 @@ export default function CreateProcessPage() {
             <Secondary sx={{ color: TOKENS.textSecondary, mb: 2 }}>The first round runs now; add more later from the interview page.</Secondary>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3, mb: 3 }}>
               <FormField label="Round name" required placeholder="Technical" value={roundName} onChange={(e) => setRoundName(e.target.value)} disabled={loading} />
-              <FormField
-                label="Interviewer"
-                required
-                select
-                value={interviewerUserId}
-                onChange={(e) => setInterviewerUserId(e.target.value)}
+              <InterviewersField
+                members={members}
+                value={interviewerIds}
+                onChange={setInterviewerIds}
                 disabled={loading}
-                helperText={members.length === 0 ? 'No team members — invite someone from the Team page first.' : 'Who will take this round.'}
-              >
-                {members.map((m) => {
-                  const fullName = [m.first_name, m.last_name].filter(Boolean).join(' ').trim() || m.email;
-                  return (
-                    <MenuItem key={m.id} value={m.id}>
-                      {fullName}
-                      <Typography component="span" sx={{ fontSize: '0.75rem', color: '#9CA3AF', ml: 1 }}>{m.email}</Typography>
-                    </MenuItem>
-                  );
-                })}
-              </FormField>
+                hint="Who will take this round. Pick one or more."
+              />
             </Box>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3, mb: 3 }}>
               <Box>
