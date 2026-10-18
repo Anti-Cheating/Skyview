@@ -393,9 +393,9 @@ function DraftRow({
         )}
         {notOnTeam.length > 0 && d.status !== 'already_imported' && (
           <Typography sx={{ mt: 0.5, fontSize: '0.75rem', color: '#92400E' }}>
-            {notOnTeam.join(', ')} {notOnTeam.length === 1 ? "isn't" : "aren't"} on your Trueyy team, so{' '}
-            {notOnTeam.length === 1 ? "they can't be an interviewer" : "they can't be interviewers"}. Add them on the
-            Team page, then fetch again to include them.
+            {notOnTeam.join(', ')} {notOnTeam.length === 1 ? "isn't" : "aren't"} on your Trueyy team yet.{' '}
+            {notOnTeam.length === 1 ? "They're" : "They're each"} added as an interviewer automatically when they join
+            your team. Invite them from the Team page.
           </Typography>
         )}
 
@@ -426,7 +426,7 @@ function DraftRow({
                 value={choice.candidate}
                 onChange={(e) => onChange({ candidate: e.target.value })}
                 disabled={disabled || !importable}
-                hint="More than one person from outside your company is invited. Pick the candidate."
+                hint="More than one person from outside your company is invited. Pick the candidate. Anyone else here who later joins your team is added as an interviewer."
                 SelectProps={{
                   displayEmpty: true,
                   renderValue: (v) =>
