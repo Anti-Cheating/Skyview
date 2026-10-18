@@ -62,7 +62,7 @@ const STATUS_CHIP: Record<Status, { label: string; tone: keyof typeof TONES }> =
 const STATUS_HINT: Partial<Record<Status, string>> = {
   not_interview: 'Everyone invited is from your company, so there is no candidate.',
   no_interviewer: 'No one on your Trueyy team is invited. Add the interviewer on the Team page, then fetch again.',
-  no_link: 'Add a Meet, Zoom or Teams link to the event, then fetch again.',
+  no_link: "Add a Google Meet link, or put the Zoom / Teams / other meeting link in the event's location, then fetch again.",
   candidate_not_invited: "This interview's candidate isn't invited to this event.",
 };
 
