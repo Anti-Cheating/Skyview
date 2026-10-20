@@ -55,7 +55,7 @@ const STATUS_CHIP: Record<Status, { label: string; tone: keyof typeof TONES }> =
   not_interview: { label: 'No candidate', tone: 'mute' },
   no_interviewer: { label: 'No interviewer', tone: 'mute' },
   no_link: { label: 'No meeting link', tone: 'mute' },
-  already_imported: { label: 'Already imported', tone: 'mute' },
+  already_imported: { label: 'Already in Trueyy', tone: 'mute' },
   candidate_not_invited: { label: 'Candidate not invited', tone: 'mute' },
 };
 
@@ -304,7 +304,7 @@ export function CalendarImportDialog({
       <DialogActions sx={{ px: 3, pb: 2.5, gap: 1, flexWrap: 'wrap' }}>
         <Typography sx={{ flex: 1, minWidth: 200, fontSize: '0.75rem', color: TOKENS.textSecondary }}>
           {process ? 'Each round gets the same emails as Add round' : 'Each interview gets the same emails as New interview'}:
-          the candidate's join link and every interviewer's monitoring link. Your Google event is left as it is.
+          the candidate's join link and every interviewer's monitoring link. For events you organized, editing or cancelling here updates Google Calendar too.
         </Typography>
         <ActionButton variant="secondary" onClick={onClose} disabled={importing}>Cancel</ActionButton>
         <ActionButton onClick={submit} loading={importing} disabled={selected.length === 0 || incomplete}>

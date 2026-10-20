@@ -362,7 +362,10 @@ function RoundDialog({
         setInterviewerIds(ivs);
         setOrigInterviewerIds(ivs);
         const link = (s.provider_metadata?.join_url as string | undefined) ?? '';
-        const eventId = (s.provider_metadata?.google_event_id as string | undefined) ?? undefined;
+        // An imported calendar event isn't a Meet Trueyy made: its link shows as pasted.
+        const eventId = s.provider_metadata?.google_event_imported
+          ? undefined
+          : ((s.provider_metadata?.google_event_id as string | undefined) ?? undefined);
         setOrigMeetingLink(link);
         setOrigEventId(eventId);
         // Managed (we own the Meet event) → auto mode; else reflect the pasted
