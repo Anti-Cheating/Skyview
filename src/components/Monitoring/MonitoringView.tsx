@@ -155,11 +155,13 @@ export default function MonitoringView() {
     return () => window.clearInterval(id);
   }, [interviewId, activated, navigate]);
 
-  // Leaving never ends the session: closing the tab, navigating away or
-  // dropping offline all leave it ACTIVE so the interviewer (or another
-  // panelist) can come back. Cortex stops capture when the last viewer's
-  // socket disconnects. Ending is explicit: the End Interview dialog or
-  // the scheduled-end deadline.
+  // RULE (product decision, intentional): an interview ends ONLY when an
+  // interviewer presses End Interview or its scheduled end time passes.
+  // Closing the tab, Back, navigating away, dropping offline, or the last
+  // viewer leaving (viewer count reaching 0) must NOT end the session or
+  // stop capture. It stays ACTIVE so the interviewer (or another panelist)
+  // can come back. Reviewers: no beforeunload / unmount deactivate or stop-*
+  // here is by design, not a missing cleanup.
 
   // Re-emit intent on (re)connect if Cortex tells us the session has no
   // active modality but we locally want it on. This covers:
@@ -310,11 +312,10 @@ export default function MonitoringView() {
     else riskData.emitStopAnalysis();
   };
 
-  // Leaving pauses capture but keeps the session ACTIVE and the on-intent
-  // stored, so re-entering resumes whatever was running. Only End clears it.
-  // Back only leaves this page — like closing the tab. Stopping capture here
-  // would stop it for every panelist still watching; Cortex stops it itself
-  // when the last viewer's socket disconnects.
+  // Back only leaves this page; it never ends the interview or stops capture
+  // (see the RULE above: only End Interview or the scheduled end does).
+  // Stopping capture here would also stop it for every panelist still
+  // watching. The on-intent stays stored, so re-entering resumes it.
   const handleExit = () => {
     // Back lands on the round we came from, not the interviews list.
     navigate(`/interviews/${processId}/rounds/${roundId}`);
