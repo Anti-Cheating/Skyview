@@ -349,6 +349,7 @@ function RoundDialog({
   const [meeting, setMeeting] = useState<MeetingSelection>({ provider: 'google_meet', link: '', googleAuto: false });
   const [origMeetingLink, setOrigMeetingLink] = useState('');
   const [origEventId, setOrigEventId] = useState<string | undefined>(undefined);
+  const [imported, setImported] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -368,6 +369,7 @@ function RoundDialog({
           : ((s.provider_metadata?.google_event_id as string | undefined) ?? undefined);
         setOrigMeetingLink(link);
         setOrigEventId(eventId);
+        setImported(!!s.provider_metadata?.google_event_imported);
         // Managed (we own the Meet event) → auto mode; else reflect the pasted
         // link under its real provider.
         setMeeting(
@@ -420,7 +422,9 @@ function RoundDialog({
         // A round staying on its own Meet event sends no link: the backend
         // moves that event with the new time / interviewer. Switching to a
         // pasted link makes the backend delete the event it replaced.
-        if (meeting.googleAuto ? !origEventId : meeting.link.trim() !== origMeetingLink) {
+        // Never generate over an imported event: that would cancel the
+        // user's own meeting for every guest.
+        if (meeting.googleAuto ? !origEventId && !imported : meeting.link.trim() !== origMeetingLink) {
           Object.assign(payload, meetingInput);
         }
         // Send the panel only when it changed — the backend then emails the
@@ -466,6 +470,7 @@ function RoundDialog({
               onChange={setMeeting}
               disabled={saving}
               hasExistingEvent={!!origEventId}
+              pasteOnly={imported}
             />
           </>
         )}

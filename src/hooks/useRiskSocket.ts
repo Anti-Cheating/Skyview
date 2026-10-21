@@ -143,6 +143,8 @@ export interface CandidateStatus {
 export interface ModalityState {
   transcription: boolean;
   analysis: boolean;
+  /** Join catch-up into a room no other viewer was in — the tab may restore its intent. */
+  fresh?: boolean;
 }
 
 /** Another viewer's action, from Cortex `panel-activity` — drives "who did it" toasts. */
@@ -429,6 +431,7 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
         setModalityState({
           transcription: !!data.transcription,
           analysis: !!data.analysis,
+          fresh: !!data.fresh,
         });
       }
     );

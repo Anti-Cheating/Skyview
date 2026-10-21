@@ -57,6 +57,11 @@ interface MeetingLinkFieldProps {
   disabled?: boolean;
   /** True in edit mode when the round already owns a generated Meet event. */
   hasExistingEvent?: boolean;
+  /**
+   * No auto-generate (an imported calendar event): asking for a Meet would
+   * replace — and cancel for every guest — the user's own event.
+   */
+  pasteOnly?: boolean;
 }
 
 const PROVIDERS: Array<{ value: MeetingProvider; label: string }> = [
@@ -66,7 +71,7 @@ const PROVIDERS: Array<{ value: MeetingProvider; label: string }> = [
   { value: 'other', label: 'Other — paste a link' },
 ];
 
-export function MeetingLinkField({ value, onChange, disabled, hasExistingEvent }: MeetingLinkFieldProps) {
+export function MeetingLinkField({ value, onChange, disabled, hasExistingEvent, pasteOnly }: MeetingLinkFieldProps) {
   const [gStatus, setGStatus] = useState<GoogleConnectionStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [notice, setNotice] = useState<{ kind: 'success' | 'error' | 'info'; msg: string } | null>(null);
@@ -100,7 +105,7 @@ export function MeetingLinkField({ value, onChange, disabled, hasExistingEvent }
   useEffect(() => {
     if (statusLoading || syncedRef.current) return;
     syncedRef.current = true;
-    if (value.provider === 'google_meet' && !value.link && gStatus?.connected && !value.googleAuto) {
+    if (value.provider === 'google_meet' && !value.link && gStatus?.connected && !value.googleAuto && !pasteOnly) {
       onChange({ provider: 'google_meet', link: '', googleAuto: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,7 +121,7 @@ export function MeetingLinkField({ value, onChange, disabled, hasExistingEvent }
       if (data.status === 'connected') {
         setNotice({ kind: 'success', msg: 'Google Calendar connected.' });
         void refreshStatus();
-        if (value.provider === 'google_meet') onChange({ provider: 'google_meet', link: '', googleAuto: true });
+        if (value.provider === 'google_meet' && !pasteOnly) onChange({ provider: 'google_meet', link: '', googleAuto: true });
       } else if (data.status === 'denied') {
         setNotice({ kind: 'info', msg: 'Google connection was cancelled.' });
       } else {
@@ -141,11 +146,12 @@ export function MeetingLinkField({ value, onChange, disabled, hasExistingEvent }
   };
 
   const connected = !!gStatus?.connected;
+  const canAuto = connected && !pasteOnly;
 
   const setProvider = (provider: MeetingProvider) => {
     setNotice(null);
     if (provider === 'google_meet') {
-      onChange({ provider, link: connected ? '' : value.link, googleAuto: connected });
+      onChange({ provider, link: canAuto ? '' : value.link, googleAuto: canAuto });
     } else {
       onChange({ provider, link: value.link, googleAuto: false });
     }
@@ -193,7 +199,7 @@ export function MeetingLinkField({ value, onChange, disabled, hasExistingEvent }
                 Checking Google connection…
               </Typography>
             </Box>
-          ) : connected ? (
+          ) : value.googleAuto && connected ? (
             <Stack spacing={0.5}>
               <Stack direction="row" spacing={1} alignItems="center">
                 <CheckCircleIcon sx={{ fontSize: 15, color: TOKENS.brand }} />
@@ -212,14 +218,27 @@ export function MeetingLinkField({ value, onChange, disabled, hasExistingEvent }
             </Stack>
           ) : (
             <Stack spacing={1}>
-              <Box>
-                <Link component="button" type="button" onClick={connect} sx={{ fontSize: '0.8125rem', fontWeight: 600 }}>
-                  Connect Google Calendar
-                </Link>{' '}
-                <Typography component="span" sx={{ fontSize: '0.75rem', color: TOKENS.textSecondary }}>
-                  to auto-create the link, or paste one below.
-                </Typography>
-              </Box>
+              {!connected ? (
+                <Box>
+                  <Link component="button" type="button" onClick={connect} sx={{ fontSize: '0.8125rem', fontWeight: 600 }}>
+                    Connect Google Calendar
+                  </Link>{' '}
+                  <Typography component="span" sx={{ fontSize: '0.75rem', color: TOKENS.textSecondary }}>
+                    to auto-create the link, or paste one below.
+                  </Typography>
+                </Box>
+              ) : !pasteOnly && (
+                <Box>
+                  <Link
+                    component="button"
+                    type="button"
+                    onClick={() => onChange({ provider: 'google_meet', link: '', googleAuto: true })}
+                    sx={{ fontSize: '0.8125rem', fontWeight: 600 }}
+                  >
+                    Create a Meet link instead
+                  </Link>
+                </Box>
+              )}
               {pasteField}
             </Stack>
           )}

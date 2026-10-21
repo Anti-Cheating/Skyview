@@ -177,4 +177,23 @@ describe('MonitoringView — two viewers', () => {
     await waitFor(() => expect(sessionStorage.getItem('skyview:txn:round-1')).toBe('0'));
     expect(emitStartTranscription).not.toHaveBeenCalled();
   });
+
+  test('a reconnect while another viewer stayed adopts their "off" instead of switching it back on', async () => {
+    const emitStartTranscription = vi.fn();
+    sessionStorage.setItem('skyview:txn:round-1', '1');
+    // Rejoin catch-up into a room someone else kept alive: not fresh.
+    riskState = makeRiskData({ emitStartTranscription, modalityState: { transcription: false, analysis: false, fresh: false } });
+    render(<MonitoringView />);
+    await waitFor(() => expect(sessionStorage.getItem('skyview:txn:round-1')).toBe('0'));
+    expect(emitStartTranscription).not.toHaveBeenCalled();
+  });
+
+  test('the only viewer coming back restores what this tab had on', async () => {
+    const emitStartTranscription = vi.fn();
+    sessionStorage.setItem('skyview:txn:round-1', '1');
+    // Cortex wiped the state when the last viewer left: fresh.
+    riskState = makeRiskData({ emitStartTranscription, modalityState: { transcription: false, analysis: false, fresh: true } });
+    render(<MonitoringView />);
+    await waitFor(() => expect(emitStartTranscription).toHaveBeenCalledTimes(1));
+  });
 });

@@ -171,9 +171,11 @@ export default function MonitoringView() {
   //     lands on first connect, no action needed here.
   // Intent is stored in sessionStorage (since we removed local state).
   //
-  // Only ONCE per connection — on the first canonical state. Every later
-  // modality-state is another panelist's toggle: adopt it as this tab's
-  // intent. Re-emitting there switched their "off" straight back on.
+  // Only ONCE per connection — on the first canonical state, and only when
+  // Cortex says no other viewer kept the state alive (`fresh`). Otherwise
+  // that state, like every later one, is another panelist's choice: adopt
+  // it as this tab's intent. Re-emitting there switched their "off" back on
+  // (e.g. after a transient reconnect while they toggled it).
   const restoredRef = useRef(false);
   useEffect(() => {
     if (!riskData.isConnected) restoredRef.current = false;
@@ -181,7 +183,8 @@ export default function MonitoringView() {
   useEffect(() => {
     if (!interviewId || !riskData.isConnected || !activated) return;
     if (!riskData.modalityState) return; // wait for canonical state
-    if (restoredRef.current) {
+    if (restoredRef.current || !riskData.modalityState.fresh) {
+      restoredRef.current = true;
       sessionStorage.setItem(`skyview:txn:${interviewId}`, riskData.modalityState.transcription ? '1' : '0');
       sessionStorage.setItem(`skyview:anl:${interviewId}`, riskData.modalityState.analysis ? '1' : '0');
       return;

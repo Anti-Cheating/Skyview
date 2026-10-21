@@ -370,7 +370,7 @@ describe('ProcessDetailPage — add round dialog', () => {
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByLabelText(/Round\ name/), 'Managerial');
     await user.click(within(dialog).getByRole('button', { name: 'Add round' }));
-    expect(await screen.findByText('Meeting link is required')).toBeInTheDocument();
+    expect(await screen.findByText(/^Meeting link is required/)).toBeInTheDocument();
   }, 20000);
 
   test('validates a malformed meeting link', async () => {
