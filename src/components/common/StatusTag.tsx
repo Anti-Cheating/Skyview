@@ -21,6 +21,7 @@ export type SessionStatus =
   | 'IN_PROGRESS'
   | 'COMPLETED'
   | 'CANCELLED'
+  | 'MISSED'
   | string;
 
 interface TagTokens {
@@ -60,6 +61,12 @@ const STATUS_TOKENS: Record<string, TagTokens> = {
     bg:     '#FEF2F2',
     border: '#FECACA',
     text:   '#B91C1C',
+  },
+  // Time passed, nobody ran it — amber: needs a reschedule, not an error.
+  MISSED: {
+    bg:     '#FFFBEB',
+    border: '#FDE68A',
+    text:   '#92400E',
   },
 };
 

@@ -80,8 +80,9 @@ export default function AppInterviewCard({ interview, userRole, onJoin, onEdit, 
   //   - Otherwise (candidate + application) → "Join in Falcon App"
   const isCompleted = interview.status === 'COMPLETED';
   const isCancelled = interview.status === 'CANCELLED';
-  // A cancelled or completed session is closed — nobody can join/monitor it.
-  const isClosed = isCompleted || isCancelled;
+  const isMissed = interview.status === 'MISSED';
+  // A cancelled, completed or missed session is closed — nobody can join/monitor it.
+  const isClosed = isCompleted || isCancelled || isMissed;
   const isInterviewer = isStaffRole(userRole);
   const isCandidate = userRole === USER_ROLES.CANDIDATE;
   const canMonitor = isInterviewer && !isClosed;
@@ -93,6 +94,9 @@ export default function AppInterviewCard({ interview, userRole, onJoin, onEdit, 
   if (isCancelled) {
     actionLabel = 'Cancelled';
     tooltipMessage = 'This interview was cancelled';
+  } else if (isMissed) {
+    actionLabel = 'Missed';
+    tooltipMessage = 'This interview was missed. Reschedule it to run it.';
   } else if (isCompleted) {
     actionLabel = 'View Details';
     tooltipMessage = '';

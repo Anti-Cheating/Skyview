@@ -65,6 +65,7 @@ export default function CandidatesListPage({ embedded = false }: { embedded?: bo
       <DataTable<CandidateListItem>
         columns={columns}
         rows={rows}
+        onRowClick={(c) => navigate(`/candidates/${c.id}`)}
         rowKey={(r) => r.id}
         loading={loading}
         emptyText="No candidates yet."

@@ -73,7 +73,7 @@ describe('CreateProcessPage', () => {
     const payload = createProcess.mock.calls[0][0];
     expect(payload.role).toBe('SDE-1');
     expect(payload.candidate_email).toBe('jane@example.com');
-    expect(payload.first_round.interviewer_user_id).toBe('u1');
+    expect(payload.first_round.interviewer_user_ids).toEqual(['u1']);
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/interviews/proc-1'));
   }, 20000);
 });

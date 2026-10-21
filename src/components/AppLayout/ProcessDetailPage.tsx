@@ -4,7 +4,7 @@ import {
   Box, Chip, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   MenuItem, Typography, IconButton, Tooltip,
 } from '@mui/material';
-import { Add as AddIcon, EditOutlined as EditIcon, DeleteOutline as DeleteIcon } from '@mui/icons-material';
+import { Add as AddIcon, EditOutlined as EditIcon, DeleteOutline as DeleteIcon, CalendarMonthOutlined as CalendarIcon } from '@mui/icons-material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -13,6 +13,9 @@ import { TOKENS } from '../../theme';
 import { PageTitle, Secondary, Caption, CardTitle } from '../layout/Typography';
 import { ActionButton } from '../common/ActionButton';
 import { FormField } from '../common/FormField';
+import { InterviewersField } from '../common/InterviewersField';
+import { CalendarImportDialog } from './CalendarImportDialog';
+import { MeetingLinkField, detectProvider, type MeetingSelection } from '../common/MeetingLinkField';
 import { LABEL_SX, DATETIME_SLOT_PROPS } from '../common/formTokens';
 import { DataTable, type DataTableColumn } from '../common/DataTable';
 import { Breadcrumb } from '../common/Breadcrumb';
@@ -30,6 +33,7 @@ const ROUND_STATUS: Record<string, { label: string; bg: string; fg: string }> = 
   ACTIVE: { label: 'Live', bg: 'rgba(76,217,100,0.14)', fg: '#047857' },
   COMPLETED: { label: 'Completed', bg: '#F3F4F6', fg: '#4B5563' },
   CANCELLED: { label: 'Cancelled', bg: '#F3F4F6', fg: '#9CA3AF' },
+  MISSED: { label: 'Missed', bg: '#FFFBEB', fg: '#92400E' },
 };
 
 function fmtDateTime(iso: string): string {
@@ -46,6 +50,7 @@ export default function ProcessDetailPage() {
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [addOpen, setAddOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editRound, setEditRound] = useState<RoundSummary | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RoundSummary | null>(null);
@@ -229,7 +234,10 @@ export default function ProcessDetailPage() {
 
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
         <CardTitle sx={{ color: TOKENS.textPrimary }}>Rounds</CardTitle>
-        <ActionButton onClick={() => setAddOpen(true)} startIcon={<AddIcon />}>Add round</ActionButton>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <ActionButton onClick={() => setCalendarOpen(true)} startIcon={<CalendarIcon />} aria-label="Import from Google Calendar">Import</ActionButton>
+          <ActionButton onClick={() => setAddOpen(true)} startIcon={<AddIcon />}>Add round</ActionButton>
+        </Box>
       </Box>
       <DataTable<RoundSummary>
         columns={columns}
@@ -249,6 +257,16 @@ export default function ProcessDetailPage() {
           onClose={() => setAddOpen(false)}
           onSaved={() => { setAddOpen(false); showSuccess('Round added'); refresh(); }}
           onError={showError}
+        />
+      )}
+      {calendarOpen && (
+        <CalendarImportDialog
+          process={{
+            id: processId!,
+            candidateName: [candidate.first_name, candidate.last_name].filter(Boolean).join(' ').trim() || candidate.email,
+          }}
+          onClose={() => setCalendarOpen(false)}
+          onImported={refresh}
         />
       )}
       {editRound && (
@@ -324,12 +342,14 @@ function RoundDialog({
 }) {
   const [ready, setReady] = useState(mode === 'add');
   const [roundName, setRoundName] = useState(round?.round_name ?? '');
-  const [interviewerUserId, setInterviewerUserId] = useState(defaultInterviewer ?? '');
-  const [origInterviewer, setOrigInterviewer] = useState('');
+  const [interviewerIds, setInterviewerIds] = useState<string[]>(defaultInterviewer ? [defaultInterviewer] : []);
+  const [origInterviewerIds, setOrigInterviewerIds] = useState<string[]>([]);
   const [startDateTime, setStartDateTime] = useState<Dayjs | null>(dayjs().add(1, 'hour').startOf('hour'));
   const [duration, setDuration] = useState(60);
-  const [meetingLink, setMeetingLink] = useState('');
+  const [meeting, setMeeting] = useState<MeetingSelection>({ provider: 'google_meet', link: '', googleAuto: false });
   const [origMeetingLink, setOrigMeetingLink] = useState('');
+  const [origEventId, setOrigEventId] = useState<string | undefined>(undefined);
+  const [imported, setImported] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -339,12 +359,24 @@ function RoundDialog({
       .then((r) => {
         const s = r.data;
         if (!s) { onError('Failed to load round'); return; }
-        const iv = s.interview_session_participants?.find((p) => p.interviewer_id)?.interviewer_id ?? '';
-        setInterviewerUserId(iv);
-        setOrigInterviewer(iv);
+        const ivs = (s.interview_session_participants ?? []).flatMap((p) => (p.interviewer_id ? [p.interviewer_id] : []));
+        setInterviewerIds(ivs);
+        setOrigInterviewerIds(ivs);
         const link = (s.provider_metadata?.join_url as string | undefined) ?? '';
-        setMeetingLink(link);
+        // An imported calendar event isn't a Meet Trueyy made: its link shows as pasted.
+        const eventId = s.provider_metadata?.google_event_imported
+          ? undefined
+          : ((s.provider_metadata?.google_event_id as string | undefined) ?? undefined);
         setOrigMeetingLink(link);
+        setOrigEventId(eventId);
+        setImported(!!s.provider_metadata?.google_event_imported);
+        // Managed (we own the Meet event) → auto mode; else reflect the pasted
+        // link under its real provider.
+        setMeeting(
+          eventId
+            ? { provider: 'google_meet', link: '', googleAuto: true }
+            : { provider: detectProvider(link), link, googleAuto: false },
+        );
         const start = dayjs(s.scheduled_start_at);
         setStartDateTime(start);
         setDuration(Math.max(15, Math.round(dayjs(s.scheduled_end_at).diff(start, 'minute'))));
@@ -355,23 +387,30 @@ function RoundDialog({
 
   const submit = async () => {
     if (!roundName.trim()) return setError('Round name is required');
-    if (!interviewerUserId) return setError('Pick an interviewer');
+    if (interviewerIds.length === 0) return setError('Pick at least one interviewer');
     if (!startDateTime || !startDateTime.isValid() || startDateTime.isBefore(dayjs())) return setError('Pick a valid future time');
-    if (!meetingLink.trim()) return setError('Meeting link is required');
-    try { new URL(meetingLink.trim()); } catch { return setError('Meeting link must be a valid URL'); }
+    if (!meeting.googleAuto) {
+      if (!meeting.link.trim()) return setError('Meeting link is required (or connect Google to auto-generate)');
+      try { new URL(meeting.link.trim()); } catch { return setError('Meeting link must be a valid URL'); }
+    }
     setSaving(true);
     setError(null);
     try {
       const startAt = startDateTime.toDate();
       const endAt = new Date(startAt.getTime() + duration * 60 * 1000);
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // A Meet link is generated by the backend on save, after its checks
+      // pass, so the form only says which kind of link it wants.
+      const meetingInput = meeting.googleAuto ? { generate_meet: true } : { meeting_link: meeting.link.trim() };
+
       if (mode === 'add') {
         const r = await ProcessService.addRound(processId, {
           round_name: roundName.trim(),
-          interviewer_user_id: interviewerUserId,
+          interviewer_user_ids: interviewerIds,
           scheduled_start_at: startAt.toISOString(),
           scheduled_end_at: endAt.toISOString(),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          meeting_link: meetingLink.trim(),
+          timezone: tz,
+          ...meetingInput,
         });
         if (r.success) onSaved(); else onError(r.message || 'Failed to add round');
       } else if (round) {
@@ -380,11 +419,20 @@ function RoundDialog({
           scheduled_start_at: startAt.toISOString(),
           scheduled_end_at: endAt.toISOString(),
         };
-        if (meetingLink.trim() !== origMeetingLink) payload.meeting_link = meetingLink.trim();
-        if (interviewerUserId && interviewerUserId !== origInterviewer) {
+        // A round staying on its own Meet event sends no link: the backend
+        // moves that event with the new time / interviewer. Switching to a
+        // pasted link makes the backend delete the event it replaced.
+        // Never generate over an imported event: that would cancel the
+        // user's own meeting for every guest.
+        if (meeting.googleAuto ? !origEventId && !imported : meeting.link.trim() !== origMeetingLink) {
+          Object.assign(payload, meetingInput);
+        }
+        // Send the panel only when it changed — the backend then emails the
+        // update to everyone on the new panel and the candidate.
+        if ([...interviewerIds].sort().join() !== [...origInterviewerIds].sort().join()) {
           payload.interview_session_participants = [
             { candidate_email: candidate.email, candidate_first_name: candidate.first_name, candidate_last_name: candidate.last_name },
-            { interviewer_user_id: interviewerUserId },
+            ...interviewerIds.map((id) => ({ interviewer_user_id: id })),
           ];
         }
         const r = await InterviewService.update(round.id, payload);
@@ -407,11 +455,7 @@ function RoundDialog({
           <>
             {error && <Typography sx={{ color: TOKENS.error, fontSize: '0.8125rem' }}>{error}</Typography>}
             <FormField label="Round name" required placeholder="Managerial" value={roundName} onChange={(e) => setRoundName(e.target.value)} disabled={saving} />
-            <FormField label="Interviewer" required select value={interviewerUserId} onChange={(e) => setInterviewerUserId(e.target.value)} disabled={saving}>
-              {members.map((m) => (
-                <MenuItem key={m.id} value={m.id}>{[m.first_name, m.last_name].filter(Boolean).join(' ').trim() || m.email}</MenuItem>
-              ))}
-            </FormField>
+            <InterviewersField members={members} value={interviewerIds} onChange={setInterviewerIds} disabled={saving} />
             <Box>
               <Box sx={LABEL_SX}><span>Schedule</span><Box component="span" sx={{ color: TOKENS.errorLight, fontWeight: 700 }}>*</Box></Box>
               <LocalizationProvider dateAdapter={AdapterDayjs}>
@@ -421,7 +465,13 @@ function RoundDialog({
             <FormField label="Duration" required select value={String(duration)} onChange={(e) => setDuration(Number(e.target.value))} disabled={saving}>
               {DURATIONS.map((d) => (<MenuItem key={d} value={String(d)}>{d} minutes</MenuItem>))}
             </FormField>
-            <FormField label="Meeting Link" required placeholder="https://meet.google.com/abc-defg-hij" value={meetingLink} onChange={(e) => setMeetingLink(e.target.value)} disabled={saving} />
+            <MeetingLinkField
+              value={meeting}
+              onChange={setMeeting}
+              disabled={saving}
+              hasExistingEvent={!!origEventId}
+              pasteOnly={imported}
+            />
           </>
         )}
       </DialogContent>

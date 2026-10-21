@@ -8,7 +8,7 @@
  *     (Pulse / Window Analysis / Screenshots) plus Start/Stop monitoring buttons
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -29,7 +29,8 @@ import {
   FiberManualRecord as DotIcon,
   StopCircleOutlined as EndIcon,
 } from '@mui/icons-material';
-import { useRiskSocket } from '../../hooks/useRiskSocket';
+import { useRiskSocket, type PanelActivity } from '../../hooks/useRiskSocket';
+import { useSnackbar } from '../../contexts/SnackbarContext';
 import { useHelper } from '../../hooks/useHelper';
 import { InterviewService } from '../../services/interview.service';
 import { ENV } from '../../config/env';
@@ -44,6 +45,15 @@ import { TOKENS } from '../../theme';
 const LIGHT_BG = TOKENS.bgCard;
 const LIGHT_BORDER = TOKENS.border;
 const BRAND = TOKENS.brand;
+
+const ACTIVITY_TEXT: Record<PanelActivity['action'], string> = {
+  transcription_on: 'turned transcription on',
+  transcription_off: 'turned transcription off',
+  analysis_on: 'turned analysis on',
+  analysis_off: 'turned analysis off',
+  capture: "captured the candidate's screen",
+  ended: 'ended the interview',
+};
 
 export default function MonitoringView() {
   const { processId, roundId } = useParams<{ processId: string; roundId: string }>();
@@ -60,6 +70,17 @@ export default function MonitoringView() {
   const [endDialogOpen, setEndDialogOpen] = useState(false);
 
   const riskData = useRiskSocket(interviewId ?? null);
+  const { showInfo } = useSnackbar();
+
+  // Someone else watching (any company employee) acted — say who. When they
+  // ended the interview, everyone leaves with them.
+  useEffect(() => {
+    const a = riskData.panelActivity;
+    if (!a) return;
+    showInfo(`${a.actor.name} ${ACTIVITY_TEXT[a.action]}`);
+    if (a.action === 'ended') navigate('/interviews');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [riskData.panelActivity]);
   const helper = useHelper(2000);
 
   // Toggle state is server-authoritative now (Bug 12 fix). Cortex
@@ -74,8 +95,8 @@ export default function MonitoringView() {
   const analysisOn = riskData.modalityState?.analysis ?? false;
 
   // Cortex is the single authority on session lifecycle. On mount we
-  // flip SCHEDULED → ACTIVE; a 10s heartbeat refreshes a Redis TTL;
-  // tab close (beforeunload) or an explicit End flips ACTIVE → COMPLETED.
+  // flip SCHEDULED → ACTIVE; a 10s heartbeat refreshes a Redis TTL; only
+  // an explicit End or the scheduled-end deadline flips ACTIVE → COMPLETED.
   useEffect(() => {
     if (!interviewId) return;
     let cancelled = false;
@@ -134,41 +155,41 @@ export default function MonitoringView() {
     return () => window.clearInterval(id);
   }, [interviewId, activated, navigate]);
 
-  useEffect(() => {
-    if (!interviewId) return;
-    // fetch keepalive lets POST outlive the tab; sendBeacon can't send
-    // Authorization headers so it's a poor fit for an authenticated route.
-    const beaconDeactivate = () => {
-      const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN) || '';
-      try {
-        fetch(`${ENV.AUTH_API_URL}/interview-sessions/${interviewId}/deactivate`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: '{}',
-          keepalive: true,
-        });
-      } catch {/* ignore */}
-    };
-    window.addEventListener('beforeunload', beaconDeactivate);
-    // Unmount does NOT deactivate: navigating away (dashboard, breadcrumb,
-    // back arrow) must leave the session ACTIVE so the interviewer can come
-    // back. Ending is explicit — the End Interview dialog or scheduled-end.
-    return () => window.removeEventListener('beforeunload', beaconDeactivate);
-  }, [interviewId]);
+  // RULE (product decision, intentional): an interview ends ONLY when an
+  // interviewer presses End Interview or its scheduled end time passes.
+  // Closing the tab, Back, navigating away, dropping offline, or the last
+  // viewer leaving (viewer count reaching 0) must NOT end the session or
+  // stop capture. It stays ACTIVE so the interviewer (or another panelist)
+  // can come back. Reviewers: no beforeunload / unmount deactivate or stop-*
+  // here is by design, not a missing cleanup.
 
   // Re-emit intent on (re)connect if Cortex tells us the session has no
   // active modality but we locally want it on. This covers:
-  //   • Tab refresh — Cortex's in-memory modality may have been cleared
-  //     by the beforeunload deactivate; after reload we want to restore.
+  //   • Tab refresh — Cortex clears its in-memory modality when the last
+  //     viewer disconnects; after reload we want to restore.
   //   • Fresh tab opening mid-session — catch-up from Cortex already
   //     lands on first connect, no action needed here.
   // Intent is stored in sessionStorage (since we removed local state).
+  //
+  // Only ONCE per connection — on the first canonical state, and only when
+  // Cortex says no other viewer kept the state alive (`fresh`). Otherwise
+  // that state, like every later one, is another panelist's choice: adopt
+  // it as this tab's intent. Re-emitting there switched their "off" back on
+  // (e.g. after a transient reconnect while they toggled it).
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (!riskData.isConnected) restoredRef.current = false;
+  }, [riskData.isConnected]);
   useEffect(() => {
     if (!interviewId || !riskData.isConnected || !activated) return;
     if (!riskData.modalityState) return; // wait for canonical state
+    if (restoredRef.current || !riskData.modalityState.fresh) {
+      restoredRef.current = true;
+      sessionStorage.setItem(`skyview:txn:${interviewId}`, riskData.modalityState.transcription ? '1' : '0');
+      sessionStorage.setItem(`skyview:anl:${interviewId}`, riskData.modalityState.analysis ? '1' : '0');
+      return;
+    }
+    restoredRef.current = true;
     const wantTxn = sessionStorage.getItem(`skyview:txn:${interviewId}`) === '1';
     const wantAnl = sessionStorage.getItem(`skyview:anl:${interviewId}`) === '1';
     if (wantTxn && !riskData.modalityState.transcription) {
@@ -294,11 +315,11 @@ export default function MonitoringView() {
     else riskData.emitStopAnalysis();
   };
 
-  // Leaving pauses capture but keeps the session ACTIVE and the on-intent
-  // stored, so re-entering resumes whatever was running. Only End clears it.
+  // Back only leaves this page; it never ends the interview or stops capture
+  // (see the RULE above: only End Interview or the scheduled end does).
+  // Stopping capture here would also stop it for every panelist still
+  // watching. The on-intent stays stored, so re-entering resumes it.
   const handleExit = () => {
-    if (transcriptionOn) riskData.emitStopTranscription();
-    if (analysisOn) riskData.emitStopAnalysis();
     // Back lands on the round we came from, not the interviews list.
     navigate(`/interviews/${processId}/rounds/${roundId}`);
   };

@@ -21,6 +21,34 @@ export interface ProcessListFilter {
   search?: string;
 }
 
+/** One Google Calendar event read into New-interview fields (Cortex calendarImport.ts). */
+export interface CalendarDraft {
+  event_id: string;
+  title: string;
+  description: string | null;
+  start: string;
+  end: string;
+  timezone: string;
+  duration_minutes: number;
+  meeting_link: string | null;
+  interviewers: Array<{ id: string; name: string; email: string }>;
+  candidates: Array<{ email: string; first_name?: string; last_name?: string }>;
+  skipped: Array<{ email: string; reason: 'not_on_team' }>;
+  status:
+    | 'ready'
+    | 'pick_candidate'
+    | 'not_interview'
+    | 'no_interviewer'
+    | 'no_link'
+    | 'already_imported'
+    | 'candidate_not_invited';
+  html_link: string | null;
+}
+
+export type CalendarImportResult =
+  | { event_id: string; ok: true; process_id: string; round_id: string }
+  | { event_id: string; ok: false; error: string };
+
 /** Parent "Interview" (process) API — rounds are created/edited via InterviewService (sessions). */
 export class ProcessService {
   static async list(filter: ProcessListFilter = {}): Promise<ApiResponse<ProcessListResponse>> {
@@ -74,6 +102,40 @@ export class ProcessService {
   static async update(id: string, patch: UpdateProcessInput): Promise<ApiResponse<unknown>> {
     const r = await ApiService.patch<unknown>(`/interview-processes/${id}`, patch, undefined, 'auth');
     return { success: r.success, data: r.data, message: r.message };
+  }
+
+  /**
+   * Upcoming events on the caller's Google Calendar, each read into a draft.
+   * With processId, only events inviting that interview's candidate qualify.
+   */
+  static async calendarEvents(
+    days: number,
+    processId?: string
+  ): Promise<{ timezone: string | null; drafts: CalendarDraft[] }> {
+    const r = await ApiService.get<{ timezone: string | null; drafts: CalendarDraft[] }>(
+      `/interview-processes/calendar-events?days=${days}${processId ? `&process_id=${processId}` : ''}`,
+      undefined,
+      'auth'
+    );
+    return r.data ?? { timezone: null, drafts: [] };
+  }
+
+  /**
+   * Import the chosen events; one result per event (some can fail while others
+   * succeed). With processId they become the next rounds of that interview.
+   */
+  static async importCalendar(
+    items: Array<{ event_id: string; role?: string; round_name?: string; candidate_email?: string }>,
+    timezone: string | null,
+    processId?: string
+  ): Promise<CalendarImportResult[]> {
+    const r = await ApiService.post<{ results: CalendarImportResult[] }>(
+      `/interview-processes/import-calendar`,
+      { items, ...(timezone ? { timezone } : {}), ...(processId ? { process_id: processId } : {}) },
+      undefined,
+      'auth'
+    );
+    return r.data?.results ?? [];
   }
 
   static async cancel(id: string): Promise<ApiResponse<unknown>> {
