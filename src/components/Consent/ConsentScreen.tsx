@@ -21,6 +21,8 @@ interface Props {
   onAgree: () => void;
   onDecline: () => void;
   busy?: boolean;
+  /** Wording for an assessment (no interviewer, no meeting). Default: interview. */
+  kind?: 'interview' | 'assessment';
 }
 
 const BRAND = TOKENS.brand;
@@ -29,24 +31,39 @@ const LIGHT_BG = TOKENS.bgCard;
 const LIGHT_BORDER = TOKENS.border;
 
 // The four things recorded — branded tiles rather than a text bullet list.
-const RECORDED = [
-  { icon: <ScreenIcon />, label: 'Screen & open apps', desc: 'Your screen and the titles of applications you have open' },
-  { icon: <MicIcon />, label: 'Microphone', desc: 'Your microphone audio during the interview' },
-  { icon: <AudioIcon />, label: 'Meeting audio', desc: 'Audio played on your device from the meeting' },
-  { icon: <KeyboardIcon />, label: 'Keystroke metrics', desc: 'Timing and paste events — never the content you type' },
-];
+const RECORDED = {
+  interview: [
+    { icon: <ScreenIcon />, label: 'Screen & open apps', desc: 'Your screen and the titles of applications you have open' },
+    { icon: <MicIcon />, label: 'Microphone', desc: 'Your microphone audio during the interview' },
+    { icon: <AudioIcon />, label: 'Meeting audio', desc: 'Audio played on your device from the meeting' },
+    { icon: <KeyboardIcon />, label: 'Keystroke metrics', desc: 'Timing and paste events — never the content you type' },
+  ],
+  assessment: [
+    { icon: <ScreenIcon />, label: 'Screen & open apps', desc: 'Your screen and the titles of applications you have open' },
+    { icon: <MicIcon />, label: 'Microphone', desc: 'Your microphone audio while you take the assessment' },
+    { icon: <AudioIcon />, label: 'Computer audio', desc: 'Audio played on your device' },
+    { icon: <KeyboardIcon />, label: 'Keystroke metrics', desc: 'Timing and paste events — never the content you type' },
+  ],
+};
 
-const ASSURANCES = [
-  'Used only to assess interview integrity, shared with the company that invited you',
-  'You can withdraw consent at any time — your interviewer is notified and recording stops immediately',
-  'Withdrawing does not affect data already recorded; data is kept per the company’s retention policy',
-];
+const ASSURANCES = {
+  interview: [
+    'Used only to assess interview integrity, shared with the company that invited you',
+    'You can withdraw consent at any time — your interviewer is notified and recording stops immediately',
+    'Withdrawing does not affect data already recorded; data is kept per the company’s retention policy',
+  ],
+  assessment: [
+    'Used only to check the integrity of this assessment, shared with the company that invited you',
+    'You can withdraw consent at any time — recording stops immediately',
+    'Withdrawing does not affect data already recorded; data is kept per the company’s retention policy',
+  ],
+};
 
 /** Consent step body — a card that slots under the page header + stepper.
  *  Renders structured, branded content (recorded-item tiles + assurances).
  *  The `body` prop remains the source of truth for what's stored as
  *  evidence; this is the human-friendly presentation of the same terms. */
-export default function ConsentScreen({ companyName, onAgree, onDecline, busy }: Props) {
+export default function ConsentScreen({ companyName, onAgree, onDecline, busy, kind = 'interview' }: Props) {
   return (
     <Box sx={{
       width: 600, maxWidth: '100%', bgcolor: LIGHT_BG,
@@ -65,19 +82,19 @@ export default function ConsentScreen({ companyName, onAgree, onDecline, busy }:
           <CardTitle component="h2" sx={{ m: 0, fontWeight: 700, color: TOKENS.textPrimary }}>
             Review &amp; agree to monitoring
           </CardTitle>
-          <Caption sx={{ color: TOKENS.textSecondary }}>Required before this interview can start</Caption>
+          <Caption sx={{ color: TOKENS.textSecondary }}>Required before {kind === 'assessment' ? 'you start' : 'this interview can start'}</Caption>
         </Box>
       </Box>
 
       <Box sx={{ px: { xs: 3, md: 4 }, pt: 1.5, pb: 1 }}>
         <Secondary sx={{ color: TOKENS.textSecondary, mb: 2.5 }}>
-          {companyName ? `${companyName} uses` : 'This interview uses'} Trueyy integrity
+          {companyName ? `${companyName} uses` : `This ${kind} uses`} Trueyy integrity
           monitoring. For the duration of this session we will record:
         </Secondary>
 
         {/* Recorded items — branded tiles */}
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25, mb: 3 }}>
-          {RECORDED.map((item) => (
+          {RECORDED[kind].map((item) => (
             <Box key={item.label} sx={{
               display: 'flex', gap: 1.25, alignItems: 'flex-start',
               p: 1.5, borderRadius: '10px', bgcolor: '#FAFBFC', border: `1px solid ${LIGHT_BORDER}`,
@@ -103,7 +120,7 @@ export default function ConsentScreen({ companyName, onAgree, onDecline, busy }:
 
         {/* Assurances — brand check rows */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, mb: 1 }}>
-          {ASSURANCES.map((line) => (
+          {ASSURANCES[kind].map((line) => (
             <AssuranceRow key={line}>{line}</AssuranceRow>
           ))}
         </Box>

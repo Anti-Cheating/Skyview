@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Box, CircularProgress, IconButton, TextField } from '@mui/material';
+import { Box, CircularProgress, IconButton, TextField, Typography } from '@mui/material';
 import { MdAccessTime, MdArrowBack, MdAssignment, MdBlock, MdCheckCircle, MdErrorOutline, MdEventBusy, MdLockClock } from 'react-icons/md';
 import dayjs from 'dayjs';
 import { CandidateAssessmentService } from '../../services/candidateAssessment.service';
@@ -18,11 +18,11 @@ import { STORAGE_KEYS } from '../../config/constants';
 // Same chrome as the candidate interview join page (CandidateJoinPage).
 const PAGE_BG = '#F9FAFB';
 const LETTERS = 'ABCDEF';
-const FORMAT_HINT = { mcq: 'Pick one answer', fill_blank: 'Fill in the blank', short_answer: 'Short answer', written: 'Written answer', build: 'Build task' } as const;
+const FORMAT_HINT = { mcq: 'Pick one answer', multi: 'Pick all that apply', fill_blank: 'Fill in the blank', short_answer: 'Short answer', written: 'Written answer', build: 'Build task' } as const;
 const when = (iso: string) => dayjs(iso).format('ddd D MMM, h:mm A');
 
 type Answer = {
-  answer: number | string | null;
+  answer: number | number[] | string | null;
   explanation: string;
   deliverable_files?: Array<{ name: string; url?: string; content?: string; size?: number; type?: string }>;
 };
@@ -37,6 +37,15 @@ function clock(ms: number): string {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
   const pad = (n: number) => String(n).padStart(2, '0');
   return h ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
+}
+
+/** Assignment countdown: days + hours, then hours + minutes under a day, then minutes + seconds under an hour. */
+function dueClock(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  return `${m}m ${String(sec).padStart(2, '0')}s`;
 }
 
 function untilText(ms: number): string {
@@ -188,7 +197,7 @@ function TestView({ base, data, offset, onDone }: { base: string; data: Candidat
 
   const answered = (qid: string) => {
     const a = answers[qid]?.answer;
-    return a !== null && a !== undefined && a !== '';
+    return a !== null && a !== undefined && a !== '' && !(Array.isArray(a) && !a.length);
   };
   const unanswered = questions.filter((q) => !answered(q.id)).length;
 
@@ -227,7 +236,7 @@ function TestView({ base, data, offset, onDone }: { base: string; data: Candidat
               display: 'flex', alignItems: 'center', gap: 0.75, px: 1.25, py: 0.5, borderRadius: '8px', fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: '0.95rem',
               bgcolor: critical ? '#FEF2F2' : low ? '#FFFBEB' : TOKENS.brandBg, color: critical ? '#B91C1C' : low ? '#92400E' : '#047857',
             }}>
-              <MdAccessTime /> {clock(remaining)}
+              <MdAccessTime /> {data.assessment.mode === 'live' ? clock(remaining) : dueClock(remaining)}
             </Box>
             <ActionButton onClick={submit} loading={submitting}>Submit</ActionButton>
           </Box>
@@ -259,19 +268,26 @@ function TestView({ base, data, offset, onDone }: { base: string; data: Candidat
         {current && a && (
           <Box sx={{ bgcolor: TOKENS.bgCard, borderRadius: '16px', border: `1px solid ${TOKENS.border}`, boxShadow: '0 4px 24px rgba(17, 24, 39, 0.06)', p: { xs: 2.5, md: 3.5 }, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
-              <Caption sx={{ color: TOKENS.textSecondary, fontWeight: 600 }}>Question {idx + 1} of {questions.length}</Caption>
+              <Caption sx={{ color: TOKENS.textSecondary, fontWeight: 600 }}>
+                {current.format === 'build' ? 'Task' : 'Question'} {idx + 1} of {questions.length}
+                {current.marks != null && <Box component="span" sx={{ fontWeight: 400 }}> ({current.marks} mark{current.marks === 1 ? '' : 's'}{current.negative_marks ? `, −${current.negative_marks} if wrong` : ''})</Box>}
+              </Caption>
               <Caption sx={{ color: TOKENS.textSecondary }}>{FORMAT_HINT[current.format]}</Caption>
             </Box>
 
             {/* Live: the question and its options can't be copied out. Answer boxes stay normal (typing, pasting). */}
             <Box onCopy={block} onCut={block} onContextMenu={block} sx={{ fontSize: '1rem', userSelect: live ? 'none' : 'auto' }}><QuestionText text={current.prompt} /></Box>
 
-            {current.format === 'mcq' && current.options && (
-              <Box role="radiogroup" aria-label="Options" onCopy={block} onCut={block} onContextMenu={block} sx={{ display: 'flex', flexDirection: 'column', gap: 1, userSelect: live ? 'none' : 'auto' }}>
+            {(current.format === 'mcq' || current.format === 'multi') && current.options && (
+              <Box role={current.format === 'multi' ? 'group' : 'radiogroup'} aria-label="Options" onCopy={block} onCut={block} onContextMenu={block} sx={{ display: 'flex', flexDirection: 'column', gap: 1, userSelect: live ? 'none' : 'auto' }}>
                 {current.options.map((o, i) => {
-                  const on = a.answer === o.id;
+                  // multi: several picks (original option indexes); mcq: one.
+                  const multi = current.format === 'multi';
+                  const picks = Array.isArray(a.answer) ? a.answer : [];
+                  const on = multi ? picks.includes(o.id) : a.answer === o.id;
+                  const pick = () => change(current.id, { answer: multi ? (on ? picks.filter((x) => x !== o.id) : [...picks, o.id]) : o.id }, 0);
                   return (
-                    <Box key={o.id} component="button" type="button" role="radio" aria-checked={on} onClick={() => change(current.id, { answer: o.id }, 0)}
+                    <Box key={o.id} component="button" type="button" role={multi ? 'checkbox' : 'radio'} aria-checked={on} onClick={pick}
                       sx={{
                         all: 'unset', boxSizing: 'border-box', cursor: 'pointer', display: 'flex', gap: 1.5, alignItems: 'flex-start', px: 1.75, py: 1.25, borderRadius: '10px',
                         border: `1px solid ${on ? TOKENS.brand : TOKENS.border}`, bgcolor: on ? TOKENS.brandBg : TOKENS.bgCard,
@@ -279,7 +295,7 @@ function TestView({ base, data, offset, onDone }: { base: string; data: Candidat
                         '&:hover': { borderColor: TOKENS.brand }, '&:focus-visible': { outline: `2px solid ${TOKENS.brand}`, outlineOffset: 2 },
                       }}>
                       <Box component="span" sx={{
-                        width: 24, height: 24, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700,
+                        width: 24, height: 24, borderRadius: current.format === 'multi' ? '6px' : '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700,
                         bgcolor: on ? TOKENS.brand : TOKENS.borderLight, color: on ? '#fff' : TOKENS.textSecondary,
                       }}>{LETTERS[i]}</Box>
                       <Box component="span" sx={{ flex: 1, minWidth: 0, pt: '2px' }}>{o.text}</Box>
@@ -303,7 +319,6 @@ function TestView({ base, data, offset, onDone }: { base: string; data: Candidat
 
             {current.format === 'build' && (
               <BuildTaskAnswer
-                starter={current.starter}
                 deliverableType={current.deliverable_type}
                 deliverableFiles={a.deliverable_files}
                 value={(a.answer as string) ?? ''}
@@ -465,19 +480,47 @@ export default function TakeAssessmentPage() {
     <Card icon={<MdAssignment />} title={`Hi${data.candidate_name ? ` ${data.candidate_name}` : ''}, ready when you are`}
       subtitle={`${a.company} has invited you to take ${a.title}.`}>
       <Box sx={{ mb: 2.5 }}>
-        <Fact label="Time limit" value={`${a.duration_min >= 60 ? `${Math.floor(a.duration_min / 60)} h${a.duration_min % 60 ? ` ${a.duration_min % 60} min` : ''}` : `${a.duration_min} min`}`} />
-        <Fact label="Questions" value={`${a.question_count}${a.explain_count ? ` · ${a.explain_count} ask you to explain` : ''}`} />
+        <Fact label={live ? 'Time limit' : 'Time to finish'} value={live
+          ? `${a.duration_min >= 60 ? `${Math.floor(a.duration_min / 60)} h${a.duration_min % 60 ? ` ${a.duration_min % 60} min` : ''}` : `${a.duration_min} min`}`
+          : `${a.duration_min % 1440 === 0 ? `${a.duration_min / 1440} day${a.duration_min === 1440 ? '' : 's'}` : `${Math.round(a.duration_min / 60)} h`} from when you start`} />
+        <Fact label={live ? 'Questions' : a.question_count === 1 ? 'Task' : 'Tasks'} value={String(a.question_count)} />
         <Fact label={live ? 'Must finish by' : 'Start by'} value={when(data.closes_at)} />
       </Box>
+      {/* How marking works, built from this test's own settings, so there are no surprises later. Aptitude only. */}
+      {live && <Box sx={{ mb: 2.5, p: 2, borderRadius: '12px', bgcolor: TOKENS.bg, border: `1px solid ${TOKENS.border}` }}>
+        <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', color: TOKENS.textPrimary, mb: 1 }}>
+          How you're marked{a.total_marks ? <Box component="span" sx={{ fontWeight: 500, color: TOKENS.textSecondary }}> · {a.total_marks} marks in total</Box> : null}
+        </Typography>
+        <Box component="ul" sx={{ m: 0, pl: 2.5, display: 'flex', flexDirection: 'column', gap: 0.75, color: TOKENS.textSecondary, fontSize: '0.85rem' }}>
+          <li>Each question shows its marks. A right answer earns them.</li>
+          {!!a.explain_count && <li>Some questions also ask you to explain why. Explanation marks count only when your answer is right.</li>}
+          {a.has_multi && <li>“Pick all that apply”: each right pick earns part of the marks. Any wrong pick makes the whole question wrong.</li>}
+          {a.has_written && <li>Written answers earn marks for each key point they cover.</li>}
+          {a.has_negative
+            ? <li><b style={{ color: TOKENS.textPrimary }}>Negative marking:</b> some questions lose marks for a wrong answer; the minus is shown on each. A blank answer loses nothing, so skip if you're unsure.</li>
+            : <li>Wrong answers don't lose marks, so try every question.</li>}
+        </Box>
+      </Box>}
       <Box component="ul" sx={{ m: 0, mb: 2.5, pl: 2.5, display: 'flex', flexDirection: 'column', gap: 0.75, color: TOKENS.textSecondary, fontSize: '0.85rem' }}>
-        <li>The timer starts when you press Start and keeps running even if you close the page.</li>
-        <li>Your answers save automatically as you go. You can move between questions freely.</li>
-        <li>Type your answers yourself: pasting into answer boxes is turned off.</li>
-        <li>When time runs out, your answers are submitted for you.</li>
-        {live && <li>This is a live assessment: take it in one sitting, without other help.</li>}
+        {live ? (
+          <>
+            <li>The timer starts when you press Start and keeps running even if you close the page.</li>
+            <li>Your answers save automatically as you go. You can move between questions freely.</li>
+            <li>Type your answers yourself: pasting into answer boxes is turned off.</li>
+            <li>When time runs out, your answers are submitted for you.</li>
+            <li>This is a live assessment: take it in one sitting, without other help.</li>
+          </>
+        ) : (
+          <>
+            <li>Press Start to see the task. Your time to finish starts then, and you can work on it in your own time.</li>
+            <li>You can close this page and come back from your email link. What you've added is saved.</li>
+            <li>Hand in before time runs out. Whatever you've added by then is submitted for you.</li>
+            <li>Your work is reviewed against what the task asks for.</li>
+          </>
+        )}
         {data.helper && <li>The Trueyy Helper stays on until you submit. It watches for other apps, pasting and voices. It takes no screenshots.</li>}
       </Box>
-      <ActionButton fullWidth onClick={start} loading={starting}>Start assessment</ActionButton>
+      <ActionButton fullWidth onClick={start} loading={starting}>{live ? 'Start assessment' : 'Start and see the task'}</ActionButton>
     </Card>
   );
   if (!data.helper) return shell(welcome);

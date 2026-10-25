@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { TruoyyLogo } from '../layout/TruoyyLogo';
 import { TOKENS } from '../../theme';
 import { Sidebar } from '../layout/Sidebar';
-import type { LogoConfig, NavItem, ProfileConfig } from '../layout/sidebar.types';
+import type { LogoConfig, NavItem, ProfileConfig, SecondaryNavItem } from '../layout/sidebar.types';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserDisplayName } from '../../utils/user.utils';
 import { USER_ROLES, isCompanyManagerRole, isStaffRole, isSystemAdmin } from '../../config/constants';
@@ -39,26 +39,41 @@ export default function AppLayout() {
   // just leads to an info-only page. The route itself is also guarded in
   // App.tsx so a Member manually typing /users gets redirected.
   const sidebarItems: NavItem[] = (() => {
-    const shared: NavItem[] = [
-      { id: 'dashboard',  label: 'Dashboard',  iconName: 'Dashboard',  route: '/',           badge: null },
-      isStaffRole(userRole)
-        ? { id: 'assessments', label: 'Assessments', iconName: 'Assessments', route: '/assessments', badge: null }
-        : { id: 'my-assessments', label: 'Assessments', iconName: 'Assessments', route: '/my-assessments', badge: null },
-      { id: 'interviews', label: 'Interviews', iconName: 'Interviews', route: '/interviews', badge: null },
-    ];
-    if (isCompanyManagerRole(userRole)) {
-      shared.push({ id: 'users', label: 'Users', iconName: 'People', route: '/users', badge: null });
-      shared.push({ id: 'plans', label: 'Plans', iconName: 'Plans', route: '/plans', badge: null });
-      shared.push({ id: 'billing', label: 'Billing', iconName: 'CreditCard', route: '/billing', badge: null });
-      shared.push({ id: 'tokens', label: 'API Tokens', iconName: 'ApiKey', route: '/tokens', badge: null });
-      shared.push({ id: 'webhooks', label: 'Webhooks', iconName: 'Webhook', route: '/webhooks', badge: null });
-      shared.push({ id: 'audit-log', label: 'Audit log', iconName: 'AuditLog', route: '/audit-log', badge: null });
+    // Candidates only see their own tests and interviews: no sections.
+    if (!isStaffRole(userRole)) {
+      return [
+        { id: 'dashboard', label: 'Dashboard', iconName: 'Dashboard', route: '/', badge: null },
+        { id: 'my-assessments', label: 'Assessments', iconName: 'Assessments', route: '/my-assessments', badge: null },
+        { id: 'interviews', label: 'Interviews', iconName: 'Interviews', route: '/interviews', badge: null },
+        { id: 'profile', label: 'Profile', iconName: 'Person', route: '/profile', badge: null },
+      ];
     }
-    // Profile is available to every authenticated user — the page itself
-    // gates the Owner-only Company section inside.
-    shared.push({ id: 'profile', label: 'Profile', iconName: 'Person', route: '/profile', badge: null });
-    return shared;
+    const manager = isCompanyManagerRole(userRole);
+    const evaluate = { id: 'evaluate', label: 'Evaluate', iconName: 'Evaluate' };
+    const items: NavItem[] = [
+      { id: 'dashboard', label: 'Dashboard', iconName: 'Dashboard', route: '/', badge: null },
+      // Each person and their steps (tests and interview rounds) on one timeline.
+      ...(manager ? [{ id: 'candidates', label: 'Candidates', iconName: 'Candidates', route: '/candidates', badge: null }] : []),
+      { id: 'interviews', label: 'Interviews', iconName: 'Interviews', route: '/interviews', badge: null, group: evaluate },
+      { id: 'assessments', label: 'Assessments', iconName: 'Assessments', route: '/assessments', badge: null, group: evaluate },
+    ];
+    return items;
   })();
+
+  // Workspace settings sit apart under their own heading. Only Owners / Admins see
+  // the team and billing tabs; the routes are guarded in App.tsx too.
+  const manager = isStaffRole(userRole) && isCompanyManagerRole(userRole);
+  const workspaceItems: SecondaryNavItem[] = !isStaffRole(userRole) ? [] : [
+    ...(manager ? [
+      { id: 'users', label: 'Users', iconName: 'People', route: '/users' },
+      { id: 'plans', label: 'Plans', iconName: 'Plans', route: '/plans' },
+      { id: 'billing', label: 'Billing', iconName: 'CreditCard', route: '/billing' },
+      { id: 'tokens', label: 'API Tokens', iconName: 'ApiKey', route: '/tokens' },
+      { id: 'webhooks', label: 'Webhooks', iconName: 'Webhook', route: '/webhooks' },
+      { id: 'audit-log', label: 'Audit log', iconName: 'AuditLog', route: '/audit-log' },
+    ] : []),
+    { id: 'profile', label: 'Profile', iconName: 'Person', route: '/profile' },
+  ];
 
   const sidebarProfile: ProfileConfig = {
     id: 'profile',
@@ -73,6 +88,7 @@ export default function AppLayout() {
   const getActiveId = (): string => {
     if (location.pathname.startsWith('/assessments')) return 'assessments';
     if (location.pathname.startsWith('/my-assessments')) return 'my-assessments';
+    if (location.pathname.startsWith('/candidates')) return 'candidates';
     if (location.pathname.startsWith('/interviews')) return 'interviews';
     if (location.pathname.startsWith('/users')) return 'users';
     if (location.pathname.startsWith('/plans')) return 'plans';
@@ -132,6 +148,8 @@ export default function AppLayout() {
       <Sidebar
         logo={sidebarLogo}
         items={sidebarItems}
+        secondary={workspaceItems}
+        secondaryLabel="Workspace"
         profile={sidebarProfile}
         // Desktop: Sidebar ignores these (always open). Mobile: `collapsed`
         // means "overlay closed", and `onToggle` closes it.

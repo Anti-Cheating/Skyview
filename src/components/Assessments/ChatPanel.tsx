@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Box, IconButton, InputBase, Tooltip, Typography } from '@mui/material';
 import { MdArrowForward, MdSend } from 'react-icons/md';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { SidebarLeft01Icon } from '@hugeicons/core-free-icons';
+import { SidebarRight01Icon } from '@hugeicons/core-free-icons';
 import trueyyEye from '../../assets/trueyy-e.svg';
 import { TOKENS } from '../../theme';
 import type { AssessmentMode, ChatEntry } from '../../types/assessment.types';
 import { ChatProgressSteps, type TurnProgress } from './ChatProgress';
 
-const SUGGESTIONS: Record<AssessmentMode, string[]> = {
+export const SUGGESTIONS: Record<AssessmentMode, string[]> = {
   live: [
     '10 quant questions, medium, explain the hard ones',
     '5 logical reasoning questions, hard',
@@ -129,17 +129,17 @@ export function ChatPanel({ mode, chat, busy, progress, blocked, readOnly, messa
       <Box sx={{ px: 2, py: 1.5, bgcolor: '#fff', borderBottom: `1px solid ${TOKENS.border}`, display: 'flex', alignItems: 'center', gap: 1.25, flexShrink: 0 }}>
         <AiAvatar />
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', color: TOKENS.textPrimary, lineHeight: 1.2 }}>Assessment assistant</Typography>
-          <Typography sx={{ fontSize: '0.75rem', color: TOKENS.textSecondary }}>Ask for questions; the paper updates on the right.</Typography>
+          <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', color: TOKENS.textPrimary, lineHeight: 1.2 }}>AI assistant</Typography>
+          <Typography sx={{ fontSize: '0.75rem', color: TOKENS.textSecondary }}>Ask for questions or changes</Typography>
         </Box>
         <Tooltip title="Hide chat">
           <IconButton size="small" aria-label="Hide chat" onClick={onHide} sx={{ color: TOKENS.textSecondary, display: { xs: 'none', md: 'inline-flex' } }}>
-            <HugeiconsIcon icon={SidebarLeft01Icon} size={20} color="currentColor" />
+            <HugeiconsIcon icon={SidebarRight01Icon} size={20} color="currentColor" />
           </IconButton>
         </Tooltip>
       </Box>
 
-      <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', p: 2, display: 'flex', flexDirection: 'column', gap: 1.75 }}>
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' }, p: 2, display: 'flex', flexDirection: 'column', gap: 1.75 }}>
         {chat.length === 0 && !busy && (
           <Box sx={{ m: 'auto', width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, textAlign: 'center', py: 2 }}>
             <AiAvatar size={48} />

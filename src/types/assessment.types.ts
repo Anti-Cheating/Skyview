@@ -1,7 +1,8 @@
 export type AssessmentMode = 'live' | 'take_home';
 export type AssessmentStatus = 'draft' | 'final' | 'cancelled';
-/** build = take-home project in a repo or deliverable (brief + generated starter repo/spec, hidden attacks). */
-export type QuestionFormat = 'mcq' | 'fill_blank' | 'short_answer' | 'written' | 'build';
+/** build = take-home project in a repo or deliverable: the brief is the whole spec, attacked live at grading. */
+/** mcq = single correct option; multi = several correct options (pick all). */
+export type QuestionFormat = 'mcq' | 'multi' | 'fill_blank' | 'short_answer' | 'written' | 'build';
 export type DeliverableType = 'code' | 'spreadsheet' | 'document' | 'presentation' | 'data_analysis' | 'design' | 'video';
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'extreme';
 /** Questions: blind re-solve result. Build tasks: 'generating' → 'ok' | 'failed'. */
@@ -15,8 +16,6 @@ export interface RepoFile {
 /** A build task's hidden part: the attacks, one file per rubric category. */
 export interface BuildKey {
   tests: RepoFile[];
-  /** Set when the sandbox checked that the starter boots (attacks don't run on it). */
-  starter_check?: { ran_at: string; booted: boolean; rounds: number; error?: string };
 }
 
 export interface RubricLine {
@@ -32,21 +31,23 @@ export interface AssessmentQuestion {
   topic: string;
   difficulty: Difficulty;
   prompt: string;
-  /** MCQ only. (A build task stores its starter repo here; read it with starterOf().) */
+  /** MCQ only. */
   options: string[] | null;
-  /** MCQ: option index. Fill in the blank / short answer: accepted forms. Written: null. Build: BuildKey. */
-  answer_key: number | string[] | BuildKey | null;
+  /** mcq: option index. multi: option indexes. Fill in the blank / short answer: accepted forms. Written: null. Build: BuildKey. */
+  answer_key: number | number[] | string[] | BuildKey | null;
   /** Set → the candidate explains their answer (written: marked against it). */
   rubric: RubricLine[] | null;
+  /** Marks for the right answer (keyed formats); explanation marks are the rubric's points on top. */
+  points?: number;
+  /** Marks lost for a wrong answer: single/multiple-correct only, 0 = none. */
+  negative_marks?: number;
   /** Blind re-solve by a second model. */
   check_status: CheckStatus;
   /** What the re-solve answered: option index (MCQ) or text. Build: { generated_at } or { error }. */
-  check_answer: number | string | { generated_at?: string; error?: string } | null;
+  check_answer: number | number[] | string | { generated_at?: string; error?: string } | null;
+  /** Changes on every edit; the builder uses it to tell what an AI change touched. */
+  updated_at?: string;
 }
-
-/** A build task's starter repo (stored in `options`). */
-export const starterOf = (q: AssessmentQuestion): RepoFile[] =>
-  q.format === 'build' ? ((q.options as unknown as { files?: RepoFile[] } | null)?.files ?? []) : [];
 
 export interface ChatEntry {
   role: 'user' | 'assistant';
@@ -60,6 +61,12 @@ export interface Assessment {
   role: string | null;
   mode: AssessmentMode;
   duration_min: number;
+  /** Minus for a wrong choice answer; the default for new choice questions (each question keeps its own). */
+  negative_marks?: number;
+  /** Live: whether candidates run the Trueyy Helper. */
+  helper_required?: boolean;
+  /** Take-home: what the candidate hands in; the default for its tasks. */
+  deliverable_type?: DeliverableType | null;
   status: AssessmentStatus;
   finalized_at: string | null;
   created_at: string;
@@ -80,6 +87,9 @@ export interface AssessmentListItem {
   question_count: number;
   /** Questions whose answer key failed the check; Finalize is blocked while > 0. */
   flagged_count: number;
+  /** Candidates invited (revoked ones left out), and how many have submitted. */
+  candidate_count: number;
+  submitted_count: number;
 }
 
 export interface CreateAssessmentInput {
@@ -87,12 +97,21 @@ export interface CreateAssessmentInput {
   role?: string | null;
   mode: AssessmentMode;
   duration_min: number;
+  /** Live only: run the Trueyy Helper (default on). */
+  helper_required?: boolean;
+  /** Take-home only: what the candidate hands in. */
+  deliverable_type?: DeliverableType;
+  negative_marks?: number;
+  /** Not stored: which choice questions the minus applies to. */
+  negative_applies_to?: NegativeAppliesTo;
 }
+
+export type NegativeAppliesTo = 'mcq' | 'multi' | 'both';
 
 export type QuestionPatch = Partial<
   Pick<
     AssessmentQuestion,
-    'format' | 'topic' | 'difficulty' | 'prompt' | 'options' | 'answer_key' | 'rubric'
+    'format' | 'deliverable_type' | 'topic' | 'difficulty' | 'prompt' | 'options' | 'answer_key' | 'rubric' | 'points' | 'negative_marks'
   >
 >;
 
@@ -109,7 +128,7 @@ export interface AssessmentInvite {
   created_at: string;
   started_at: string | null;
   submitted_at: string | null;
-  candidate: { id: string; email: string; first_name: string | null; last_name: string | null };
+  candidate: { id: string; email: string; first_name: string | null; last_name: string | null; avatar_url?: string | null };
 }
 
 export interface InviteCandidate {
@@ -139,6 +158,13 @@ export interface CandidateAttempt {
     duration_min: number;
     question_count: number;
     explain_count: number;
+    /** Marks cut for a wrong answer (0 = none). */
+    negative_marks?: number;
+    total_marks?: number;
+    has_multi?: boolean;
+    has_written?: boolean;
+    /** Some choice question loses marks for a wrong answer. */
+    has_negative?: boolean;
   };
   opens_at: string;
   closes_at: string;
@@ -159,10 +185,12 @@ export interface CandidateAttempt {
     options: Array<{ id: number; text: string }> | null;
     /** Ask for an explanation alongside the answer. */
     explain: boolean;
-    /** Build task: signed API path to the starter .zip and the folder / repo name it unpacks to. */
-    starter?: { path: string; folder: string } | null;
+    /** Most this question can earn. */
+    marks?: number | null;
+    /** Marks lost for a wrong answer (0 = none). */
+    negative_marks?: number;
   }> | null;
-  answers: Array<{ question_id: string; answer: number | string | null; explanation: string | null; time_ms: number; deliverable_files?: any[] | null }> | null;
+  answers: Array<{ question_id: string; answer: number | number[] | string | null; explanation: string | null; time_ms: number; deliverable_files?: any[] | null }> | null;
 }
 
 /** One row on a logged-in candidate's "Assessments" page. */
@@ -200,9 +228,6 @@ export interface Integrity {
   report_status: 'pending' | 'done' | 'failed' | null;
   /** The report's summary (scoreboard rows only). */
   summary?: string | null;
-  overridden: boolean;
-  /** Last hand change (from the audit log): who, when, and to what (null = back to automatic). */
-  changed: { by: string; at: string; level: 'clean' | 'review' | 'high' | 'critical' | null } | null;
 }
 
 /** One row of the Results tab. Scores are 0–100. */
@@ -220,7 +245,9 @@ export interface AssessmentResultRow {
   submitted_at: string | null;
   time_ms: number;
   answered: number;
-  candidate: { id: string; email: string; first_name: string | null; last_name: string | null };
+  candidate: { id: string; email: string; first_name: string | null; last_name: string | null; avatar_url?: string | null };
+  /** Staff left a note on this result. */
+  has_note?: boolean;
 }
 
 export interface RubricMark {
@@ -284,6 +311,12 @@ export interface AssessmentResultDetail extends Omit<AssessmentResultRow, 'time_
   report: { summary: string; evidence: Array<{ at: string; text: string }>; verdict: Integrity['level']; generated_at: string } | null;
   /** Start, alerts, voice, each answer and submit, in order. */
   timeline: TimelineItem[];
+  /** Staff note: never changes the score or the integrity level. */
+  note: { text: string; by: string | null; at: string | null } | null;
+  /** Marks earned (can be below 0 with negative marking) out of max_marks. Null on results graded before marks. */
+  marks?: number | null;
+  max_marks?: number | null;
+  negative_marks?: number;
   questions: Array<{
     id: string;
     order: number;
@@ -293,9 +326,14 @@ export interface AssessmentResultDetail extends Omit<AssessmentResultRow, 'time_
     difficulty: Difficulty;
     prompt: string;
     options: string[] | null;
-    answer_key: number | string[] | null;
+    answer_key: number | number[] | string[] | null;
     rubric: RubricLine[] | null;
-    answer: number | string | null;
+    points?: number;
+    negative_marks?: number;
+    /** Most this question can earn, and what it earned (null until graded). */
+    max_marks?: number;
+    marks?: number | null;
+    answer: number | number[] | string | null;
     explanation: string | null;
     time_ms: number;
     answered_at: string | null;

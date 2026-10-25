@@ -1,21 +1,36 @@
 import { useState } from 'react';
 import {
-  Box, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, MenuItem, TextField, Tooltip, Typography,
+  Box, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { MdAdd, MdAutoAwesome, MdDeleteOutline } from 'react-icons/md';
 import { FormField } from '../common/FormField';
 import { ActionButton } from '../common/ActionButton';
 import { TOKENS } from '../../theme';
 import { QuestionText } from './QuestionText';
-import type { AssessmentQuestion, QuestionFormat, QuestionPatch, RubricLine } from '../../types/assessment.types';
+import type { AssessmentQuestion, QuestionFormat, RubricLine } from '../../types/assessment.types';
 
 export const FORMAT_LABEL: Record<QuestionFormat, string> = {
-  mcq: 'MCQ',
+  mcq: 'Single correct',
+  multi: 'Multiple correct',
   fill_blank: 'Fill in the blank',
   short_answer: 'Short answer',
   written: 'Written',
   build: 'Build task',
 };
+/** Answered by picking options. */
+export const isChoice = (f: QuestionFormat) => f === 'mcq' || f === 'multi';
+
+/** The correct option indexes: one for mcq, several for multi, none otherwise. */
+export function keyedOptions(q: { format: QuestionFormat; answer_key: unknown }): number[] {
+  if (q.format === 'mcq' && typeof q.answer_key === 'number') return [q.answer_key];
+  if (q.format === 'multi' && Array.isArray(q.answer_key)) return q.answer_key as number[];
+  return [];
+}
+
+/** Accepted typed answers (fill in the blank / short answer), else null. */
+export const textKeys = (q: { format: QuestionFormat; answer_key: unknown }): string[] | null =>
+  (q.format === 'fill_blank' || q.format === 'short_answer') && Array.isArray(q.answer_key) ? (q.answer_key as string[]) : null;
+
 const EMPTY_LINE: RubricLine = { criterion: '', points: 1 };
 const DIALOG_PAPER = { sx: { borderRadius: '16px' } };
 
@@ -86,7 +101,7 @@ export function AiEditDialog({ question, onClose, onAsk }: {
 }
 
 /** Editable list of rubric lines with points. */
-function RubricEditor({ value, onChange, disabled, weights }: { value: RubricLine[]; onChange: (v: RubricLine[]) => void; disabled?: boolean; weights?: boolean }) {
+export function RubricEditor({ value, onChange, disabled, weights }: { value: RubricLine[]; onChange: (v: RubricLine[]) => void; disabled?: boolean; weights?: boolean }) {
   const total = value.reduce((s, l) => s + (l.points || 0), 0);
   const set = (i: number, patch: Partial<RubricLine>) => onChange(value.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   return (
@@ -96,10 +111,11 @@ function RubricEditor({ value, onChange, disabled, weights }: { value: RubricLin
           <FormField placeholder={weights ? 'A way the work can break, e.g. Access: users only see their own data' : 'What a correct explanation must show'} value={line.criterion} disabled={disabled} multiline
             // Wraps instead of scrolling sideways; a criterion stays one line of text.
             onChange={(e) => set(i, { criterion: e.target.value.replace(/\n/g, ' ') })} />
-          <FormField select value={String(line.points)} disabled={disabled} onChange={(e) => set(i, { points: Number(e.target.value) })}>
-            {(weights ? [...new Set([5, 10, 15, 20, 25, 30, 35, 40, 50, line.points])].sort((a, b) => a - b) : [1, 2, 3, 4, 5])
-              .map((p) => <MenuItem key={p} value={String(p)}>{p}{weights ? '%' : ` pt${p > 1 ? 's' : ''}`}</MenuItem>)}
-          </FormField>
+          {/* Typed, not picked: weights are % (they add up to 100); marks are 1-10 points. */}
+          <FormField type="number" value={line.points ? String(line.points) : ''} disabled={disabled}
+            onChange={(e) => set(i, { points: Math.max(0, Math.min(weights ? 100 : 10, Math.round(Number(e.target.value) || 0))) })}
+            inputProps={{ min: 1, max: weights ? 100 : 10, 'aria-label': weights ? 'Weight in percent' : 'Points' }}
+            InputProps={{ endAdornment: <Box component="span" sx={{ color: TOKENS.textMuted, fontSize: '0.8rem', pl: 0.5 }}>{weights ? '%' : 'pts'}</Box> }} />
           {!disabled && (
             <Tooltip title="Remove line">
               <span>
@@ -122,77 +138,5 @@ function RubricEditor({ value, onChange, disabled, weights }: { value: RubricLin
         </Typography>
       </Box>
     </Box>
-  );
-}
-
-const cleanRubric = (r: RubricLine[]) => r.map((l) => ({ ...l, criterion: l.criterion.trim() })).filter((l) => l.criterion);
-
-/**
- * Add or edit a question's rubric by hand, or ask the AI to write or change
- * it. A rubric means the candidate explains their answer.
- */
-export function RubricDialog({ question, readOnly, onClose, onSave, onAsk }: {
-  question: AssessmentQuestion;
-  readOnly: boolean;
-  onClose: () => void;
-  onSave: (p: QuestionPatch) => Promise<boolean>;
-  /** Ask the AI to change the rubric; resolves to the updated question. */
-  onAsk: (instruction: string) => Promise<AssessmentQuestion | null>;
-}) {
-  const had = !!question.rubric?.length;
-  const build = question.format === 'build';
-  const [rubric, setRubric] = useState<RubricLine[]>(had ? question.rubric! : [{ ...EMPTY_LINE }]);
-  const [busy, setBusy] = useState<'save' | 'ai' | 'remove' | null>(null);
-
-  const finish = async (kind: 'save' | 'remove', patch: QuestionPatch) => {
-    setBusy(kind);
-    const ok = await onSave(patch);
-    setBusy(null);
-    if (ok) onClose();
-  };
-  const ask = async (instruction: string) => {
-    setBusy('ai');
-    const q = await onAsk(instruction);
-    setBusy(null);
-    if (q?.rubric?.length) setRubric(q.rubric);
-    return !!q;
-  };
-
-  return (
-    <Dialog open onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth PaperProps={DIALOG_PAPER}>
-      <DialogTitle sx={{ fontWeight: 700 }}>{had || readOnly ? 'Rubric' : 'Add rubric'} · Q{question.order}</DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {!build && (
-          <Typography sx={{ fontSize: '0.85rem', color: TOKENS.textSecondary }}>
-            {question.format === 'written'
-              ? 'The written answer is marked against each line.'
-              : "The candidate explains their answer, and the explanation is marked against each line."}
-          </Typography>
-        )}
-        {!readOnly && (
-          <AskAi
-            placeholder={build ? 'Ask AI to change the rubric' : had ? 'Ask AI to change the rubric' : 'Ask AI to write the rubric'}
-            busy={busy === 'ai'}
-            onAsk={ask}
-            suggestions={build ? ['Weigh access control higher', 'Add a category for the tests they write', 'Fewer categories'] : had ? ['Add a line for units', 'Make it stricter', 'Fewer lines'] : ['Write a rubric for this question']}
-          />
-        )}
-        <RubricEditor value={rubric} onChange={setRubric} disabled={readOnly || !!busy} weights={build} />
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2.5 }}>
-        {!readOnly && had && question.format !== 'written' && !build && (
-          <ActionButton variant="secondary" onClick={() => finish('remove', { rubric: null })} loading={busy === 'remove'} disabled={!!busy} sx={{ mr: 'auto' }}>
-            Remove rubric
-          </ActionButton>
-        )}
-        <ActionButton variant="secondary" onClick={onClose} disabled={!!busy}>{readOnly ? 'Close' : 'Cancel'}</ActionButton>
-        {!readOnly && (
-          <ActionButton onClick={() => finish('save', { rubric: cleanRubric(rubric) })} loading={busy === 'save'}
-            disabled={!!busy || cleanRubric(rubric).length === 0 || (build && cleanRubric(rubric).reduce((t, l) => t + l.points, 0) !== 100)}>
-            Save rubric
-          </ActionButton>
-        )}
-      </DialogActions>
-    </Dialog>
   );
 }

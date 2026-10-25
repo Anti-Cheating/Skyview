@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Box, Chip, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
   MenuItem, Typography, IconButton, Tooltip,
@@ -22,7 +22,7 @@ import { useSnackbar } from '../../contexts/SnackbarContext';
 import { ProcessService } from '../../services/process.service';
 import { InterviewService } from '../../services/interview.service';
 import { InvitesService, type TeamMember } from '../../services/invites.service';
-import type { ProcessDetail, RoundSummary } from '../../types/process.types';
+import { testStepUrl, type ProcessDetail, type RoundSummary } from '../../types/process.types';
 
 const DURATIONS = [15, 30, 45, 60, 90, 120];
 const ROUND_STATUS: Record<string, { label: string; bg: string; fg: string }> = {
@@ -45,7 +45,9 @@ export default function ProcessDetailPage() {
   const [data, setData] = useState<ProcessDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [addOpen, setAddOpen] = useState(false);
+  // ?add=1 (from a candidate's Add step) opens the Add round dialog straight away.
+  const [params] = useSearchParams();
+  const [addOpen, setAddOpen] = useState(params.get('add') === '1');
   const [editOpen, setEditOpen] = useState(false);
   const [editRound, setEditRound] = useState<RoundSummary | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RoundSummary | null>(null);
@@ -108,8 +110,11 @@ export default function ProcessDetailPage() {
         key: 'round',
         header: 'Round',
         render: (r) => (
-          <Box sx={{ color: TOKENS.textPrimary, fontWeight: 600 }}>
+          <Box sx={{ color: TOKENS.textPrimary, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
             {r.round_order} · {r.round_name}
+            {r.kind === 'assessment' && (
+              <Chip label={r.assessment?.mode === 'take_home' ? 'Assignment' : 'Test'} size="small" sx={{ height: 20, fontSize: '0.68rem', fontWeight: 600, bgcolor: 'rgba(59,130,246,0.12)', color: '#2563EB' }} />
+            )}
           </Box>
         ),
       },
@@ -119,7 +124,7 @@ export default function ProcessDetailPage() {
         hideOn: 'mobile',
         render: (r) => (
           <Box sx={{ color: r.interviewer ? TOKENS.textPrimary : TOKENS.textMuted }}>
-            {r.interviewer ? `${r.interviewer.first_name} ${r.interviewer.last_name}`.trim() : 'Unassigned'}
+            {r.interviewer ? `${r.interviewer.first_name} ${r.interviewer.last_name}`.trim() : r.kind === 'assessment' ? '—' : 'Unassigned'}
           </Box>
         ),
       },
@@ -138,7 +143,9 @@ export default function ProcessDetailPage() {
         header: 'Analysis',
         width: 120,
         render: (r) =>
-          r.analysis && r.analysis.overall_score != null ? (
+          r.kind === 'assessment' ? (
+            <Caption sx={{ color: TOKENS.textSecondary }}>{r.result?.grading_status === 'done' ? 'Graded' : r.status === 'COMPLETED' ? 'Grading' : '—'}</Caption>
+          ) : r.analysis && r.analysis.overall_score != null ? (
             <Chip label={`${r.analysis.overall_score} · ${r.analysis.risk_level ?? '—'}`} size="small" sx={{ height: 22, fontSize: '0.7rem', fontWeight: 600, bgcolor: 'rgba(76,217,100,0.12)', color: '#047857' }} />
           ) : (
             <Caption sx={{ color: TOKENS.textMuted }}>—</Caption>
@@ -150,6 +157,8 @@ export default function ProcessDetailPage() {
         align: 'right',
         width: 96,
         render: (r) => {
+          // Test steps are managed from the test's Candidates tab.
+          if (r.kind === 'assessment') return null;
           const terminal = r.status === 'COMPLETED' || r.status === 'CANCELLED';
           return (
             <Box sx={{ display: 'inline-flex', gap: 0.5 }}>
@@ -235,7 +244,7 @@ export default function ProcessDetailPage() {
         columns={columns}
         rows={data.rounds}
         rowKey={(r) => r.id}
-        onRowClick={(r) => navigate(`/interviews/${processId}/rounds/${r.id}`)}
+        onRowClick={(r) => navigate(testStepUrl(r) ?? `/interviews/${processId}/rounds/${r.id}`)}
         emptyText="No rounds."
       />
 

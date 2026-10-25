@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Drawer,
@@ -24,6 +24,9 @@ import {
   MdDashboard,
   MdVideoCall,
   MdPeople,
+  MdPersonSearch,
+  MdFactCheck,
+  MdExpandMore,
   MdPerson,
   MdRocketLaunch,
   MdCreditCard,
@@ -55,6 +58,8 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   Assessments: MdAssignment,   // Assessments builder
   VideoCall: MdVideoCall,       // alias
   People: MdPeople,             // Users / team
+  Candidates: MdPersonSearch,   // Candidates
+  Evaluate: MdFactCheck,        // Evaluate (Interviews + Assessments)
   Person: MdPerson,             // Profile
   Plans: MdRocketLaunch,        // Plans / upgrade
   CreditCard: MdCreditCard,     // Billing
@@ -99,6 +104,7 @@ export function Sidebar({
   logo,
   items,
   secondary,
+  secondaryLabel,
   profile,
   collapsed,
   onToggle,
@@ -116,6 +122,14 @@ export function Sidebar({
   // away unsaved Profile/Create form work. The previous `onClick={logout}`
   // logged the user out instantly with no recovery path.
   const [logoutOpen, setLogoutOpen] = useState(false);
+  // Tree groups the user has closed (all start open).
+  const [closedGroups, setClosedGroups] = useState<Set<string>>(() => new Set());
+  const [hoverKid, setHoverKid] = useState<{ group: string; pos: number } | null>(null);
+  // Landing on a page inside a closed group opens it once; after that the chevron still collapses it.
+  const activeGroup = (items || []).find((x) => x.id === activeId)?.group?.id;
+  useEffect(() => {
+    if (activeGroup) setClosedGroups((c) => { if (!c.has(activeGroup)) return c; const n = new Set(c); n.delete(activeGroup); return n; });
+  }, [activeGroup]);
 
   const flatItems = useMemo(
     () => [...(items || []), ...(secondary || [])],
@@ -202,7 +216,10 @@ export function Sidebar({
 
   const renderRow = (
     item: { id: string; label: string; iconName: string; route: string; badge?: string | number | null },
-    index: number
+    index: number,
+    sub = false,
+    /** A tree child that's lit: hovered, or the current page while nothing is hovered. */
+    hot = false
   ) => {
     const isActive = activeId === item.id;
     const ItemIcon = getIcon(item.iconName);
@@ -229,14 +246,21 @@ export function Sidebar({
         }}
         onKeyDown={(e) => handleKeyDown(e, item.route, index)}
         aria-current={isActive ? 'page' : undefined}
-        sx={rowSx(isActive)}
+        sx={sub ? {
+          ...rowSx(isActive), mb: 0, minHeight: 40, pl: 1,
+          // A tree child: no pill; the active one is bold white with an accent icon.
+          color: hot ? '#FFFFFF' : 'rgba(255,255,255,0.62)', fontWeight: hot ? 600 : 400,
+          transition: 'color 0.2s ease',
+          '&:hover': { bgcolor: 'transparent' },
+          '& .MuiListItemIcon-root': { color: hot ? theme.palette.primary.main : 'rgba(255,255,255,0.55)', minWidth: 32, position: 'relative', zIndex: 1, transition: 'color 0.2s ease' },
+        } : rowSx(isActive)}
       >
         {/* Sliding active pill — same `layoutId` across every active
             instance, so framer-motion morphs the rectangle from the
             previous active row to this one when activeId changes.
             Sits at z-index 0 behind the icon + label (which are pushed
             to z-index 1 in rowSx). */}
-        {isActive && (
+        {isActive && !sub && (
           <motion.div
             layoutId="sidebar-active-pill"
             style={{
@@ -250,7 +274,7 @@ export function Sidebar({
           />
         )}
         <ListItemIcon>
-          <ItemIcon size={22} />
+          <ItemIcon size={sub ? 19 : 22} />
         </ListItemIcon>
         <ListItemText primary={item.label} />
         {hasBadge && (
@@ -416,11 +440,70 @@ export function Sidebar({
         sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', py: 1 }}
       >
         <List ref={listRef} sx={{ px: padding, py: 0 }}>
-          {(items || []).map((item, index) => renderRow(item, index))}
+          {(items || []).map((item, index) => {
+            const g = item.group;
+            if (!g) return renderRow(item, index);
+            // A group renders once, at its first child: the header, then every child on the tree.
+            if (items[index - 1]?.group?.id === g.id) return null;
+            const open = !closedGroups.has(g.id);
+            const GroupIcon = getIcon(g.iconName);
+            const kids = items.map((x, i) => ({ x, i })).filter(({ x }) => x.group?.id === g.id);
+            const activePos = kids.findIndex(({ x }) => x.id === activeId);
+            // The lit branch follows the mouse, and falls back to the current page.
+            const litPos = hoverKid?.group === g.id ? hoverKid.pos : activePos;
+            const lit = theme.palette.primary.main, faint = 'rgba(255,255,255,0.18)', line = '1.5px solid';
+            const ROW = 40;
+            return (
+              <Fragment key={g.id}>
+                <ListItemButton
+                  onClick={() => setClosedGroups((c) => { const n = new Set(c); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; })}
+                  aria-expanded={open}
+                  sx={{
+                    ...rowSx(false),
+                    // An accent tick on the group that holds the current page.
+                    '&::before': { content: '""', position: 'absolute', left: 0, top: '28%', height: '44%', width: 3, borderRadius: 2, bgcolor: activePos >= 0 ? lit : 'transparent', transition: 'background-color 0.2s' },
+                  }}
+                >
+                  <ListItemIcon><GroupIcon size={22} /></ListItemIcon>
+                  <ListItemText primary={g.label} />
+                  <MdExpandMore size={20} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', opacity: 0.7 }} />
+                </ListItemButton>
+                {open && (
+                  <Box onMouseLeave={() => setHoverKid(null)} sx={{ position: 'relative', ml: 3.25, mb: 0.5 }}>
+                    {/* The lit └: grows or shrinks to the hovered (or current) child. */}
+                    {litPos >= 0 && (
+                      <Box aria-hidden sx={{
+                        position: 'absolute', left: 0, top: 0, width: 12, zIndex: 1, pointerEvents: 'none',
+                        height: litPos * ROW + ROW / 2, borderLeft: `${line} ${lit}`, borderBottom: `${line} ${lit}`, borderBottomLeftRadius: 10,
+                        transition: 'height 0.25s cubic-bezier(.4,0,.2,1)',
+                      }} />
+                    )}
+                    {kids.map(({ x, i }, pos) => (
+                      <Box key={x.id} onMouseEnter={() => setHoverKid({ group: g.id, pos })} onFocus={() => setHoverKid({ group: g.id, pos })}
+                        sx={{
+                          position: 'relative', height: ROW, pl: 2.25, display: 'flex', alignItems: 'center',
+                          // Faint └ into every child, and the rail on to the next one.
+                          '&::before': { content: '""', position: 'absolute', left: 0, top: 0, height: ROW / 2, width: 12, borderLeft: `${line} ${faint}`, borderBottom: `${line} ${faint}`, borderBottomLeftRadius: 10 },
+                          ...(pos < kids.length - 1 && { '&::after': { content: '""', position: 'absolute', left: 0, top: 0, bottom: 0, borderLeft: `${line} ${faint}` } }),
+                          '& > *': { flex: 1 },
+                        }}>
+                        {renderRow(x, i, true, pos === litPos)}
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Fragment>
+            );
+          })}
         </List>
 
         {secondary && secondary.length > 0 && (
           <List sx={{ px: padding, py: 0, mt: 2 }}>
+            {secondaryLabel && (
+              <Box component="li" sx={{ listStyle: 'none', px: 1.5, pt: 1, pb: 1, fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)' }}>
+                {secondaryLabel}
+              </Box>
+            )}
             {secondary.map((item, index) =>
               renderRow(item, (items?.length || 0) + index)
             )}

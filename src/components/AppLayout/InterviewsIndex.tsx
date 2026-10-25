@@ -4,6 +4,7 @@
  * Managers (Owner/Admin) get a view switcher:
  *   - By interview → ProcessListPage (candidate + role, groups its rounds)
  *   - By round     → AppInterviewList (flat, time-ordered list of every round)
+ * Candidates have their own page (/candidates).
  * Both are the existing views, rendered `embedded` (their own headers
  * suppressed) so this page owns the single header + New button + tabs.
  *
@@ -23,14 +24,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { isCompanyManagerRole } from '../../config/constants';
 import ProcessListPage from './ProcessListPage';
 import AppInterviewList from './AppInterviewList';
-import CandidatesListPage from './CandidatesListPage';
 
-type View = 'interview' | 'round' | 'candidate';
+type View = 'interview' | 'round';
 
 const OPTIONS: { value: View; label: string }[] = [
   { value: 'interview', label: 'Interviews' },
   { value: 'round', label: 'Rounds' },
-  { value: 'candidate', label: 'Candidates' },
 ];
 
 export default function InterviewsIndex() {
@@ -42,7 +41,7 @@ export default function InterviewsIndex() {
   if (!isCompanyManagerRole(user?.role)) return <AppInterviewList />;
 
   const raw = params.get('view');
-  const view: View = raw === 'round' || raw === 'candidate' ? raw : 'interview';
+  const view: View = raw === 'round' ? raw : 'interview';
   const setView = (v: View) => {
     const next = new URLSearchParams(params);
     if (v === 'interview') next.delete('view');
@@ -56,11 +55,7 @@ export default function InterviewsIndex() {
         <Box>
           <PageTitle sx={{ color: TOKENS.textPrimary, mb: 0.5 }}>Interviews</PageTitle>
           <Secondary sx={{ color: TOKENS.textSecondary }}>
-            {view === 'interview'
-              ? 'Grouped by candidate and role.'
-              : view === 'round'
-                ? 'All rounds, newest first.'
-                : 'One row per candidate.'}
+            {view === 'interview' ? 'Grouped by candidate and role.' : 'All rounds, newest first.'}
           </Secondary>
         </Box>
         {/* Right cluster: Group by dropdown, then the New interview button */}
@@ -96,11 +91,7 @@ export default function InterviewsIndex() {
         </Box>
       </Box>
 
-      {view === 'interview'
-        ? <ProcessListPage embedded />
-        : view === 'round'
-          ? <AppInterviewList embedded />
-          : <CandidatesListPage embedded />}
+      {view === 'interview' ? <ProcessListPage embedded /> : <AppInterviewList embedded />}
     </Box>
   );
 }

@@ -16,7 +16,17 @@ export interface RoundSummary {
   scheduled_end_at: string;
   interviewer: { first_name: string; last_name: string } | null;
   analysis: { overall_score: number | null; risk_level: string | null } | null;
+  /** "assessment" = a test step: no interviewer; it opens the test's result. */
+  kind?: 'interview' | 'assessment';
+  assessment?: { id: string; title: string; mode: 'live' | 'take_home' } | null;
+  result?: { id: string; score: number | null; grading_status: string | null } | null;
 }
+
+/** Where a test step opens: its result once submitted, else the test itself. */
+export const testStepUrl = (r: RoundSummary): string | null =>
+  r.kind === 'assessment' && r.assessment
+    ? r.status === 'COMPLETED' && r.result ? `/assessments/${r.assessment.id}/results/${r.result.id}` : `/assessments/${r.assessment.id}`
+    : null;
 
 export interface ProcessListItem {
   id: string;

@@ -10,6 +10,8 @@ export interface NavItem {
   iconName: string;
   route: string;
   badge?: string | number | null;
+  /** Items sharing a group sit under one parent row that opens and closes. */
+  group?: { id: string; label: string; iconName: string };
 }
 
 export interface SecondaryNavItem {
@@ -30,6 +32,8 @@ export interface SidebarProps {
   logo: LogoConfig;
   items: NavItem[];
   secondary?: SecondaryNavItem[];
+  /** A small heading above `secondary`, e.g. "Workspace". */
+  secondaryLabel?: string;
   profile: ProfileConfig;
   collapsed: boolean;
   onToggle: () => void;

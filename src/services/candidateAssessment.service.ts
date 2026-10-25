@@ -23,7 +23,7 @@ export class CandidateAssessmentService {
   static save(
     base: string,
     questionId: string,
-    answer: number | string | null,
+    answer: number | number[] | string | null,
     explanation: string | null,
     timeMs: number,
     deliverableFiles?: Array<{ name: string; url?: string; content?: string; size?: number; type?: string }> | null

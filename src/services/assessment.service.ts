@@ -13,6 +13,8 @@ import type {
   InviteResult,
   CreateAssessmentInput,
   QuestionPatch,
+  DeliverableType,
+  NegativeAppliesTo,
 } from '../types/assessment.types';
 
 const base = '/assessments';
@@ -89,6 +91,21 @@ export class AssessmentService {
     return ApiService.post<Assessment>(`${base}/${id}/questions/${qid}/accept-key`, {}, undefined, 'auth');
   }
 
+  /** Draft settings: the Trueyy Helper on a live test. */
+  static updateSettings(id: string, settings: Partial<Pick<Assessment, 'title' | 'role' | 'duration_min' | 'helper_required' | 'negative_marks'>> & { deliverable_type?: DeliverableType; negative_applies_to?: NegativeAppliesTo }): Promise<ApiResponse<Assessment>> {
+    return ApiService.patch<Assessment>(`${base}/${id}`, settings, undefined, 'auth');
+  }
+
+  /** Put the paper back as it was before the last AI change. */
+  static undo(id: string): Promise<ApiResponse<Assessment>> {
+    return ApiService.post<Assessment>(`${base}/${id}/undo`, {}, undefined, 'auth');
+  }
+
+  /** A hand-written question, added at the end of the paper. */
+  static addQuestion(id: string, q: QuestionPatch): Promise<ApiResponse<Assessment>> {
+    return ApiService.post<Assessment>(`${base}/${id}/questions`, q, undefined, 'auth');
+  }
+
   static deleteQuestion(id: string, qid: string): Promise<ApiResponse<Assessment>> {
     return ApiService.delete<Assessment>(`${base}/${id}/questions/${qid}`, undefined, 'auth');
   }
@@ -124,9 +141,9 @@ export class AssessmentService {
     return ApiService.get<AssessmentResultDetail>(`${base}/${id}/results/${aid}`, undefined, 'auth');
   }
 
-  /** Override the integrity level (null = back to automatic). */
-  static setIntegrity(id: string, aid: string, level: 'clean' | 'review' | 'high' | 'critical' | null): Promise<ApiResponse<AssessmentResultDetail>> {
-    return ApiService.put<AssessmentResultDetail>(`${base}/${id}/results/${aid}/integrity`, { level }, undefined, 'auth');
+  /** Save the staff note on a result (empty clears it). */
+  static setNote(id: string, aid: string, note: string): Promise<ApiResponse<AssessmentResultDetail>> {
+    return ApiService.put<AssessmentResultDetail>(`${base}/${id}/results/${aid}/note`, { note }, undefined, 'auth');
   }
 
   static regrade(id: string, aid: string): Promise<ApiResponse<AssessmentResultDetail>> {

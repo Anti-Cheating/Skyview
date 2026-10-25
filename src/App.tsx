@@ -15,6 +15,7 @@ import AppDashboard from './components/AppLayout/AppDashboard';
 import InterviewsIndex from './components/AppLayout/InterviewsIndex';
 import CreateProcessPage from './components/AppLayout/CreateProcessPage';
 import AssessmentsListPage from './components/Assessments/AssessmentsListPage';
+import NewAssessmentPage from './components/Assessments/NewAssessmentPage';
 import AssessmentBuilderPage from './components/Assessments/AssessmentBuilderPage';
 import InviteCandidatesPage from './components/Assessments/InviteCandidatesPage';
 import TakeAssessmentPage from './components/Assessments/TakeAssessmentPage';
@@ -22,6 +23,7 @@ import MyAssessmentsPage from './components/Assessments/MyAssessmentsPage';
 import ResultDetailPage from './components/Assessments/ResultDetailPage';
 import ProcessDetailPage from './components/AppLayout/ProcessDetailPage';
 import CandidateDetailPage from './components/AppLayout/CandidateDetailPage';
+import CandidatesListPage from './components/AppLayout/CandidatesListPage';
 import InterviewDetailPage from './components/AppLayout/InterviewDetailPage';
 import { PostAnalysisPanel } from './components/PostAnalysis';
 import PreviewPage from './components/PostAnalysis/PreviewPage';
@@ -246,12 +248,14 @@ function AppRoutes() {
           {/* Parent "Interview" (process) — manager-managed list + create */}
           <Route path="my-assessments" element={<MyAssessmentsPage />} />
           <Route path="assessments" element={<StaffRoute><AssessmentsListPage /></StaffRoute>} />
+          <Route path="assessments/new" element={<StaffRoute><NewAssessmentPage /></StaffRoute>} />
           <Route path="assessments/:id" element={<StaffRoute><AssessmentBuilderPage /></StaffRoute>} />
           <Route path="assessments/:id/invite" element={<StaffRoute><InviteCandidatesPage /></StaffRoute>} />
           <Route path="assessments/:id/results/:aid" element={<StaffRoute><ResultDetailPage /></StaffRoute>} />
           <Route path="interviews" element={<InterviewsIndexRoute />} />
           <Route path="interviews/new" element={<CompanyManagerRoute><CreateProcessPage /></CompanyManagerRoute>} />
           <Route path="interviews/:processId" element={<ProcessDetailPage />} />
+          <Route path="candidates" element={<CompanyManagerRoute><CandidatesListPage /></CompanyManagerRoute>} />
           <Route path="candidates/:candidateId" element={<CompanyManagerRoute><CandidateDetailPage /></CompanyManagerRoute>} />
           {/* Round screens — a round is a session, so these reuse the existing pages */}
           <Route path="interviews/:processId/rounds/:roundId" element={<InterviewDetailPage />} />

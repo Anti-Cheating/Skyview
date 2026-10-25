@@ -135,7 +135,7 @@ export function AssessmentHelperSteps({ ids, company, children }: { ids: Ids; co
       <JoinStepper current={h.step} lastLabel="Start" />
       <Box sx={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', pt: { xs: 3, md: 5 }, px: { xs: 2, md: 3 }, pb: 3 }}>
         {h.step === 'consent' && h.consentText && (
-          <ConsentScreen body={h.consentText.body} version={h.consentText.version} companyName={company} companyLogoUrl={null}
+          <ConsentScreen kind="assessment" body={h.consentText.body} version={h.consentText.version} companyName={company} companyLogoUrl={null}
             onAgree={h.agree} onDecline={h.decline} busy={h.busy} />
         )}
         {h.step === 'install' && (

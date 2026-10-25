@@ -10,36 +10,38 @@ const qs = (o: Record<string, unknown> = {}): string => {
   return s ? `?${s}` : '';
 };
 
+/** One step on a candidate's timeline: an interview round or a test. `status` is the session status. */
+export interface CandidateStep {
+  id: string;
+  process_id: string;
+  role: string;
+  kind: 'interview' | 'test' | 'assignment';
+  name: string;
+  status: string; // SCHEDULED | ACTIVE | COMPLETED | CANCELLED
+  at: string;
+}
+
 export interface CandidateListItem {
   id: string;
   first_name: string;
   last_name: string;
   email: string;
-  interviews_count: number;
-  rounds_count: number;
+  steps: CandidateStep[];
   last_activity: string;
 }
 
-export interface CandidateRound {
-  id: string;
-  round_name: string | null;
-  round_order: number | null;
-  status: string;
-  scheduled_start_at: string;
-  interviewer: { first_name: string; last_name: string } | null;
-  analysis: { overall_score: number | null; risk_level: string | null } | null;
-}
-
-export interface CandidateInterview {
-  process_id: string;
-  role: string;
-  created_at: string;
-  rounds: CandidateRound[];
+export interface CandidateTimelineStep extends CandidateStep {
+  interviewer: string | null;
+  /** Interview: analysis score once ready. */
+  score: number | null;
+  assessment_id: string | null;
+  result: { id: string; grading_status: string | null } | null;
 }
 
 export interface CandidateDetail {
   candidate: { id: string; first_name: string; last_name: string; email: string };
-  interviews: CandidateInterview[];
+  processes: { id: string; role: string }[];
+  steps: CandidateTimelineStep[];
 }
 
 export interface CandidatesListQuery {

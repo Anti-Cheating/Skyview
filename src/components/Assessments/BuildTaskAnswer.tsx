@@ -1,19 +1,35 @@
-import { useState, useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Box, Chip, IconButton, TextField, Tooltip, Typography } from '@mui/material';
-import { MdCheck, MdContentCopy, MdDownload, MdUploadFile, MdClose, MdLink } from 'react-icons/md';
-import { ENV } from '../../config/env';
+import { MdCheck, MdContentCopy, MdUploadFile, MdClose, MdLink } from 'react-icons/md';
 import { TOKENS } from '../../theme';
 import type { DeliverableType } from '../../types/assessment.types';
 
-type Os = 'mac' | 'windows';
-const isWindows = () => /Win/i.test(navigator.platform || navigator.userAgent);
+/** Putting their project on GitHub, one command at a time (run inside the project folder). */
+const PUSH_STEPS: Array<{ text: string; cmd?: string; link?: string }> = [
+  { text: 'Turn your project folder into a git repo', cmd: 'git init -b main' },
+  { text: 'Add all your files', cmd: 'git add -A' },
+  { text: 'Save them in a first commit', cmd: 'git commit -m "My assignment"' },
+  { text: 'Create a new, empty public repo on GitHub (no README), and copy its link', link: 'https://github.com/new' },
+  { text: 'Connect your folder to it (use your repo’s link)', cmd: 'git remote add origin https://github.com/you/repo.git' },
+  { text: 'Upload your work', cmd: 'git push -u origin main' },
+];
 
-function command(os: Os, url: string, folder: string): string {
-  const steps = os === 'mac'
-    ? [`curl -fsSL "${url}" -o ${folder}.zip`, `unzip -q ${folder}.zip`, `rm ${folder}.zip`, `cd ${folder}`]
-    : [`curl.exe -fsSL "${url}" -o ${folder}.zip`, `tar -xf ${folder}.zip`, `del ${folder}.zip`, `cd ${folder}`];
-  steps.push('git init -q -b main', 'git add -A', 'git commit -qm "Starter from Trueyy"', `gh repo create ${folder} --public --source=. --push`);
-  return steps.join(os === 'mac' ? ' && ' : '; ');
+/** One command, with its own copy button. */
+function Command({ cmd }: { cmd: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(cmd); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked: the text is selectable */ }
+  };
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: '#0F172A', borderRadius: '8px', pl: 1.5, pr: 0.5, py: 0.25 }}>
+      <Box component="code" sx={{ flex: 1, minWidth: 0, color: '#E2E8F0', fontSize: '0.8rem', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', overflowX: 'auto', whiteSpace: 'nowrap', py: 0.75 }}>{cmd}</Box>
+      <Tooltip title={copied ? 'Copied' : 'Copy'}>
+        <IconButton size="small" aria-label={`Copy: ${cmd}`} onClick={copy} sx={{ color: '#CBD5E1', '&:hover': { color: '#fff' } }}>
+          {copied ? <MdCheck /> : <MdContentCopy />}
+        </IconButton>
+      </Tooltip>
+    </Box>
+  );
 }
 
 export type DeliverableFileEntry = {
@@ -69,8 +85,8 @@ const DELIVERABLE_LABELS: Record<DeliverableType, { title: string; hint: string;
   },
 };
 
+/** A build task's answer: a public repo link (code) or files / a link (other deliverables). The brief above has the requirements. */
 export function BuildTaskAnswer({
-  starter,
   value,
   deliverableType = 'code',
   deliverableFiles = [],
@@ -78,7 +94,6 @@ export function BuildTaskAnswer({
   onFilesChange,
   error,
 }: {
-  starter: { path: string; folder: string } | null | undefined;
   value: string;
   deliverableType?: DeliverableType | null;
   deliverableFiles?: DeliverableFileEntry[] | null;
@@ -86,14 +101,9 @@ export function BuildTaskAnswer({
   onFilesChange?: (files: DeliverableFileEntry[]) => void;
   error?: string | null;
 }) {
-  const [os, setOs] = useState<Os>(isWindows() ? 'windows' : 'mac');
-  const [copied, setCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const type = deliverableType || 'code';
   const meta = DELIVERABLE_LABELS[type] || DELIVERABLE_LABELS.code;
-
-  const url = starter ? `${ENV.AUTH_API_URL}${starter.path}` : '';
-  const cmd = starter ? command(os, url, starter.folder) : '';
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -140,95 +150,34 @@ export function BuildTaskAnswer({
     onFilesChange(next);
   };
 
-  // 1. Code Deliverable Interface
+  // 1. Code: a public repo link, with the git steps folded below for anyone not on GitHub yet.
   if (type === 'code') {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Box>
-          <Typography sx={{ fontWeight: 600, fontSize: '0.95rem', color: TOKENS.textPrimary, mb: 0.5 }}>
-            1. Put the starter repo on your GitHub
-          </Typography>
-          {!starter ? (
-            <Typography sx={{ fontSize: '0.85rem', color: TOKENS.textSecondary }}>The starter repo isn't ready yet. Refresh in a minute.</Typography>
-          ) : (
-            <>
-              <Typography sx={{ fontSize: '0.85rem', color: TOKENS.textSecondary, mb: 1 }}>
-                Run this in a terminal. It downloads the starter, makes it a git repo and pushes it to a new public repo on your GitHub.
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 0.5, mb: 1 }}>
-                {(['mac', 'windows'] as Os[]).map((o) => (
-                  <Box
-                    key={o}
-                    component="button"
-                    type="button"
-                    onClick={() => { setOs(o); setCopied(false); }}
-                    sx={{
-                      all: 'unset',
-                      cursor: 'pointer',
-                      px: 1.25,
-                      py: 0.4,
-                      borderRadius: '6px',
-                      fontSize: '0.78rem',
-                      fontWeight: 600,
-                      bgcolor: os === o ? TOKENS.brandBg : 'transparent',
-                      color: os === o ? '#047857' : TOKENS.textSecondary,
-                      '&:focus-visible': { outline: `2px solid ${TOKENS.brand}` },
-                    }}
-                  >
-                    {o === 'mac' ? 'macOS / Linux' : 'Windows (PowerShell)'}
-                  </Box>
-                ))}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        <Box component="label" htmlFor="repo-link" sx={{ fontWeight: 600, fontSize: '0.9rem', color: TOKENS.textPrimary }}>Your repo link</Box>
+        <TextField
+          id="repo-link"
+          fullWidth
+          placeholder="https://github.com/you/repo"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          error={!!error}
+          helperText={error ?? undefined}
+          inputProps={{ inputMode: 'url' }}
+          sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
+        />
+        <Box component="details" sx={{ borderTop: `1px solid ${TOKENS.borderLight}`, pt: 1.5 }}>
+          <Box component="summary" sx={{ cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem', color: TOKENS.textSecondary, width: 'fit-content' }}>Not on GitHub yet?</Box>
+          <Box component="ol" sx={{ listStyle: 'none', m: 0, mt: 1, p: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {PUSH_STEPS.map((st, i) => (
+              <Box component="li" key={st.text} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, fontSize: '0.875rem', color: TOKENS.textPrimary }}>
+                <Box sx={{ width: 24, height: 24, flex: 'none', borderRadius: '50%', bgcolor: TOKENS.borderLight, color: TOKENS.textSecondary, fontSize: '0.75rem', fontWeight: 700, display: 'grid', placeItems: 'center' }}>{i + 1}</Box>
+                {st.cmd ? <Box sx={{ flex: 1, minWidth: 0 }}><Command cmd={st.cmd} /></Box> : (
+                  <Box sx={{ flex: 1 }}>Make an empty public repo at <Box component="a" href={st.link} target="_blank" rel="noopener noreferrer" sx={{ color: TOKENS.success, fontWeight: 600 }}>github.com/new</Box></Box>
+                )}
               </Box>
-              <Box sx={{ position: 'relative', bgcolor: '#0F172A', borderRadius: '10px', p: 1.5, pr: 6 }}>
-                <Box
-                  component="code"
-                  sx={{
-                    display: 'block',
-                    color: '#E2E8F0',
-                    fontSize: '0.78rem',
-                    lineHeight: 1.6,
-                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                    wordBreak: 'break-all',
-                  }}
-                >
-                  {cmd}
-                </Box>
-                <Tooltip title={copied ? 'Copied' : 'Copy command'}>
-                  <IconButton
-                    size="small"
-                    aria-label="Copy command"
-                    onClick={() => { void navigator.clipboard.writeText(cmd); setCopied(true); }}
-                    sx={{ position: 'absolute', top: 8, right: 8, color: '#CBD5E1', '&:hover': { color: '#fff' } }}
-                  >
-                    {copied ? <MdCheck /> : <MdContentCopy />}
-                  </IconButton>
-                </Tooltip>
-              </Box>
-              <Typography sx={{ fontSize: '0.78rem', color: TOKENS.textSecondary, mt: 1 }}>
-                Needs git and GitHub CLI (<Box component="code" sx={{ fontSize: '0.75rem' }}>gh auth login</Box>). Or{' '}
-                <Box component="a" href={url} sx={{ color: TOKENS.success, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
-                  <MdDownload /> Download the starter
-                </Box>
-                , and push it manually.
-              </Typography>
-            </>
-          )}
-        </Box>
-
-        <Box>
-          <Typography sx={{ fontWeight: 600, fontSize: '0.95rem', color: TOKENS.textPrimary, mb: 0.5 }}>
-            2. Paste your public repo link
-          </Typography>
-          <TextField
-            fullWidth
-            placeholder="https://github.com/you/repo"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            error={!!error}
-            helperText={error ?? undefined}
-            inputProps={{ 'aria-label': 'Your public GitHub repo link', inputMode: 'url' }}
-            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '10px' } }}
-          />
+            ))}
+          </Box>
         </Box>
       </Box>
     );
