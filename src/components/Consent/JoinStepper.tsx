@@ -18,7 +18,7 @@ const STEPS: { key: JoinStep; label: string }[] = [
 /** Horizontal 4-step progress band for the candidate join flow. Sits
  *  directly under the page header. `current` is the active step; every
  *  step before it renders as complete (green check). */
-export default function JoinStepper({ current }: { current: JoinStep }) {
+export default function JoinStepper({ current, lastLabel = 'Join' }: { current: JoinStep; lastLabel?: string }) {
   const currentIndex = STEPS.findIndex((s) => s.key === current);
 
   return (
@@ -53,7 +53,7 @@ export default function JoinStepper({ current }: { current: JoinStep }) {
                   color: done || active ? TOKENS.textPrimary : TOKENS.textMuted,
                   whiteSpace: 'nowrap',
                 }}>
-                  {step.label}
+                  {step.key === 'join' ? lastLabel : step.label}
                 </Caption>
               </Box>
               {/* Connector */}

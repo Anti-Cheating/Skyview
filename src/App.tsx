@@ -14,6 +14,12 @@ import AppLayout from './components/AppLayout/AppLayout';
 import AppDashboard from './components/AppLayout/AppDashboard';
 import InterviewsIndex from './components/AppLayout/InterviewsIndex';
 import CreateProcessPage from './components/AppLayout/CreateProcessPage';
+import AssessmentsListPage from './components/Assessments/AssessmentsListPage';
+import AssessmentBuilderPage from './components/Assessments/AssessmentBuilderPage';
+import InviteCandidatesPage from './components/Assessments/InviteCandidatesPage';
+import TakeAssessmentPage from './components/Assessments/TakeAssessmentPage';
+import MyAssessmentsPage from './components/Assessments/MyAssessmentsPage';
+import ResultDetailPage from './components/Assessments/ResultDetailPage';
 import ProcessDetailPage from './components/AppLayout/ProcessDetailPage';
 import CandidateDetailPage from './components/AppLayout/CandidateDetailPage';
 import InterviewDetailPage from './components/AppLayout/InterviewDetailPage';
@@ -46,7 +52,7 @@ import AuditLogPage from './components/Settings/AuditLogPage';
 import AuditDetailPage from './components/Settings/AuditDetailPage';
 import AdminContactQueriesPage from './components/Admin/ContactQueriesPage';
 import AdminPlansPage from './components/Admin/PlansPage';
-import { isCompanyManagerRole } from './config/constants';
+import { isCompanyManagerRole, isStaffRole } from './config/constants';
 import { trackPageview } from './lib/analytics';
 
 /**
@@ -160,6 +166,14 @@ function CompanyManagerRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/** Staff only (Owner / Admin / Member / System Admin): candidates are sent home. */
+function StaffRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return <LoadingSpinner fullScreen message="Loading..." />;
+  if (!isStaffRole(user?.role)) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 /**
  * /interviews is role-aware:
  *  - Company managers (Owner/Admin/System Admin) → a view switcher over the
@@ -220,12 +234,21 @@ function AppRoutes() {
             it must not sit behind PrivateRoute. Falls back to PrivateRoute's
             login redirect internally if no/invalid token is present. */}
         <Route path="/interviews/:id/join" element={<CandidateJoinPage />} />
+        {/* Public candidate assessment link — the token in the URL is the credential. */}
+        <Route path="/a/:token" element={<TakeAssessmentPage />} />
+        {/* Logged-in candidate taking an assessment: full-screen, no sidebar. */}
+        <Route path="/my-assessments/:attemptId" element={<PrivateRoute><TakeAssessmentPage /></PrivateRoute>} />
         {/* Falcon deep-link return page — simple "open desktop app" view */}
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         {/* Full web app with sidebar — nested routes render in AppLayout's <Outlet /> */}
         <Route path="/" element={<PrivateRoute><AppLayout /></PrivateRoute>}>
           <Route index element={<AppDashboard />} />
           {/* Parent "Interview" (process) — manager-managed list + create */}
+          <Route path="my-assessments" element={<MyAssessmentsPage />} />
+          <Route path="assessments" element={<StaffRoute><AssessmentsListPage /></StaffRoute>} />
+          <Route path="assessments/:id" element={<StaffRoute><AssessmentBuilderPage /></StaffRoute>} />
+          <Route path="assessments/:id/invite" element={<StaffRoute><InviteCandidatesPage /></StaffRoute>} />
+          <Route path="assessments/:id/results/:aid" element={<StaffRoute><ResultDetailPage /></StaffRoute>} />
           <Route path="interviews" element={<InterviewsIndexRoute />} />
           <Route path="interviews/new" element={<CompanyManagerRoute><CreateProcessPage /></CompanyManagerRoute>} />
           <Route path="interviews/:processId" element={<ProcessDetailPage />} />

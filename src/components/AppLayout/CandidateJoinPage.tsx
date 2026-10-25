@@ -586,7 +586,7 @@ export default function CandidateJoinPage() {
 
 /** A plain white setup card (permissions / join) matching ConsentScreen's
  *  visual weight so the stepped flow feels consistent. */
-function SetupCard({ icon, title, subtitle, children }: {
+export function SetupCard({ icon, title, subtitle, children }: {
   icon: React.ReactNode; title: string; subtitle: string; children: React.ReactNode;
 }) {
   return (
@@ -611,7 +611,7 @@ function SetupCard({ icon, title, subtitle, children }: {
 
 // ── Small helper components ─────────────────────────────────────────
 
-function Status({ busy, ok, err, text }: { busy?: boolean; ok?: boolean; err?: boolean; text: string }) {
+export function Status({ busy, ok, err, text }: { busy?: boolean; ok?: boolean; err?: boolean; text: string }) {
   const color = ok ? TOKENS.success : err ? TOKENS.error : TOKENS.textSecondary;
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -622,7 +622,7 @@ function Status({ busy, ok, err, text }: { busy?: boolean; ok?: boolean; err?: b
 }
 
 
-function PermissionRow({ title, desc, done, onEnable }: {
+export function PermissionRow({ title, desc, done, onEnable }: {
   title: string; desc: string; done: boolean; onEnable: () => void;
 }) {
   return (

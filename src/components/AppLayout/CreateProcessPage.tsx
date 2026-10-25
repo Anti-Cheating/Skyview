@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box, Alert, MenuItem, Typography } from '@mui/material';
 import { Breadcrumb } from '../common/Breadcrumb';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -30,11 +30,14 @@ export default function CreateProcessPage() {
   const navigate = useNavigate();
   const { showSuccess, showError } = useSnackbar();
 
-  const [role, setRole] = useState('');
-  const [description, setDescription] = useState('');
-  const [candidateFirstName, setCandidateFirstName] = useState('');
-  const [candidateLastName, setCandidateLastName] = useState('');
-  const [candidateEmail, setCandidateEmail] = useState('');
+  // Optional prefill, e.g. "Create interview" from an assessment result:
+  // /interviews/new?first=&last=&email=&role=&description=
+  const [params] = useSearchParams();
+  const [role, setRole] = useState(params.get('role') ?? '');
+  const [description, setDescription] = useState(params.get('description') ?? '');
+  const [candidateFirstName, setCandidateFirstName] = useState(params.get('first') ?? '');
+  const [candidateLastName, setCandidateLastName] = useState(params.get('last') ?? '');
+  const [candidateEmail, setCandidateEmail] = useState(params.get('email') ?? '');
 
   const [roundName, setRoundName] = useState('Technical');
   const [members, setMembers] = useState<TeamMember[]>([]);

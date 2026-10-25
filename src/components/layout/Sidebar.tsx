@@ -38,6 +38,7 @@ import {
   MdHub,
   MdHistory,
   MdMail,
+  MdAssignment,
 } from 'react-icons/md';
 import { motion } from 'framer-motion';
 import { SidebarProps } from './sidebar.types';
@@ -51,6 +52,7 @@ import { useCompany } from '../../contexts/CompanyContext';
 const iconMap: Record<string, React.ComponentType<any>> = {
   Dashboard: MdDashboard,       // Dashboard
   Interviews: MdVideoCall,      // Interviews (video calls)
+  Assessments: MdAssignment,   // Assessments builder
   VideoCall: MdVideoCall,       // alias
   People: MdPeople,             // Users / team
   Person: MdPerson,             // Profile

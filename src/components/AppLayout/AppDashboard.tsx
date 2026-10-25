@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { InterviewService } from '../../services/interview.service';
+import { AssessmentService } from '../../services/assessment.service';
+import { CandidateAssessmentService } from '../../services/candidateAssessment.service';
 import { useDelayedFlag } from '../../hooks/useDelayedFlag';
 
 // Module-scoped cache for the dashboard counts. Lives for the lifetime
@@ -26,6 +28,9 @@ import {
   Event as EventIcon,
   History as HistoryIcon,
   TrendingUp as TrendingUpIcon,
+  AssignmentOutlined as AssignmentIcon,
+  AssignmentTurnedInOutlined as AssignmentDoneIcon,
+  EditNoteOutlined as DraftIcon,
 } from '@mui/icons-material';
 import { DashboardShimmer } from '../common/Shimmer';
 import { useAuth } from '../../contexts/AuthContext';
@@ -154,6 +159,33 @@ export default function AppDashboard() {
   const showShimmer = useDelayedFlag(loading, 250);
 
   const userRole = user?.role || USER_ROLES.CANDIDATE;
+  const candidate = userRole === USER_ROLES.CANDIDATE;
+
+  // Assessment counts: a candidate's own (to do / done), or the team's papers (live / drafts).
+  // Shown only once loaded; a team without access to assessments just doesn't see the row.
+  const [assessments, setAssessments] = useState<{ a: number; b: number; total: number } | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (candidate) {
+          const r = await CandidateAssessmentService.mine();
+          const list = r.success ? r.data ?? [] : [];
+          const todo = list.filter((x) => x.status === 'invited' || x.status === 'started').length;
+          const done = list.filter((x) => x.status === 'submitted').length;
+          if (!cancelled && r.success) setAssessments({ a: todo, b: done, total: todo + done });
+        } else {
+          const r = await AssessmentService.list();
+          const list = r.success ? r.data ?? [] : [];
+          const live = list.filter((x) => x.status === 'final').length;
+          const drafts = list.filter((x) => x.status === 'draft').length;
+          if (!cancelled && r.success) setAssessments({ a: live, b: drafts, total: live + drafts });
+        }
+      } catch {/* no access or offline: hide the row */}
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, candidate]);
 
   // Shimmer only when the cache has nothing AND we've waited 250ms —
   // return-visits render instantly from cached counts.
@@ -252,6 +284,32 @@ export default function AppDashboard() {
           onClick={() => navigate('/interviews')}
         />
       </Box>
+
+      {assessments && (
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 3, mt: 3 }}>
+          <StatCard
+            title={candidate ? 'Assessments to Do' : 'Live Assessments'}
+            value={assessments.a}
+            icon={<AssignmentIcon sx={{ fontSize: 28, color: theme.palette.primary.main }} />}
+            bgColor="rgba(76, 217, 100, 0.15)"
+            onClick={() => navigate(candidate ? '/my-assessments' : '/assessments')}
+          />
+          <StatCard
+            title={candidate ? 'Completed Assessments' : 'Draft Assessments'}
+            value={assessments.b}
+            icon={candidate ? <AssignmentDoneIcon sx={{ fontSize: 28, color: '#6B7280' }} /> : <DraftIcon sx={{ fontSize: 28, color: '#6B7280' }} />}
+            bgColor="rgba(107, 114, 128, 0.12)"
+            onClick={() => navigate(candidate ? '/my-assessments' : '/assessments')}
+          />
+          <StatCard
+            title="Total Assessments"
+            value={assessments.total}
+            icon={<AssignmentIcon sx={{ fontSize: 28, color: '#3B82F6' }} />}
+            bgColor="rgba(59, 130, 246, 0.12)"
+            onClick={() => navigate(candidate ? '/my-assessments' : '/assessments')}
+          />
+        </Box>
+      )}
     </Box>
   );
 }

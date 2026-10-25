@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
+  useSearchParams: () => [new URLSearchParams()],
   Link: ({ children }: { children?: React.ReactNode }) => <a>{children}</a>,
 }));
 

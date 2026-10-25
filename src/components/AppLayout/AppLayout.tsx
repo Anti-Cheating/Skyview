@@ -9,7 +9,7 @@ import { Sidebar } from '../layout/Sidebar';
 import type { LogoConfig, NavItem, ProfileConfig } from '../layout/sidebar.types';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserDisplayName } from '../../utils/user.utils';
-import { USER_ROLES, isCompanyManagerRole, isSystemAdmin } from '../../config/constants';
+import { USER_ROLES, isCompanyManagerRole, isStaffRole, isSystemAdmin } from '../../config/constants';
 
 const DRAWER_WIDTH = 280;
 
@@ -41,6 +41,9 @@ export default function AppLayout() {
   const sidebarItems: NavItem[] = (() => {
     const shared: NavItem[] = [
       { id: 'dashboard',  label: 'Dashboard',  iconName: 'Dashboard',  route: '/',           badge: null },
+      isStaffRole(userRole)
+        ? { id: 'assessments', label: 'Assessments', iconName: 'Assessments', route: '/assessments', badge: null }
+        : { id: 'my-assessments', label: 'Assessments', iconName: 'Assessments', route: '/my-assessments', badge: null },
       { id: 'interviews', label: 'Interviews', iconName: 'Interviews', route: '/interviews', badge: null },
     ];
     if (isCompanyManagerRole(userRole)) {
@@ -68,6 +71,8 @@ export default function AppLayout() {
   };
 
   const getActiveId = (): string => {
+    if (location.pathname.startsWith('/assessments')) return 'assessments';
+    if (location.pathname.startsWith('/my-assessments')) return 'my-assessments';
     if (location.pathname.startsWith('/interviews')) return 'interviews';
     if (location.pathname.startsWith('/users')) return 'users';
     if (location.pathname.startsWith('/plans')) return 'plans';

@@ -61,6 +61,18 @@ const STATUS_TOKENS: Record<string, TagTokens> = {
     border: '#FECACA',
     text:   '#B91C1C',
   },
+  // Needs a person to act (e.g. an assessment invite email that didn't send).
+  WARNING: {
+    bg:     '#FFFBEB',
+    border: '#FDE68A',
+    text:   '#92400E',
+  },
+  // Solid red: the worst outcome (e.g. an assessment voided by a cheating overlay).
+  CRITICAL: {
+    bg:     '#B91C1C',
+    border: '#991B1B',
+    text:   '#FFFFFF',
+  },
 };
 
 function prettyLabel(s: string): string {
@@ -68,7 +80,8 @@ function prettyLabel(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
-export function StatusTag({ status }: { status: SessionStatus }) {
+/** `label` overrides the text, so other lists (assessments, invites) can reuse the colours. */
+export function StatusTag({ status, label }: { status: SessionStatus | 'WARNING' | 'CRITICAL'; label?: string }) {
   const tokens = STATUS_TOKENS[status] ?? STATUS_TOKENS.SCHEDULED;
   return (
     <Box
@@ -94,7 +107,7 @@ export function StatusTag({ status }: { status: SessionStatus }) {
         transition: 'background-color 200ms ease, border-color 200ms ease, color 200ms ease',
       }}
     >
-      {tokens.label ?? prettyLabel(status)}
+      {label ?? tokens.label ?? prettyLabel(status)}
     </Box>
   );
 }
