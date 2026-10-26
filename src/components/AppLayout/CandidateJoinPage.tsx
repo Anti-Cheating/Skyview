@@ -12,7 +12,7 @@
  *
  * Steps:
  *   1. Trueyy Helper installed (detected via local /health)
- *   2. Permissions granted (screen recording + microphone)
+ *   2. Permissions granted (screen recording + microphone + keyboard + camera)
  *   3. Join Meeting — opens the meeting URL in a new tab
  */
 
@@ -334,6 +334,11 @@ export default function CandidateJoinPage() {
     if (!ok) await openSettingsPane('accessibility');
     helper.refresh();
   };
+  const openCameraSettings = async () => {
+    const ok = await requestHelperPermission('camera');
+    if (!ok) await openSettingsPane('camera');
+    helper.refresh();
+  };
 
   // ── Render ────────────────────────────────────────────────────────
 
@@ -398,7 +403,10 @@ export default function CandidateJoinPage() {
   const screenOk = !!helper.status?.screen_recording_ok;
   const micOk = !!helper.status?.microphone_ok;
   const keyboardOk = !!helper.status?.keyboard_ok;
-  const allPermissions = screenOk && micOk && keyboardOk;
+  // Undefined = a Helper without the live camera: nothing to grant, no row.
+  const cameraKnown = helper.status?.camera_ok !== undefined;
+  const cameraOk = helper.status?.camera_ok !== false;
+  const allPermissions = screenOk && micOk && keyboardOk && cameraOk;
   const monitoringState = !helper.installed
     ? 'pending'
     : allPermissions ? 'done' : 'permission-needed';
@@ -520,9 +528,13 @@ export default function CandidateJoinPage() {
                       done={micOk} onEnable={openMicSettings} />
                     <PermissionRow title="Keyboard Access" desc="Required for keyboard activity monitoring"
                       done={keyboardOk} onEnable={openKeyboardSettings} />
+                    {cameraKnown && (
+                      <PermissionRow title="Camera" desc="Used only if your interviewer turns on the live camera; never recorded"
+                        done={cameraOk} onEnable={openCameraSettings} />
+                    )}
                     <Caption sx={{ display: 'block', color: TOKENS.textSecondary, mt: 1.5 }}>
                       {detectHelperPlatform() === 'windows'
-                        ? <>Enable <strong>Microphone access</strong> (and <strong>Let desktop apps access your microphone</strong>) in Windows Settings, then return here.</>
+                        ? <>Enable <strong>Microphone</strong> and <strong>Camera</strong> access (and <strong>Let desktop apps access</strong> each) in Windows Settings, then return here.</>
                         : <>Toggle <strong>Trueyy Helper</strong> ON in each pane, then return here.</>}
                     </Caption>
                   </>

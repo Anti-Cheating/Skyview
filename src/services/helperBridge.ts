@@ -69,6 +69,8 @@ export interface HelperStatus {
   screen_recording_ok: boolean;
   microphone_ok: boolean;
   keyboard_ok: boolean;
+  /** Absent on Helpers built before the live camera; those can't stream it. */
+  camera_ok?: boolean;
   mic_active: boolean;
   connected: boolean;
 }
@@ -187,7 +189,7 @@ const _lastOpenAt: Record<string, number> = {};
 const OPEN_COOLDOWN_MS = 2000;
 
 export async function openSettingsPane(
-  pane: 'microphone' | 'screen_recording' | 'accessibility'
+  pane: 'microphone' | 'screen_recording' | 'accessibility' | 'camera'
 ): Promise<boolean> {
   const now = Date.now();
   if (now - (_lastOpenAt[pane] || 0) < OPEN_COOLDOWN_MS) {
@@ -216,7 +218,7 @@ export async function openSettingsPane(
  * will pick up the change on the next poll.
  */
 export async function requestHelperPermission(
-  pane: 'microphone' | 'screen_recording' | 'accessibility'
+  pane: 'microphone' | 'screen_recording' | 'accessibility' | 'camera'
 ): Promise<boolean> {
   try {
     const resp = await fetch(`${HELPER_BASE}/permissions/request`, {
@@ -241,6 +243,7 @@ export async function getHelperPermissions(): Promise<{
   screen_recording_ok: boolean;
   microphone_ok: boolean;
   keyboard_ok: boolean;
+  camera_ok?: boolean;
 } | null> {
   try {
     const resp = await fetch(`${HELPER_BASE}/permissions`, { method: 'GET' });
@@ -249,6 +252,7 @@ export async function getHelperPermissions(): Promise<{
       screen_recording_ok: boolean;
       microphone_ok: boolean;
       keyboard_ok: boolean;
+      camera_ok?: boolean;
     };
   } catch {
     return null;
