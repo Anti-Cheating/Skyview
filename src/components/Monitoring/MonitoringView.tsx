@@ -196,15 +196,17 @@ export default function MonitoringView() {
       return;
     }
     restoredRef.current = true;
-    const wantTxn = sessionStorage.getItem(`skyview:txn:${interviewId}`) === '1';
-    const wantAnl = sessionStorage.getItem(`skyview:anl:${interviewId}`) === '1';
-    if (wantTxn && !riskData.modalityState.transcription) {
+    if (consentBlocked) return;
+    // On by default: only an explicit "off" ('0' — toggled off or ended)
+    // keeps a modality off when the session starts fresh.
+    const want = (key: string) => sessionStorage.getItem(`skyview:${key}:${interviewId}`) !== '0';
+    if (want('txn') && !riskData.modalityState.transcription) {
       riskData.emitStartTranscription();
     }
-    if (wantAnl && !riskData.modalityState.analysis) {
+    if (want('anl') && !riskData.modalityState.analysis) {
       riskData.emitStartAnalysis();
     }
-    if (sessionStorage.getItem(`skyview:cam:${interviewId}`) === '1' && !riskData.modalityState.camera) {
+    if (want('cam') && !riskData.modalityState.camera) {
       riskData.emitStartCamera();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

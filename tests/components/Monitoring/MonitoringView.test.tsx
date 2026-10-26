@@ -52,7 +52,8 @@ function makeRiskData(over: Partial<UseRiskSocketReturn> = {}): UseRiskSocketRet
     imageAnalysisResults: [], latestImageAnalysis: null, isImageAnalysisProcessing: false,
     pendingImageAnalysisCount: 0, incrementPendingImageAnalysis: vi.fn(),
     emitCaptureScreenshots: vi.fn(), emitStartTranscription: vi.fn(), emitStopTranscription: vi.fn(),
-    emitStartAnalysis: vi.fn(), emitStopAnalysis: vi.fn(), modalityState: null, panelActivity: null,
+    emitStartAnalysis: vi.fn(), emitStopAnalysis: vi.fn(),
+    emitStartCamera: vi.fn(), emitStopCamera: vi.fn(), modalityState: null, panelActivity: null,
     candidateStatus: null, consentStatus: null,
     setInitialConsentStatus: vi.fn(), setInitialCandidateStatus: vi.fn(),
     ...over,
@@ -195,5 +196,31 @@ describe('MonitoringView — two viewers', () => {
     riskState = makeRiskData({ emitStartTranscription, modalityState: { transcription: false, analysis: false, fresh: true } });
     render(<MonitoringView />);
     await waitFor(() => expect(emitStartTranscription).toHaveBeenCalledTimes(1));
+  });
+
+  test('a fresh session turns transcription, analysis and camera on by default', async () => {
+    sessionStorage.clear(); // this tab never chose anything
+    const [emitStartTranscription, emitStartAnalysis, emitStartCamera] = [vi.fn(), vi.fn(), vi.fn()];
+    riskState = makeRiskData({
+      emitStartTranscription, emitStartAnalysis, emitStartCamera,
+      modalityState: { transcription: false, analysis: false, camera: false, fresh: true },
+    });
+    render(<MonitoringView />);
+    await waitFor(() => expect(emitStartTranscription).toHaveBeenCalledTimes(1));
+    expect(emitStartAnalysis).toHaveBeenCalledTimes(1);
+    expect(emitStartCamera).toHaveBeenCalledTimes(1);
+  });
+
+  test('a modality this tab switched off stays off in a fresh session', async () => {
+    sessionStorage.clear();
+    sessionStorage.setItem('skyview:cam:round-1', '0');
+    const [emitStartTranscription, emitStartCamera] = [vi.fn(), vi.fn()];
+    riskState = makeRiskData({
+      emitStartTranscription, emitStartCamera,
+      modalityState: { transcription: false, analysis: false, camera: false, fresh: true },
+    });
+    render(<MonitoringView />);
+    await waitFor(() => expect(emitStartTranscription).toHaveBeenCalledTimes(1));
+    expect(emitStartCamera).not.toHaveBeenCalled();
   });
 });
