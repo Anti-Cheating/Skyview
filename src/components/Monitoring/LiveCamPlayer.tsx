@@ -4,8 +4,8 @@
  * Frames come from the candidate's Sentinel through Cortex (`cam-frame`,
  * never stored). Each frame carries the gaze numbers, and the arrows are
  * drawn here rather than burned into the image so a viewer can switch them
- * off. Sentinel processes a mirrored (selfie) view; we flip it back so the
- * interviewer sees the candidate the way a video call shows them.
+ * off. Shown as Sentinel's mirrored (selfie) view, so an arrow points to
+ * the candidate's own side: they look right → it points right.
  *
  * Mini mode floats over the monitoring screen and can be dragged anywhere
  * (position saved per viewer as a fraction of the screen, so it survives a
@@ -150,22 +150,18 @@ export default function LiveCamPlayer({
         if (canvas.height !== h) canvas.height = h;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-        // Un-mirror: Sentinel's view is a selfie view.
-        ctx.save();
-        ctx.translate(w, 0);
-        ctx.scale(-1, 1);
+        // Drawn as sent: Sentinel's view is already mirrored (selfie).
         ctx.drawImage(bmp, 0, 0);
-        ctx.restore();
         bmp.close();
         if (arrowsRef.current) {
           const s = h / 720;
           const lw = Math.max(2, 3 * s);
           if (f.nose && f.head) {
-            drawArrow(ctx, (1 - f.nose[0]) * w, f.nose[1] * h, -f.head[0] * HEAD_ARROW_PX * s, f.head[1] * HEAD_ARROW_PX * s, '#3B82F6', lw);
+            drawArrow(ctx, f.nose[0] * w, f.nose[1] * h, f.head[0] * HEAD_ARROW_PX * s, f.head[1] * HEAD_ARROW_PX * s, '#3B82F6', lw);
           }
           if (f.eye) {
             for (const [ix, iy] of f.irises ?? []) {
-              drawArrow(ctx, (1 - ix) * w, iy * h, -f.eye[0] * EYE_ARROW_PX * s, f.eye[1] * EYE_ARROW_PX * s, '#EF4444', lw);
+              drawArrow(ctx, ix * w, iy * h, f.eye[0] * EYE_ARROW_PX * s, f.eye[1] * EYE_ARROW_PX * s, '#EF4444', lw);
             }
           }
         }
