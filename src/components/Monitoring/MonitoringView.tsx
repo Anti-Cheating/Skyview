@@ -40,6 +40,7 @@ import { USER_ROLES, isStaffRole } from '../../config/constants';
 import { useAuth } from '../../contexts/AuthContext';
 import AnalyticsPanel from './AnalyticsPanel';
 import CandidateSetupCard from './CandidateSetupCard';
+import LiveCamPlayer from './LiveCamPlayer';
 import { TOKENS } from '../../theme';
 
 const LIGHT_BG = TOKENS.bgCard;
@@ -51,6 +52,8 @@ const ACTIVITY_TEXT: Record<PanelActivity['action'], string> = {
   transcription_off: 'turned transcription off',
   analysis_on: 'turned analysis on',
   analysis_off: 'turned analysis off',
+  camera_on: "turned the candidate's camera on",
+  camera_off: "turned the candidate's camera off",
   capture: "captured the candidate's screen",
   ended: 'ended the interview',
 };
@@ -68,6 +71,7 @@ export default function MonitoringView() {
   const [activated, setActivated] = useState(false);
   const [activateError, setActivateError] = useState<string | null>(null);
   const [endDialogOpen, setEndDialogOpen] = useState(false);
+  const [camMaximized, setCamMaximized] = useState(false);
 
   const riskData = useRiskSocket(interviewId ?? null);
   const { showInfo } = useSnackbar();
@@ -93,6 +97,7 @@ export default function MonitoringView() {
   // the fallback via the next modality-state event.
   const transcriptionOn = riskData.modalityState?.transcription ?? false;
   const analysisOn = riskData.modalityState?.analysis ?? false;
+  const cameraOn = riskData.modalityState?.camera ?? false;
 
   // Cortex is the single authority on session lifecycle. On mount we
   // flip SCHEDULED → ACTIVE; a 10s heartbeat refreshes a Redis TTL; only
@@ -187,6 +192,7 @@ export default function MonitoringView() {
       restoredRef.current = true;
       sessionStorage.setItem(`skyview:txn:${interviewId}`, riskData.modalityState.transcription ? '1' : '0');
       sessionStorage.setItem(`skyview:anl:${interviewId}`, riskData.modalityState.analysis ? '1' : '0');
+      sessionStorage.setItem(`skyview:cam:${interviewId}`, riskData.modalityState.camera ? '1' : '0');
       return;
     }
     restoredRef.current = true;
@@ -197,6 +203,9 @@ export default function MonitoringView() {
     }
     if (wantAnl && !riskData.modalityState.analysis) {
       riskData.emitStartAnalysis();
+    }
+    if (sessionStorage.getItem(`skyview:cam:${interviewId}`) === '1' && !riskData.modalityState.camera) {
+      riskData.emitStartCamera();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interviewId, riskData.isConnected, activated, riskData.modalityState]);
@@ -315,6 +324,27 @@ export default function MonitoringView() {
     else riskData.emitStopAnalysis();
   };
 
+  const handleToggleCamera = (next: boolean) => {
+    if (next && consentBlocked) return;
+    if (interviewId) {
+      sessionStorage.setItem(`skyview:cam:${interviewId}`, next ? '1' : '0');
+    }
+    if (next) riskData.emitStartCamera();
+    else riskData.emitStopCamera();
+  };
+
+  useEffect(() => {
+    if (riskData.cameraBlocked) {
+      showInfo("The camera can't start: the candidate hasn't agreed to webcam monitoring yet. They'll be asked when they next join.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [riskData.cameraBlocked]);
+
+  // Camera turned off (here or by another panelist): drop the large layout.
+  useEffect(() => {
+    if (!cameraOn) setCamMaximized(false);
+  }, [cameraOn]);
+
   // Back only leaves this page; it never ends the interview or stops capture
   // (see the RULE above: only End Interview or the scheduled end does).
   // Stopping capture here would also stop it for every panelist still
@@ -334,9 +364,11 @@ export default function MonitoringView() {
     setEndDialogOpen(false);
     if (transcriptionOn) riskData.emitStopTranscription();
     if (analysisOn) riskData.emitStopAnalysis();
+    if (cameraOn) riskData.emitStopCamera();
     if (interviewId) {
       sessionStorage.setItem(`skyview:txn:${interviewId}`, '0');
       sessionStorage.setItem(`skyview:anl:${interviewId}`, '0');
+      sessionStorage.setItem(`skyview:cam:${interviewId}`, '0');
       InterviewService.deactivate(interviewId).catch(() => {});
     }
     navigate('/interviews');
@@ -344,7 +376,7 @@ export default function MonitoringView() {
 
   // Back-compat "monitoring active" signal = either toggle on. Used only
   // by the status chip + AnalyticsPanel's header dot.
-  const isMonitoring = transcriptionOn || analysisOn;
+  const isMonitoring = transcriptionOn || analysisOn || cameraOn;
 
   // Permission check: only staff (Owner / Admin / Member) should reach this view
   useEffect(() => {
@@ -591,17 +623,44 @@ export default function MonitoringView() {
               call above stay in case a helper IS installed (it'll bind to
               the session and add a redundant interviewer-side mic stream
               that Cortex's transcriptFusion dedup will merge). */}
-          <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            <AnalyticsPanel
-              interview={interview}
-              riskData={riskData}
-              isMonitoring={isMonitoring}
-              transcriptionOn={transcriptionOn}
-              analysisOn={analysisOn}
-              onToggleTranscription={handleToggleTranscription}
-              onToggleAnalysis={handleToggleAnalysis}
-              onClose={handleExit}
-            />
+          {/* The live camera floats over the panel (draggable mini player);
+              maximized, it takes the main area and the panel becomes a rail. */}
+          <Box
+            sx={{
+              flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative',
+              ...(camMaximized && {
+                display: 'grid',
+                gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) 420px' },
+                gridTemplateRows: { xs: 'minmax(0, 45%) minmax(0, 1fr)', md: 'minmax(0, 1fr)' },
+              }),
+            }}
+          >
+            {cameraOn && (
+              <LiveCamPlayer
+                candidateName={candidateName}
+                isConnected={riskData.isConnected}
+                cameraState={riskData.cameraState}
+                onCamFrame={riskData.onCamFrame}
+                watchCamera={riskData.watchCamera}
+                unwatchCamera={riskData.unwatchCamera}
+                maximized={camMaximized}
+                onMaximizedChange={setCamMaximized}
+              />
+            )}
+            <Box sx={{ minWidth: 0, minHeight: 0, height: '100%', overflow: 'hidden', ...(camMaximized && { borderLeft: { md: `1px solid ${LIGHT_BORDER}` } }) }}>
+              <AnalyticsPanel
+                interview={interview}
+                riskData={riskData}
+                isMonitoring={isMonitoring}
+                transcriptionOn={transcriptionOn}
+                analysisOn={analysisOn}
+                cameraOn={cameraOn}
+                onToggleTranscription={handleToggleTranscription}
+                onToggleAnalysis={handleToggleAnalysis}
+                onToggleCamera={handleToggleCamera}
+                onClose={handleExit}
+              />
+            </Box>
           </Box>
       </>
     </Box>

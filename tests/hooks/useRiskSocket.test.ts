@@ -178,12 +178,19 @@ describe('useRiskSocket — live socket', () => {
     expect(result.current.candidateStatus!.updated_at).toBe('2026-01-01T00:00:00Z');
   });
 
-  test('a modality-state event coerces both toggles to booleans', () => {
+  test('a modality-state event coerces every toggle to booleans', () => {
     const { result } = renderHook(() => useRiskSocket('s1'));
     act(() => handlers['modality-state']({ sessionId: 's1', transcription: 1, analysis: 0 }));
-    expect(result.current.modalityState).toEqual({ transcription: true, analysis: false, fresh: false });
-    act(() => handlers['modality-state']({ sessionId: 's1', transcription: 0, analysis: 0, fresh: true }));
-    expect(result.current.modalityState).toEqual({ transcription: false, analysis: false, fresh: true });
+    expect(result.current.modalityState).toEqual({ transcription: true, analysis: false, camera: false, fresh: false });
+    act(() => handlers['modality-state']({ sessionId: 's1', transcription: 0, analysis: 0, camera: 1, fresh: true }));
+    expect(result.current.modalityState).toEqual({ transcription: false, analysis: false, camera: true, fresh: true });
+  });
+
+  test('camera-status sets the camera state', () => {
+    const { result } = renderHook(() => useRiskSocket('s1'));
+    expect(result.current.cameraState).toBeNull();
+    act(() => handlers['camera-status']({ sessionId: 's1', state: 'busy' }));
+    expect(result.current.cameraState).toBe('busy');
   });
 
   test('an image-analysis-result merges + decrements the pending counter', () => {

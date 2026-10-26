@@ -20,6 +20,7 @@ import {
   ArrowDown01Icon,
   ArrowUp01Icon,
   Mic01Icon,
+  EyeIcon,
   Clock01Icon,
   Shield01Icon,
   Alert02Icon,
@@ -51,8 +52,10 @@ interface AnalyticsPanelProps {
   isMonitoring?: boolean;
   transcriptionOn?: boolean;
   analysisOn?: boolean;
+  cameraOn?: boolean;
   onToggleTranscription?: (next: boolean) => void;
   onToggleAnalysis?: (next: boolean) => void;
+  onToggleCamera?: (next: boolean) => void;
   onClose: () => void;
   participantId?: string;
 }
@@ -332,7 +335,8 @@ export function summarizeTimeline(
 
     const isSuspicious =
       /paste|storm|switch_storm/i.test(current.detail) ||
-      /claude|chatgpt|openai|copilot|aside/i.test(current.detail);
+      /claude|chatgpt|openai|copilot|aside/i.test(current.detail) ||
+      (current.kind === 'GAZE' && /second face/i.test(current.detail));
 
     if (count > 1) {
       out.push({
@@ -359,6 +363,7 @@ export function summarizeTimeline(
 
 export function getTimelineEntryIcon(entry: { kind: string; detail: string }): IconSvgElement {
   if (entry.kind === 'VOICE') return Mic01Icon;
+  if (entry.kind === 'GAZE') return EyeIcon;
   if (entry.kind === 'IMAGE') return Camera01Icon;
   if (entry.kind === 'KEYSTROKE') {
     if (/paste/i.test(entry.detail)) return ClipboardIcon;
@@ -627,7 +632,8 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
     result.per_modality &&
       (result.per_modality.app_metadata ||
         result.per_modality.keystroke ||
-        result.per_modality.voice)
+        result.per_modality.voice ||
+        result.per_modality.gaze)
   );
   const hasCorrelations = Boolean(result.correlations && result.correlations.length > 0);
   const hasExpandable = Boolean(hasModalities || hasCorrelations || result.timeline_note);
@@ -694,6 +700,16 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
                   </Box>
                 </Tooltip>
               )}
+              {result.per_modality.gaze && (
+                <Tooltip title={`Webcam: ${result.per_modality.gaze.risk_score}/100 (${result.per_modality.gaze.risk_level})`} arrow>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, bgcolor: `${getRiskColor(result.per_modality.gaze.risk_level)}12`, px: 0.5, py: 0.2, borderRadius: '4px' }}>
+                    <HugeiconsIcon icon={EyeIcon} size={11} color={getRiskColor(result.per_modality.gaze.risk_level)} />
+                    <Typography sx={{ fontSize: '0.55rem', fontWeight: 700, color: getRiskColor(result.per_modality.gaze.risk_level) }}>
+                      {result.per_modality.gaze.risk_score}
+                    </Typography>
+                  </Box>
+                </Tooltip>
+              )}
             </Box>
           )}
         </Box>
@@ -717,6 +733,9 @@ export function WindowCard({ result, isLatest, onExpandScreenshot: _onExpandScre
                 )}
                 {result.per_modality!.voice && (
                   <ModalityCard label="Voice" icon={Mic01Icon} modality={result.per_modality!.voice} />
+                )}
+                {result.per_modality!.gaze && (
+                  <ModalityCard label="Webcam" icon={EyeIcon} modality={result.per_modality!.gaze} />
                 )}
               </Box>
             </Box>
@@ -953,8 +972,10 @@ export default function AnalyticsPanel({
   isMonitoring = false,
   transcriptionOn = false,
   analysisOn = false,
+  cameraOn = false,
   onToggleTranscription,
   onToggleAnalysis,
+  onToggleCamera,
   onClose: _onClose,
   participantId: _participantId,
   interview,
@@ -977,7 +998,7 @@ export default function AnalyticsPanel({
 
   const totalSignals = results.reduce((count, r) => {
     if (!r.per_modality) return count;
-    return count + (r.per_modality.app_metadata?.signals?.length || 0) + (r.per_modality.keystroke?.signals?.length || 0) + (r.per_modality.voice?.signals?.length || 0);
+    return count + (r.per_modality.app_metadata?.signals?.length || 0) + (r.per_modality.keystroke?.signals?.length || 0) + (r.per_modality.voice?.signals?.length || 0) + (r.per_modality.gaze?.signals?.length || 0);
   }, 0);
   const totalCorrelations = results.reduce((count, r) => count + (r.correlations?.length || 0), 0);
 
@@ -998,7 +1019,7 @@ export default function AnalyticsPanel({
           </Box>
         </Box>
         {(onToggleTranscription || onToggleAnalysis) && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flexWrap: 'wrap' }}>
             {interview?.provider_metadata?.join_url && (
               <Button
                 variant="outlined"
@@ -1088,6 +1109,25 @@ export default function AnalyticsPanel({
                 sx={{ m: 0 }}
               />
             </Tooltip>
+            {onToggleCamera && (
+              <Tooltip title="Show the candidate's webcam live, with eye arrows. Not recorded. Off releases their camera." arrow placement="top">
+                <FormControlLabel
+                  control={
+                    <Switch
+                      size="small"
+                      checked={cameraOn}
+                      onChange={(_, checked) => onToggleCamera(checked)}
+                      sx={{
+                        '& .MuiSwitch-switchBase.Mui-checked': { color: BRAND },
+                        '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { bgcolor: BRAND },
+                      }}
+                    />
+                  }
+                  label={<Typography sx={{ fontSize: '0.7rem', color: DARK_TEXT }}>Camera</Typography>}
+                  sx={{ m: 0 }}
+                />
+              </Tooltip>
+            )}
           </Box>
         )}
       </Box>
@@ -1174,7 +1214,7 @@ export default function AnalyticsPanel({
           id="analytics-tab-0"
           aria-controls="analytics-tabpanel-0"
           label={
-            <Tooltip title="Risky apps and copy/paste flagged in real time — AI tools, remote access, and VMs." arrow>
+            <Tooltip title="Risky apps, copy/paste, and webcam warnings flagged in real time — AI tools, remote access, VMs, eyes away, a second face." arrow>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <span>Alerts</span>
                 {pulseAlerts.length > 0 && (
@@ -1188,7 +1228,7 @@ export default function AnalyticsPanel({
           id="analytics-tab-1"
           aria-controls="analytics-tabpanel-1"
           label={
-            <Tooltip title="The candidate's risk score over time, scored every 30 seconds from apps, typing, and voice." arrow>
+            <Tooltip title="The candidate's risk score over time, scored every 30 seconds from apps, typing, voice, and the webcam when it is on." arrow>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <span>Risk Timeline</span>
                 {results.length > 0 && (

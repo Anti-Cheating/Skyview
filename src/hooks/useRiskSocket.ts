@@ -26,7 +26,7 @@ export interface EvidenceCitation {
 
 export interface TimelineEntry {
   ts: number;
-  kind: 'APP' | 'KEYSTROKE' | 'VOICE' | string;
+  kind: 'APP' | 'KEYSTROKE' | 'VOICE' | 'IMAGE' | 'GAZE' | string;
   /** Action label only — char count for copy/paste/type, never the actual
    *  text. Full content only ever appears in Evidence / the narrative. */
   detail: string;
@@ -46,6 +46,8 @@ export interface WindowResult {
     app_metadata?: ModalityRisk;
     keystroke?: ModalityRisk;
     voice?: ModalityRisk;
+    /** Webcam gaze — present only for windows with the camera on. */
+    gaze?: ModalityRisk;
   };
   correlations?: Correlation[];
   timeline_note?: string;
@@ -143,16 +145,32 @@ export interface CandidateStatus {
 export interface ModalityState {
   transcription: boolean;
   analysis: boolean;
+  camera: boolean;
   /** Join catch-up into a room no other viewer was in — the tab may restore its intent. */
   fresh?: boolean;
 }
 
 /** Another viewer's action, from Cortex `panel-activity` — drives "who did it" toasts. */
 export interface PanelActivity {
-  action: 'transcription_on' | 'transcription_off' | 'analysis_on' | 'analysis_off' | 'capture' | 'ended';
+  action: 'transcription_on' | 'transcription_off' | 'analysis_on' | 'analysis_off' | 'camera_on' | 'camera_off' | 'capture' | 'ended';
   actor: { id: string | null; name: string };
   /** Receive time, so two identical actions in a row still count as new. */
   at: number;
+}
+
+/** The candidate's webcam as Sentinel reports it. */
+export type CameraState = 'starting' | 'live' | 'off' | 'denied' | 'busy' | 'error';
+
+/** One live webcam frame. Coordinates are 0-1 in the (mirrored) frame. */
+export interface CamFrame {
+  jpeg: ArrayBuffer;
+  /** Iris centres of the readable eyes. */
+  irises?: [number, number][];
+  nose?: [number, number];
+  /** Red arrow (eyes) and blue arrow (head), in arrow units. */
+  eye?: [number, number];
+  head?: [number, number];
+  warnings?: string[];
 }
 
 export interface UseRiskSocketReturn {
@@ -179,6 +197,16 @@ export interface UseRiskSocketReturn {
   emitStopTranscription: () => void;
   emitStartAnalysis: () => void;
   emitStopAnalysis: () => void;
+  emitStartCamera: () => void;
+  emitStopCamera: () => void;
+  /** Join the session's camera stream (hd = maximized size); off = leave it. */
+  watchCamera: (hd: boolean) => void;
+  unwatchCamera: () => void;
+  /** Frames bypass React state (10 fps); the player draws them directly. */
+  onCamFrame: (cb: (f: CamFrame) => void) => () => void;
+  cameraState: CameraState | null;
+  /** Cortex refused Camera on (the candidate's consent predates the webcam line). */
+  cameraBlocked: { reason: string; at: number } | null;
   // Server-authoritative toggle state. Null until the first
   // modality-state event lands (join-session catch-up).
   modalityState: ModalityState | null;
@@ -264,6 +292,8 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
   const [candidateStatus, setCandidateStatus] = useState<CandidateStatus | null>(null);
   const [modalityState, setModalityState] = useState<ModalityState | null>(null);
   const [panelActivity, setPanelActivity] = useState<PanelActivity | null>(null);
+  const [cameraState, setCameraState] = useState<CameraState | null>(null);
+  const [cameraBlocked, setCameraBlocked] = useState<{ reason: string; at: number } | null>(null);
   // Consent lifecycle (GDPR): null until the first event or initial seed;
   // MonitoringView seeds it from the session payload's has_open_consent.
   const [consentStatus, setConsentStatus] = useState<{ status: 'given' | 'declined' | 'revoked'; at: string } | null>(null);
@@ -307,6 +337,23 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
   const emitStopAnalysis = useCallback(() => {
     socketRef.current?.emit('stop-analysis', sessionId);
   }, [sessionId]);
+  const emitStartCamera = useCallback(() => {
+    socketRef.current?.emit('start-camera', sessionId);
+  }, [sessionId]);
+  const emitStopCamera = useCallback(() => {
+    socketRef.current?.emit('stop-camera', sessionId);
+  }, [sessionId]);
+  const watchCamera = useCallback((hd: boolean) => {
+    socketRef.current?.emit('watch-camera', { sessionId, hd });
+  }, [sessionId]);
+  const unwatchCamera = useCallback(() => {
+    socketRef.current?.emit('unwatch-camera', { sessionId });
+  }, [sessionId]);
+  const onCamFrame = useCallback((cb: (f: CamFrame) => void) => {
+    const socket = socketRef.current;
+    socket?.on('cam-frame', cb);
+    return () => { socket?.off('cam-frame', cb); };
+  }, []);
 
   const latestResult = results.length > 0 ? results[results.length - 1] : null;
 
@@ -431,10 +478,19 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
         setModalityState({
           transcription: !!data.transcription,
           analysis: !!data.analysis,
+          camera: !!data.camera,
           fresh: !!data.fresh,
         });
       }
     );
+
+    socket.on('camera-status', (data: { state: CameraState }) => {
+      setCameraState(data.state);
+    });
+
+    socket.on('camera-blocked', (data: { reason: string }) => {
+      setCameraBlocked({ reason: data.reason, at: Date.now() });
+    });
 
     socket.on('panel-activity', (data: Omit<PanelActivity, 'at'>) => {
       setPanelActivity({ action: data.action, actor: data.actor, at: Date.now() });
@@ -547,6 +603,13 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     emitStopTranscription,
     emitStartAnalysis,
     emitStopAnalysis,
+    emitStartCamera,
+    emitStopCamera,
+    watchCamera,
+    unwatchCamera,
+    onCamFrame,
+    cameraState,
+    cameraBlocked,
     modalityState,
     panelActivity,
     candidateStatus,

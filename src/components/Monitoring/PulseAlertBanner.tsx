@@ -29,6 +29,8 @@ import {
   KeyboardIcon,
   ArrowDown01Icon,
   ArrowUp01Icon,
+  EyeIcon,
+  UserMultipleIcon,
 } from '@hugeicons/core-free-icons';
 import { formatClock } from '../../utils/dateFormat';
 import type { PulseAlert, KeyboardAlert } from '../../hooks/useRiskSocket';
@@ -50,6 +52,14 @@ function kbIcon(type: string): IconSvgElement {
       return ArrowLeftRightIcon;
     case 'select_all_copy':
       return Copy01Icon;
+    case 'gaze_multiple_faces':
+      return UserMultipleIcon;
+    case 'gaze_eyes_away':
+    case 'gaze_head_turned':
+    case 'gaze_no_face':
+    case 'gaze_eyes_closed':
+    case 'gaze_head_moved':
+      return EyeIcon;
     case 'copy_paste_roundtrip':
     case 'paste_into_ai':
     case 'rapid_paste':
