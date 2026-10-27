@@ -7,7 +7,7 @@
  * mirrored frame), same numbers and warnings out, so Cortex and the
  * interviewer's LiveCamPlayer can't tell the two sources apart.
  *
- * Keep in step with Sentinel os/window/live_camera.py: thresholds were
+ * Keep in step with Sentinel os/mac/live_camera.py: thresholds were
  * measured there (poc/eye_arrow). tests/services/gaze/gazeTracker.test.ts
  * replays the Python tracker's output on poc/gaze/clip1.mp4.
  */

@@ -36,6 +36,10 @@ declare class MediaStreamTrackProcessor {
 const RETRY_OPEN_S = 5;
 let runIds = 0;
 
+const cameraDenied = (): Promise<boolean> =>
+  navigator.permissions?.query({ name: 'camera' as PermissionName }).then((s) => s.state === 'denied', () => false)
+  ?? Promise.resolve(false);
+
 /**
  * One camera-on period (start-camera → stop-camera). The page side only:
  * webcam + socket. Every frame is handled in services/gaze/camera.worker.
@@ -93,7 +97,9 @@ class BrowserCamera {
     this.worker.postMessage({ type: 'start', readable, id: this.runId }, [readable as unknown as Transferable]);
     const { gotFrame, fatal } = await ended;
     this.release();
-    if (!this.stopped && !fatal) this.status(gotFrame ? 'busy' : 'error');
+    // Lost mid-stream: the candidate turning off Chrome's camera permission ends
+    // the track too, and that is "denied", not another app taking the webcam.
+    if (!this.stopped && !fatal) this.status(!gotFrame ? 'error' : (await cameraDenied()) ? 'denied' : 'busy');
     return !!fatal;
   }
 

@@ -64,6 +64,8 @@ function kbIcon(type: string): IconSvgElement {
       return EyeIcon;
     case 'permission_revoked':
       return SquareLock02Icon;
+    case 'dev_tools':
+      return SourceCodeIcon;
     case 'permission_restored':
       return SquareUnlock02Icon;
     case 'copy_paste_roundtrip':
