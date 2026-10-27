@@ -31,6 +31,8 @@ import {
   ArrowUp01Icon,
   EyeIcon,
   UserMultipleIcon,
+  SquareLock02Icon,
+  SquareUnlock02Icon,
 } from '@hugeicons/core-free-icons';
 import { formatClock } from '../../utils/dateFormat';
 import type { PulseAlert, KeyboardAlert } from '../../hooks/useRiskSocket';
@@ -60,6 +62,10 @@ function kbIcon(type: string): IconSvgElement {
     case 'gaze_eyes_closed':
     case 'gaze_head_moved':
       return EyeIcon;
+    case 'permission_revoked':
+      return SquareLock02Icon;
+    case 'permission_restored':
+      return SquareUnlock02Icon;
     case 'copy_paste_roundtrip':
     case 'paste_into_ai':
     case 'rapid_paste':
