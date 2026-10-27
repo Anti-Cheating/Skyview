@@ -48,6 +48,7 @@ import { ENV } from '../../config/env';
 import type { InterviewSession } from '../../types/interview.types';
 import { TOKENS } from '../../theme';
 import HelperDownloadCard from '../Monitoring/HelperDownloadCard';
+import { useBrowserCamera, useCameraPermission } from '../../hooks/useBrowserCamera';
 import ConsentScreen from '../Consent/ConsentScreen';
 import ConsentOutcome from '../Consent/ConsentOutcome';
 import JoinStepper, { type JoinStep } from '../Consent/JoinStepper';
@@ -135,6 +136,11 @@ export default function CandidateJoinPage() {
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
   const helper = useHelper(2000);
+  // Windows: this tab runs the live camera, not the Helper (which would lock
+  // the meeting app out of the webcam). See useBrowserCamera.
+  const browserCam = detectHelperPlatform() === 'windows';
+  useBrowserCamera(interviewId, browserCam && consent === 'given');
+  const camPermission = useCameraPermission(browserCam);
   // Deliberately NO teardown on the candidate side — the candidate
   // usually clicks "Open meeting" and leaves the Skyview tab while the
   // interview continues in Zoom. Session lifetime ends when the
@@ -335,9 +341,14 @@ export default function CandidateJoinPage() {
     helper.refresh();
   };
   const openCameraSettings = async () => {
-    const ok = await requestHelperPermission('camera');
-    if (!ok) await openSettingsPane('camera');
-    helper.refresh();
+    // Windows camera access itself is off: Chrome can't get the webcam either.
+    if (!browserCam || helper.status?.camera_ok === false) {
+      const ok = await requestHelperPermission('camera');
+      if (!ok) await openSettingsPane('camera');
+      helper.refresh();
+      return;
+    }
+    await camPermission.request();
   };
 
   // ── Render ────────────────────────────────────────────────────────
@@ -404,8 +415,9 @@ export default function CandidateJoinPage() {
   const micOk = !!helper.status?.microphone_ok;
   const keyboardOk = !!helper.status?.keyboard_ok;
   // Undefined = a Helper without the live camera: nothing to grant, no row.
-  const cameraKnown = helper.status?.camera_ok !== undefined;
-  const cameraOk = helper.status?.camera_ok !== false;
+  // Windows also needs Chrome's own camera permission for this tab.
+  const cameraKnown = browserCam || helper.status?.camera_ok !== undefined;
+  const cameraOk = helper.status?.camera_ok !== false && (!browserCam || camPermission.permission === 'granted');
   const allPermissions = screenOk && micOk && keyboardOk && cameraOk;
   const monitoringState = !helper.installed
     ? 'pending'

@@ -16,6 +16,7 @@
     "@emotion/styled": "^11.14.1",
     "@hugeicons/core-free-icons": "^4.3.2",
     "@hugeicons/react": "^1.1.10",
+    "@mediapipe/tasks-vision": "0.10.21",
     "@mui/icons-material": "^7.3.5",
     "@mui/material": "^7.3.5",
     "@mui/x-date-pickers": "^8.27.2",
