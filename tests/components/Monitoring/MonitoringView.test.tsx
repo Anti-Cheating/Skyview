@@ -10,8 +10,10 @@ vi.mock('react-router-dom', () => ({
 }));
 
 const showInfo = vi.fn();
+const showError = vi.fn();
+const showSuccess = vi.fn();
 vi.mock('../../../src/contexts/SnackbarContext', () => ({
-  useSnackbar: () => ({ showInfo, showError: vi.fn(), showSuccess: vi.fn(), showWarning: vi.fn(), showSnackbar: vi.fn() }),
+  useSnackbar: () => ({ showInfo, showError, showSuccess, showWarning: vi.fn(), showSnackbar: vi.fn() }),
 }));
 
 vi.mock('../../../src/contexts/AuthContext', () => ({
@@ -53,7 +55,7 @@ function makeRiskData(over: Partial<UseRiskSocketReturn> = {}): UseRiskSocketRet
     pendingImageAnalysisCount: 0, incrementPendingImageAnalysis: vi.fn(),
     emitCaptureScreenshots: vi.fn(), emitStartTranscription: vi.fn(), emitStopTranscription: vi.fn(),
     emitStartAnalysis: vi.fn(), emitStopAnalysis: vi.fn(),
-    emitStartCamera: vi.fn(), emitStopCamera: vi.fn(), modalityState: null, panelActivity: null,
+    emitStartCamera: vi.fn(), emitStopCamera: vi.fn(), modalityState: null, panelActivity: null, permissionAlert: null,
     candidateStatus: null, consentStatus: null,
     setInitialConsentStatus: vi.fn(), setInitialCandidateStatus: vi.fn(),
     ...over,
@@ -222,5 +224,18 @@ describe('MonitoringView — two viewers', () => {
     render(<MonitoringView />);
     await waitFor(() => expect(emitStartTranscription).toHaveBeenCalledTimes(1));
     expect(emitStartCamera).not.toHaveBeenCalled();
+  });
+});
+
+describe('MonitoringView — permission popup', () => {
+  test('a permission turned off pops up red; turned back on pops up green', async () => {
+    const off = { type: 'permission_revoked', label: 'Candidate turned off microphone access', riskLevel: 'HIGH' as const };
+    riskState = makeRiskData({ permissionAlert: { alerts: [off], at: 1 } });
+    const { rerender } = render(<MonitoringView />);
+    await waitFor(() => expect(showError).toHaveBeenCalledWith('Candidate turned off microphone access'));
+    const on = { type: 'permission_restored', label: 'Candidate turned microphone access back on', riskLevel: 'LOW' as const };
+    riskState = makeRiskData({ permissionAlert: { alerts: [on], at: 2 } });
+    rerender(<MonitoringView />);
+    await waitFor(() => expect(showSuccess).toHaveBeenCalledWith('Candidate turned microphone access back on'));
   });
 });

@@ -74,7 +74,7 @@ export default function MonitoringView() {
   const [camMaximized, setCamMaximized] = useState(false);
 
   const riskData = useRiskSocket(interviewId ?? null);
-  const { showInfo } = useSnackbar();
+  const { showInfo, showError, showSuccess } = useSnackbar();
 
   // Someone else watching (any company employee) acted — say who. When they
   // ended the interview, everyone leaves with them.
@@ -85,6 +85,16 @@ export default function MonitoringView() {
     if (a.action === 'ended') navigate('/interviews');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [riskData.panelActivity]);
+
+  // Candidate turned a permission off / back on: pop it up as well as the Alerts row.
+  useEffect(() => {
+    const p = riskData.permissionAlert;
+    if (!p) return;
+    const off = p.alerts.filter((a) => a.type === 'permission_revoked');
+    if (off.length > 0) showError(off.map((a) => a.label).join(' · '));
+    else showSuccess(p.alerts.map((a) => a.label).join(' · '));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [riskData.permissionAlert]);
   const helper = useHelper(2000);
 
   // Toggle state is server-authoritative now (Bug 12 fix). Cortex

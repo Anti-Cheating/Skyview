@@ -407,6 +407,8 @@ interface PostAnalysis {
   /** Consent coverage windows (GDPR): which portions of the interview
    *  were monitored. An open window has revoked_at = null. */
   consent_windows: { given_at: string; revoked_at: string | null; text_version: string }[];
+  /** Permissions the candidate turned off after joining; on_at null = still off. */
+  permission_changes: { permission: string; off_at: string; on_at: string | null; duration_s: number | null }[];
 }
 
 function normalizeAnalysis(raw: Record<string, unknown>): PostAnalysis {
@@ -453,6 +455,9 @@ function normalizeAnalysis(raw: Record<string, unknown>): PostAnalysis {
     status: raw.status != null ? String(raw.status) : undefined,
     consent_windows: Array.isArray(raw.consent_windows)
       ? (raw.consent_windows as PostAnalysis["consent_windows"])
+      : [],
+    permission_changes: Array.isArray(raw.permission_changes)
+      ? (raw.permission_changes as PostAnalysis["permission_changes"])
       : [],
   };
 }
@@ -827,6 +832,30 @@ export const PostAnalysisPanel: React.FC<PostAnalysisPanelProps> = ({
                 <div className="pa-cat-apps">
                   {cat.apps.map((a) => <span key={a} className="pa-app-tag">{a}</span>)}
                 </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Permissions turned off mid-interview ─────────────────────────── */}
+      {analysis.permission_changes.length > 0 && (
+        <section className="pa-card">
+          <h3 className="pa-card-title">Permissions Turned Off</h3>
+          <div className="pa-cats">
+            {analysis.permission_changes.map((p) => (
+              <div key={`${p.permission}-${p.off_at}`} className="pa-cat"
+                style={{ borderLeftColor: getRiskColor("High") }}>
+                <div className="pa-cat-header">
+                  <span className="pa-cat-name" style={{ textTransform: "capitalize" }}>{p.permission}</span>
+                  <span className="pa-cat-risk" style={{ color: getRiskColor("High") }}>
+                    {p.duration_s === null ? "Still off"
+                      : `Off ${p.duration_s >= 60 ? `${Math.floor(p.duration_s / 60)}m ${p.duration_s % 60}s` : `${p.duration_s}s`}`}
+                  </span>
+                </div>
+                <p className="pa-cat-score">
+                  Off at {formatClock(p.off_at)}{p.on_at ? ` · back on at ${formatClock(p.on_at)}` : ""}
+                </p>
               </div>
             ))}
           </div>

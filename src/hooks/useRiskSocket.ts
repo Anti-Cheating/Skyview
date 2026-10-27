@@ -26,7 +26,7 @@ export interface EvidenceCitation {
 
 export interface TimelineEntry {
   ts: number;
-  kind: 'APP' | 'KEYSTROKE' | 'VOICE' | 'IMAGE' | 'GAZE' | string;
+  kind: 'APP' | 'KEYSTROKE' | 'VOICE' | 'IMAGE' | 'GAZE' | 'PERMISSION' | string;
   /** Action label only — char count for copy/paste/type, never the actual
    *  text. Full content only ever appears in Evidence / the narrative. */
   detail: string;
@@ -212,6 +212,8 @@ export interface UseRiskSocketReturn {
   modalityState: ModalityState | null;
   // Latest action by someone else watching this session; null until one happens.
   panelActivity: PanelActivity | null;
+  // Permissions the candidate just turned off / back on (live only, for the popup).
+  permissionAlert: { alerts: KeyboardAlert[]; at: number } | null;
   // Pre-join setup state pushed by the candidate's Jarvis extension. Null
   // means we haven't received any status yet (e.g. extension never connected
   // for this session, or it's an application-type interview).
@@ -292,6 +294,7 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
   const [candidateStatus, setCandidateStatus] = useState<CandidateStatus | null>(null);
   const [modalityState, setModalityState] = useState<ModalityState | null>(null);
   const [panelActivity, setPanelActivity] = useState<PanelActivity | null>(null);
+  const [permissionAlert, setPermissionAlert] = useState<{ alerts: KeyboardAlert[]; at: number } | null>(null);
   const [cameraState, setCameraState] = useState<CameraState | null>(null);
   const [cameraBlocked, setCameraBlocked] = useState<{ reason: string; at: number } | null>(null);
   // Consent lifecycle (GDPR): null until the first event or initial seed;
@@ -442,6 +445,8 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     socket.on('risk-pulse', (data: PulseAlert) => {
       console.log('[RiskSocket] Pulse alert received:', data);
       setPulseAlerts(prev => mergePulse(prev, [data]));
+      const perm = (data.keyboardAlerts ?? []).filter(k => k.type.startsWith('permission_'));
+      if (perm.length > 0) setPermissionAlert({ alerts: perm, at: Date.now() });
     });
 
     // Pre-join setup state from candidate's extension. Cortex broadcasts
@@ -612,6 +617,7 @@ export function useRiskSocket(sessionId: string | null): UseRiskSocketReturn {
     cameraBlocked,
     modalityState,
     panelActivity,
+    permissionAlert,
     candidateStatus,
     consentStatus,
     setInitialConsentStatus,

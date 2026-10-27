@@ -36,6 +36,7 @@ import {
   KeyboardIcon,
   BrowserIcon,
   ArrowLeftRightIcon,
+  SquareLock02Icon,
 } from '@hugeicons/core-free-icons';
 import { TOKENS } from '../../theme';
 import { formatDateTime, formatClock } from '../../utils/dateFormat';
@@ -336,7 +337,8 @@ export function summarizeTimeline(
     const isSuspicious =
       /paste|storm|switch_storm/i.test(current.detail) ||
       /claude|chatgpt|openai|copilot|aside/i.test(current.detail) ||
-      (current.kind === 'GAZE' && /second face/i.test(current.detail));
+      (current.kind === 'GAZE' && /second face/i.test(current.detail)) ||
+      (current.kind === 'PERMISSION' && /turned off/i.test(current.detail));
 
     if (count > 1) {
       out.push({
@@ -364,6 +366,7 @@ export function summarizeTimeline(
 export function getTimelineEntryIcon(entry: { kind: string; detail: string }): IconSvgElement {
   if (entry.kind === 'VOICE') return Mic01Icon;
   if (entry.kind === 'GAZE') return EyeIcon;
+  if (entry.kind === 'PERMISSION') return SquareLock02Icon;
   if (entry.kind === 'IMAGE') return Camera01Icon;
   if (entry.kind === 'KEYSTROKE') {
     if (/paste/i.test(entry.detail)) return ClipboardIcon;
