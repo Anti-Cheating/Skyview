@@ -12,10 +12,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useSnackbar } from '../../contexts/SnackbarContext';
 import { CandidatesService, type CandidateDetail, type CandidateInterview } from '../../services/candidates.service';
 
-function roundsStatus(rounds: { status: string }[]): 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' {
+function roundsStatus(rounds: { status: string }[]): 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'MISSED' {
   if (rounds.length === 0) return 'SCHEDULED';
   if (rounds.some((r) => r.status === 'ACTIVE')) return 'IN_PROGRESS';
-  if (!rounds.some((r) => r.status === 'SCHEDULED')) return 'COMPLETED';
+  // Mirrors Cortex deriveStatus: a missed round with nothing left to run still needs rescheduling.
+  const pending = rounds.some((r) => r.status === 'SCHEDULED');
+  if (!pending && rounds.some((r) => r.status === 'MISSED')) return 'MISSED';
+  if (!pending) return 'COMPLETED';
   return rounds.some((r) => r.status === 'COMPLETED') ? 'IN_PROGRESS' : 'SCHEDULED';
 }
 

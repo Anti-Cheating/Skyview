@@ -359,7 +359,7 @@ describe('ProcessDetailPage — add round dialog', () => {
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByLabelText(/Round\ name/), 'Managerial');
     await user.click(within(dialog).getByRole('button', { name: 'Add round' }));
-    expect(await screen.findByText('Pick an interviewer')).toBeInTheDocument();
+    expect(await screen.findByText('Pick at least one interviewer')).toBeInTheDocument();
   }, 20000);
 
   test('validates a missing meeting link', async () => {
@@ -370,7 +370,7 @@ describe('ProcessDetailPage — add round dialog', () => {
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByLabelText(/Round\ name/), 'Managerial');
     await user.click(within(dialog).getByRole('button', { name: 'Add round' }));
-    expect(await screen.findByText('Meeting link is required')).toBeInTheDocument();
+    expect(await screen.findByText(/^Meeting link is required/)).toBeInTheDocument();
   }, 20000);
 
   test('validates a malformed meeting link', async () => {
@@ -398,7 +398,7 @@ describe('ProcessDetailPage — add round dialog', () => {
     expect(showSuccess).toHaveBeenCalledWith('Round added');
     const payload = addRound.mock.calls[0][1] as Record<string, unknown>;
     expect(payload.round_name).toBe('Managerial');
-    expect(payload.interviewer_user_id).toBe('u1');
+    expect(payload.interviewer_user_ids).toEqual(['u1']);
   }, 20000);
 
   test('surfaces a server error while adding a round', async () => {
@@ -462,15 +462,18 @@ describe('ProcessDetailPage — edit round dialog', () => {
     const link = within(dialog).getByLabelText(/Meeting\ Link/);
     await user.clear(link);
     await user.type(link, 'https://zoom.us/j/999');
-    // Change the interviewer select (u1 → u2).
-    const combos = within(dialog).getAllByRole('combobox');
-    await user.click(combos[0]);
-    await user.click(await screen.findByRole('option', { name: 'Uma Two' }));
+    // Add a second interviewer by typing part of the name (u1 → u1 + u2).
+    await user.type(within(dialog).getByLabelText(/Interviewers/), 'Uma T');
+    await user.click(await screen.findByRole('option', { name: /Uma Two/ }));
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(ivUpdate).toHaveBeenCalled());
     const payload = ivUpdate.mock.calls[0][1] as Record<string, unknown>;
     expect(payload.meeting_link).toBe('https://zoom.us/j/999');
-    expect(Array.isArray(payload.interview_session_participants)).toBe(true);
+    expect(payload.interview_session_participants).toEqual([
+      expect.objectContaining({ candidate_email: expect.any(String) }),
+      { interviewer_user_id: 'u1' },
+      { interviewer_user_id: 'u2' },
+    ]);
   }, 20000);
 
   test('shows an error when the round session response has no data', async () => {

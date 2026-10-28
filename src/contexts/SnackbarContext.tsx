@@ -35,12 +35,12 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
       {children}
       <Snackbar
         open={open}
-        autoHideDuration={6000}
+        autoHideDuration={4000}
         onClose={handleClose}
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-        // Cap the toast width — long API error messages wrap onto the next
-        // line instead of stretching across the whole screen.
-        sx={{ maxWidth: 480 }}
+        // Compact: cap the width so long API errors wrap instead of
+        // stretching across the screen.
+        sx={{ maxWidth: 360 }}
       >
         {/* Sourced from TOKENS so every success/error surface in the app
             shares the same palette. Text is always white regardless of
@@ -52,21 +52,31 @@ export function SnackbarProvider({ children }: { children: ReactNode }) {
           variant="filled"
           sx={{
             width: '100%',
-            alignItems: 'flex-start',
+            alignItems: 'center',
+            // Compact toast — small text, tight padding.
+            py: 0,
+            px: 1.25,
+            borderRadius: '8px',
+            fontSize: '0.8125rem',
+            lineHeight: 1.4,
             bgcolor:
               severity === 'error' ? TOKENS.error
               : severity === 'success' ? TOKENS.brand
               : severity === 'warning' ? TOKENS.warning
               : '#3B82F6',
             color: '#FFFFFF',
-            '& .MuiAlert-icon': { color: '#FFFFFF' },
+            '& .MuiAlert-icon': { color: '#FFFFFF', fontSize: 18, py: '6px', mr: 1 },
             '& .MuiAlert-message': {
               color: '#FFFFFF',
-              fontWeight: 600,
+              fontWeight: 500,
+              py: '6px',
             },
+            '& .MuiAlert-action': { pt: 0, pl: 1, mr: -0.5 },
             '& .MuiAlert-action .MuiIconButton-root': {
               color: '#FFFFFF',
+              p: '2px',
             },
+            '& .MuiAlert-action .MuiSvgIcon-root': { fontSize: 16 },
           }}
         >
           {message}

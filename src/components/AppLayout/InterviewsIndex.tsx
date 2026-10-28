@@ -13,9 +13,10 @@
  * The active tab lives in the URL (?view=round) so it survives refresh and
  * is shareable.
  */
+import { useState } from 'react';
 import { Box, Select, MenuItem } from '@mui/material';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Add as AddIcon } from '@mui/icons-material';
+import { Add as AddIcon, CalendarMonthOutlined as CalendarIcon } from '@mui/icons-material';
 import { TOKENS } from '../../theme';
 import { PageTitle, Secondary, Caption } from '../layout/Typography';
 import { ActionButton } from '../common/ActionButton';
@@ -24,6 +25,7 @@ import { isCompanyManagerRole } from '../../config/constants';
 import ProcessListPage from './ProcessListPage';
 import AppInterviewList from './AppInterviewList';
 import CandidatesListPage from './CandidatesListPage';
+import { CalendarImportDialog } from './CalendarImportDialog';
 
 type View = 'interview' | 'round' | 'candidate';
 
@@ -37,6 +39,9 @@ export default function InterviewsIndex() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  // Bumped after an import so the list below refetches.
+  const [listKey, setListKey] = useState(0);
 
   // Interviewers / candidates: the flat round list only, unchanged.
   if (!isCompanyManagerRole(user?.role)) return <AppInterviewList />;
@@ -90,6 +95,9 @@ export default function InterviewsIndex() {
               ))}
             </Select>
           </Box>
+          <ActionButton onClick={() => setCalendarOpen(true)} startIcon={<CalendarIcon />} aria-label="Import from Google Calendar">
+            Import
+          </ActionButton>
           <ActionButton onClick={() => navigate('/interviews/new')} startIcon={<AddIcon />}>
             New interview
           </ActionButton>
@@ -97,10 +105,17 @@ export default function InterviewsIndex() {
       </Box>
 
       {view === 'interview'
-        ? <ProcessListPage embedded />
+        ? <ProcessListPage key={listKey} embedded />
         : view === 'round'
-          ? <AppInterviewList embedded />
-          : <CandidatesListPage embedded />}
+          ? <AppInterviewList key={listKey} embedded />
+          : <CandidatesListPage key={listKey} embedded />}
+
+      {calendarOpen && (
+        <CalendarImportDialog
+          onClose={() => setCalendarOpen(false)}
+          onImported={() => setListKey((k) => k + 1)}
+        />
+      )}
     </Box>
   );
 }

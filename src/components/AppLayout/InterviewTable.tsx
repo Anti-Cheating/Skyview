@@ -69,6 +69,9 @@ export default function InterviewTable({
   const isInterviewer = isStaffRole(userRole);
   const canDeleteRows = isCompanyManagerRole(userRole);
 
+  const open = (row: InterviewSession) =>
+    navigate(row.process_id ? `/interviews/${row.process_id}/rounds/${row.id}` : `/interviews/${row.id}`);
+
   const columns: DataTableColumn<InterviewSession>[] = [
     {
       key: 'title',
@@ -76,13 +79,7 @@ export default function InterviewTable({
       render: (row) => (
         <Box
           component="button"
-          onClick={() =>
-            navigate(
-              row.process_id
-                ? `/interviews/${row.process_id}/rounds/${row.id}`
-                : `/interviews/${row.id}`,
-            )
-          }
+          onClick={() => open(row)}
           sx={{
             background: 'none',
             border: 0,
@@ -267,6 +264,8 @@ export default function InterviewTable({
       columns={columns}
       rows={rows}
       rowKey={(r) => r.id}
+      // The whole row opens the round; edit / cancel buttons keep their own clicks.
+      onRowClick={open}
       loading={loading}
       emptyText={emptyText}
       caption={caption}
