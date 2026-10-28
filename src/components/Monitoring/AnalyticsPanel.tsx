@@ -1673,7 +1673,7 @@ export function TranscriptFeed({
                       lineHeight: 1,
                     }}
                   >
-                    {formatDateTime(f.timestamp)}
+                    {formatClock(f.timestamp, { seconds: false })}
                   </Typography>
                 )}
               </Box>
