@@ -181,7 +181,9 @@ describe('useRiskSocket — live socket', () => {
   test('a modality-state event coerces both toggles to booleans', () => {
     const { result } = renderHook(() => useRiskSocket('s1'));
     act(() => handlers['modality-state']({ sessionId: 's1', transcription: 1, analysis: 0 }));
-    expect(result.current.modalityState).toEqual({ transcription: true, analysis: false });
+    expect(result.current.modalityState).toEqual({ transcription: true, analysis: false, fresh: false });
+    act(() => handlers['modality-state']({ sessionId: 's1', transcription: 0, analysis: 0, fresh: true }));
+    expect(result.current.modalityState).toEqual({ transcription: false, analysis: false, fresh: true });
   });
 
   test('an image-analysis-result merges + decrements the pending counter', () => {
@@ -278,7 +280,12 @@ describe('useRiskSocket — rehydrate from Cortex history', () => {
           { text: 'no times', speaker_role: 'candidate', captured_at: '2026-07-05T00:00:01.000Z' },
         ] } };
       }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve(body),
+      });
     }));
   }
 

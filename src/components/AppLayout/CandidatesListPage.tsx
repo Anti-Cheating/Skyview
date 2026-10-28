@@ -119,8 +119,8 @@ export default function CandidatesListPage() {
       <DataTable<CandidateListItem>
         columns={columns}
         rows={rows}
-        rowKey={(r) => r.id}
         onRowClick={(c) => navigate(`/candidates/${c.id}`)}
+        rowKey={(r) => r.id}
         loading={loading}
         emptyText="No candidates yet. Invite someone to a test or schedule an interview."
         pagination={{ page, pageSize, total, onChange: (p, sz) => { setPage(p); setPageSize(sz); } }}

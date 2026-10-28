@@ -22,6 +22,10 @@ export interface ProviderMetadata {
   start_url?: string;
   created_at?: string;
   meeting_id?: number | string | null;
+  // Google Calendar event id when Trueyy generated the Meet link (managed).
+  google_event_id?: string;
+  // Set when that event was imported from the calendar rather than generated.
+  google_event_imported?: boolean;
   start_time?: string;
   // Extension-type interviews use this marker
   source?: "extension" | string;

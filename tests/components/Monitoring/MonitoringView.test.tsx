@@ -9,6 +9,11 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
+const showInfo = vi.fn();
+vi.mock('../../../src/contexts/SnackbarContext', () => ({
+  useSnackbar: () => ({ showInfo, showError: vi.fn(), showSuccess: vi.fn(), showWarning: vi.fn(), showSnackbar: vi.fn() }),
+}));
+
 vi.mock('../../../src/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'interviewer-1', role: 'Owner' } }),
 }));
@@ -47,7 +52,7 @@ function makeRiskData(over: Partial<UseRiskSocketReturn> = {}): UseRiskSocketRet
     imageAnalysisResults: [], latestImageAnalysis: null, isImageAnalysisProcessing: false,
     pendingImageAnalysisCount: 0, incrementPendingImageAnalysis: vi.fn(),
     emitCaptureScreenshots: vi.fn(), emitStartTranscription: vi.fn(), emitStopTranscription: vi.fn(),
-    emitStartAnalysis: vi.fn(), emitStopAnalysis: vi.fn(), modalityState: null,
+    emitStartAnalysis: vi.fn(), emitStopAnalysis: vi.fn(), modalityState: null, panelActivity: null,
     candidateStatus: null, consentStatus: null,
     setInitialConsentStatus: vi.fn(), setInitialCandidateStatus: vi.fn(),
     ...over,
@@ -134,5 +139,61 @@ describe('MonitoringView', () => {
     await screen.findByRole('heading', { name: 'Frontend Engineer' });
     unmount();
     expect(deactivate).not.toHaveBeenCalled();
+  });
+});
+
+describe('MonitoringView — who did it', () => {
+  test("another viewer's action shows a toast with their name", async () => {
+    riskState = makeRiskData({
+      panelActivity: { action: 'analysis_off', actor: { id: 'u2', name: 'Priya Shah' }, at: 1 },
+    });
+    render(<MonitoringView />);
+    await waitFor(() => expect(showInfo).toHaveBeenCalledWith('Priya Shah turned analysis off'));
+    expect(mockNavigate).not.toHaveBeenCalledWith('/interviews');
+  });
+
+  test('when someone else ends the interview, everyone is told and leaves', async () => {
+    riskState = makeRiskData({
+      panelActivity: { action: 'ended', actor: { id: 'u2', name: 'Priya Shah' }, at: 1 },
+    });
+    render(<MonitoringView />);
+    await waitFor(() => expect(showInfo).toHaveBeenCalledWith('Priya Shah ended the interview'));
+    expect(mockNavigate).toHaveBeenCalledWith('/interviews');
+  });
+});
+
+describe('MonitoringView — two viewers', () => {
+  test("another viewer turning transcription off stays off (this tab doesn't switch it back on)", async () => {
+    const emitStartTranscription = vi.fn();
+    sessionStorage.setItem('skyview:txn:round-1', '1'); // this tab turned it on earlier
+    riskState = makeRiskData({ emitStartTranscription, modalityState: { transcription: true, analysis: false } });
+    const { rerender } = render(<MonitoringView />);
+    await waitFor(() => expect(activate).toHaveBeenCalled());
+
+    // The other viewer switches it off → Cortex broadcasts the new state.
+    riskState = makeRiskData({ emitStartTranscription, modalityState: { transcription: false, analysis: false } });
+    rerender(<MonitoringView />);
+
+    await waitFor(() => expect(sessionStorage.getItem('skyview:txn:round-1')).toBe('0'));
+    expect(emitStartTranscription).not.toHaveBeenCalled();
+  });
+
+  test('a reconnect while another viewer stayed adopts their "off" instead of switching it back on', async () => {
+    const emitStartTranscription = vi.fn();
+    sessionStorage.setItem('skyview:txn:round-1', '1');
+    // Rejoin catch-up into a room someone else kept alive: not fresh.
+    riskState = makeRiskData({ emitStartTranscription, modalityState: { transcription: false, analysis: false, fresh: false } });
+    render(<MonitoringView />);
+    await waitFor(() => expect(sessionStorage.getItem('skyview:txn:round-1')).toBe('0'));
+    expect(emitStartTranscription).not.toHaveBeenCalled();
+  });
+
+  test('the only viewer coming back restores what this tab had on', async () => {
+    const emitStartTranscription = vi.fn();
+    sessionStorage.setItem('skyview:txn:round-1', '1');
+    // Cortex wiped the state when the last viewer left: fresh.
+    riskState = makeRiskData({ emitStartTranscription, modalityState: { transcription: false, analysis: false, fresh: true } });
+    render(<MonitoringView />);
+    await waitFor(() => expect(emitStartTranscription).toHaveBeenCalledTimes(1));
   });
 });
